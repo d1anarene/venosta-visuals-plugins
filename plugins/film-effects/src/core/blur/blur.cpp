@@ -4,13 +4,15 @@
 #include <cmath>
 #include <vector>
 
+#include "../common/parallel.h"
+
 namespace fe {
 namespace {
 // Above this sigma the blur runs on a half-resolution copy (sigma/2) and is upsampled.
 constexpr float kPyramidSigma = 6.0f;
 
 std::vector<float> kernel(float sigma) {
-  int r = std::max(1, static_cast<int>(std::ceil(3.0f * sigma)));
+  int r = std::max(1, static_cast<int>(std::ceil(4.0f * sigma)));  // 4 sigma: no visible cut-off ring around HDR lights
   std::vector<float> k(2 * r + 1);
   float sum = 0;
   for (int i = -r; i <= r; ++i) sum += (k[i + r] = std::exp(-0.5f * i * i / (sigma * sigma)));
@@ -25,7 +27,7 @@ Plane gaussianBlurDirect(const Plane& src, float sigma) {
   const int r = static_cast<int>(k.size() / 2);
   const int w = src.width, h = src.height, c = src.channels;
   Plane tmp(w, h, c), dst(w, h, c);
-  for (int y = 0; y < h; ++y) {
+  parallelRows(h, [&](int y) {
     for (int x = 0; x < w; ++x) {
       float acc[3] = {0, 0, 0};
       for (int i = -r; i <= r; ++i) {
@@ -34,17 +36,19 @@ Plane gaussianBlurDirect(const Plane& src, float sigma) {
       }
       for (int ch = 0; ch < c; ++ch) tmp.at(x, y)[ch] = acc[ch];
     }
-  }
-  for (int y = 0; y < h; ++y) {
-    for (int x = 0; x < w; ++x) {
-      float acc[3] = {0, 0, 0};
-      for (int i = -r; i <= r; ++i) {
-        const float* s = tmp.at(x, std::clamp(y + i, 0, h - 1));
-        for (int ch = 0; ch < c; ++ch) acc[ch] += s[ch] * k[i + r];
-      }
-      for (int ch = 0; ch < c; ++ch) dst.at(x, y)[ch] = acc[ch];
+  });
+  // Vertical pass, row-oriented: each output row is a weighted sum of whole input rows
+  // (contiguous memory, auto-vectorisable). Same arithmetic order per pixel -> deterministic.
+  const size_t rowLen = static_cast<size_t>(w) * c;
+  parallelRows(h, [&](int y) {
+    float* out = dst.at(0, y);
+    std::fill(out, out + rowLen, 0.0f);
+    for (int i = -r; i <= r; ++i) {
+      const float* in = tmp.at(0, std::clamp(y + i, 0, h - 1));
+      const float kv = k[i + r];
+      for (size_t j = 0; j < rowLen; ++j) out[j] += in[j] * kv;
     }
-  }
+  });
   return dst;
 }
 

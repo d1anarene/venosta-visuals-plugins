@@ -193,7 +193,7 @@ TEST(bloom_increases_monotonically_with_intensity_and_lower_threshold) {
 
 // ---------- blur ----------
 TEST(blur_preserves_energy_and_matches_reference) {
-  Plane p(320, 240, 1);  // large enough that 3 sigma never reaches the border
+  Plane p(400, 300, 1);  // large enough that 4 sigma never reaches the border
   p.at(160, 120)[0] = 1000.f;
   for (float sigma : {1.f, 3.f, 8.f, 20.f}) {
     Plane b = gaussianBlur(p, sigma);

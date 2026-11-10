@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "../common/fe_kernels.h"
+#include "../common/parallel.h"
 
 namespace fe {
 
@@ -51,7 +52,7 @@ bool process(Image& img, const FilmParams& raw, const RenderContext& ctx, Layers
     // variance of area-averaged grain drops; approximate that instead of aliasing to white noise.
     const float sizePx = g.size * img.height / 1080.0f;
     const float footprint = sizePx < 1.0f ? sizePx : 1.0f;
-    for (int y = 0; y < img.height; ++y) {
+    parallelRows(img.height, [&](int y) {
       for (int x = 0; x < img.width; ++x) {
         float* px = img.at(x, y);
         float lum = fe_luma(fe_make3(px[0], px[1], px[2]));
@@ -67,7 +68,7 @@ bool process(Image& img, const FilmParams& raw, const RenderContext& ctx, Layers
           }
         }
       }
-    }
+    });
   }
 
   const float mix = p.mix;
