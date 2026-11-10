@@ -15,7 +15,7 @@ _Last update: 2026-11-10_
 | --- | --- |
 | 0 Feasibility audit | ✅ `docs/FEASIBILITY.md` |
 | 1 Thin native plugin compiled + run in Premiere | ⛔ **Blocked**: no Mac, Adobe SDKs or Premiere in this environment. Plugin source is ready to build. |
-| 2 CPU cores + tests + CLI | ✅ tested — 32 test cases, ~19.8k checks pass |
+| 2 CPU cores + tests + CLI | ✅ tested — 37 test cases, ~19.8k checks pass |
 | 3 Native Metal effects | 🟡 kernels + engine + GPU entry written (**unbuilt**); CPU/GPU comparison pending |
 | 4 Usability (groups, presets, docs) | 🟡 params/groups/presets written (**syntax** for CPU entry); docs done; host tests pending |
 | 5 Optional UXP companion | not started (only after Stage 4 works in host) |

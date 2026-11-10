@@ -1,0 +1,30 @@
+name: tests
+on:
+  push:
+  pull_request:
+jobs:
+  track-range-exporter:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/track-range-exporter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci || npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+  film-effects-core:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: plugins/film-effects
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/run-core-tests.sh
