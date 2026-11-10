@@ -11,7 +11,7 @@ namespace {
 // Above this sigma the blur runs on a half-resolution copy (sigma/2) and is upsampled.
 constexpr float kPyramidSigma = 6.0f;
 
-std::vector<float> kernel(float sigma) {
+std::vector<float> kernelImpl(float sigma) {
   int r = std::max(1, static_cast<int>(std::ceil(4.0f * sigma)));  // 4 sigma: no visible cut-off ring around HDR lights
   std::vector<float> k(2 * r + 1);
   float sum = 0;
@@ -21,9 +21,11 @@ std::vector<float> kernel(float sigma) {
 }
 }  // namespace
 
+std::vector<float> gaussianKernel(float sigma) { return kernelImpl(sigma); }
+
 Plane gaussianBlurDirect(const Plane& src, float sigma) {
   if (sigma < 0.05f) return src;
-  const auto k = kernel(sigma);
+  const auto k = gaussianKernel(sigma);
   const int r = static_cast<int>(k.size() / 2);
   const int w = src.width, h = src.height, c = src.channels;
   Plane tmp(w, h, c), dst(w, h, c);
@@ -107,4 +109,15 @@ Plane gaussianBlur(const Plane& src, float sigma) {
   return upsampleTo(gaussianBlur(half, s2), src.width, src.height);
 }
 
+}  // namespace fe
+
+namespace fe {
+Plane blurByPlan(const Plane& src, const BlurStep& step) {
+  std::vector<Plane> chain;
+  chain.push_back(src);
+  for (int L = 1; L <= step.level; ++L) chain.push_back(downsample2(chain.back()));
+  Plane cur = gaussianBlurDirect(chain.back(), step.sigmaAtLevel);
+  for (int L = step.level - 1; L >= 0; --L) cur = upsampleTo(cur, chain[L].width, chain[L].height);
+  return cur;
+}
 }  // namespace fe

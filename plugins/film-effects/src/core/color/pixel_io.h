@@ -12,6 +12,8 @@ enum class PixelLayout {
   BGRA_8u,      // Premiere native 8-bit, straight alpha
   BGRA_32f,     // Premiere native float, straight alpha (gamma-encoded working space)
   ARGB_8u,      // After Effects 8-bit, premultiplied alpha
+  ARGB_16u,     // After Effects 16-bit (0..32768), premultiplied alpha
+  ARGB_32f,     // After Effects 32-bit float, premultiplied alpha
   RGBA_32f,     // CLI / tests, straight alpha
 };
 

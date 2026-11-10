@@ -17,14 +17,14 @@ Plane halationEnergy(const Plane& lin, const HalationParams& p) {
     src.v[i] = fe_halation_source(fe_make3(std::fmax(c[0], 0.f), std::fmax(c[1], 0.f), std::fmax(c[2], 0.f)),
                                   p.threshold, p.knee);
   }
-  const float sigma = std::fmax(p.radius / 100.0f * h, 0.5f);
-  Plane nearB = gaussianBlur(src, sigma * 0.5f);
-  Plane farB = gaussianBlur(nearB, sigma * 0.8660254f);  // sqrt(1 - 0.25) -> total sigma
+  const HalationPlan plan = planHalation(p, w, h);
+  Plane nearB = blurByPlan(src, plan.nearStep);
+  Plane farB = blurByPlan(src, plan.farStep);
   const fe_float3 tint = fe_halation_tint(p.warmth);
   constexpr float kGain = 4.0f;  // maps intensity 0..1 to a useful visual range
   Plane out(w, h, 3);
   for (size_t i = 0; i < static_cast<size_t>(w) * h; ++i) {
-    float blurred = 0.6f * nearB.v[i] + 0.4f * farB.v[i];
+    float blurred = plan.nearWeight * nearB.v[i] + plan.farWeight * farB.v[i];
     float spill = fe_halation_spill(blurred, src.v[i]) * p.intensity * kGain;
     out.v[i * 3 + 0] = spill * tint.x;
     out.v[i * 3 + 1] = spill * tint.y;

@@ -12,6 +12,7 @@ add_library(fe_core STATIC
   src/core/params/params.cpp
   src/core/color/pixel_io.cpp
   src/core/blur/blur.cpp
+  src/core/blur/blur_plan.cpp
   src/core/bloom/bloom.cpp
   src/core/halation/halation.cpp
   src/core/grain/grain.cpp
@@ -23,6 +24,7 @@ endif()
 
 add_executable(fe_core_tests tests/core/test_main.cpp)
 target_link_libraries(fe_core_tests PRIVATE fe_core)
+target_include_directories(fe_core_tests PRIVATE src/hosts/premiere)
 
 add_executable(fe_render tools/fe_render.cpp)
 target_link_libraries(fe_render PRIVATE fe_core)

@@ -13,6 +13,7 @@
 #include "color/pixel_io.h"
 #include "common/fe_kernels.h"
 #include "pipeline/pipeline.h"
+#include "FilmEffectsParams.h"
 
 using namespace fe;
 
@@ -296,13 +297,13 @@ TEST(halation_warmth_moves_towards_orange) {
 }
 TEST(halation_responds_to_cyan_less_than_white) {
   auto edgeRed = [](float r, float g, float b) {
-    Image im = solid(100, 60, 0.f, 0.f, 0.f);
-    rect(im, 40, 20, 60, 40, r, g, b);
+    Image im = solid(240, 1080, 0.f, 0.f, 0.f);  // realistic frame height for the default radius
+    rect(im, 80, 400, 160, 700, r, g, b);
     FilmParams p;
     p.halation.enabled = true;
     Layers L;
     process(im, p, {}, &L);
-    return L.halationAdd.at(37, 30)[0];
+    return L.halationAdd.at(77, 550)[0];
   };
   float white = edgeRed(1.5f, 1.5f, 1.5f), cyan = edgeRed(0.f, 1.5f, 1.5f), magenta = edgeRed(1.5f, 0.f, 1.5f);
   CHECK(white > cyan);
@@ -461,6 +462,23 @@ TEST(pixel_io_premultiplied_argb) {
   CHECK(std::memcmp(px, out, 4) == 0);
 }
 
+TEST(pixel_io_ae_16bit_and_float_premultiplied) {
+  uint16_t px16[4] = {16384, 8192, 4096, 2048};  // A R G B premultiplied, alpha 0.5
+  Image im;
+  readPixels(px16, 8, 1, 1, PixelLayout::ARGB_16u, im);
+  CHECK_NEAR(im.px[0], 0.5f, 1e-4f);
+  CHECK_NEAR(im.px[3], 0.5f, 1e-4f);
+  uint16_t o16[4];
+  writePixels(im, o16, 8, PixelLayout::ARGB_16u, px16, 8);
+  CHECK(std::memcmp(px16, o16, 8) == 0);
+  float pf[4] = {0.5f, 0.25f, 0.6f, 0.0f};  // straight R = 0.5, G = 1.2 (super-white)
+  readPixels(pf, 16, 1, 1, PixelLayout::ARGB_32f, im);
+  CHECK_NEAR(im.px[1], 1.2f, 1e-6f);
+  float of[4];
+  writePixels(im, of, 16, PixelLayout::ARGB_32f, pf, 16);
+  for (int i = 0; i < 4; ++i) CHECK_NEAR(of[i], pf[i], 1e-6f);
+}
+
 // ---------- presets ----------
 TEST(presets_exist_and_are_sane) {
   for (const char* n : {"Subtle Film", "Soft Highlight Glow", "Night Lights", "Fine 35mm Grain",
@@ -475,6 +493,46 @@ TEST(presets_exist_and_are_sane) {
   CHECK(!findPreset("Off")->params.anyEffectActive());
   CHECK(findPreset("Halation Only")->params.halation.enabled);
   CHECK(!findPreset("Halation Only")->params.bloom.enabled);
+}
+
+// ---------- host parameter mapping (no SDK needed) ----------
+struct FakeReader : ParamReader {
+  double nums[FE_NUM_PARAMS] = {};
+  bool flags[FE_NUM_PARAMS] = {};
+  int pops[FE_NUM_PARAMS] = {};
+  double number(int i) const override { return nums[i]; }
+  bool flag(int i) const override { return flags[i]; }
+  int popup(int i) const override { return pops[i]; }
+};
+TEST(host_param_mapping) {
+  FakeReader r;
+  r.flags[FE_MASTER_ENABLE] = true;
+  r.nums[FE_MIX] = 50.0;
+  r.pops[FE_WORKING_SPACE] = 3;
+  r.pops[FE_QUALITY] = 2;
+  r.flags[FE_GRAIN_ENABLE] = true;
+  r.nums[FE_GRAIN_AMOUNT] = 0.3;
+  r.nums[FE_GRAIN_SIZE] = 2.0;
+  r.nums[FE_GRAIN_SEED] = 77;
+  r.pops[FE_GRAIN_COLOR] = 2;
+  r.nums[FE_BLOOM_RADIUS] = 1e9;  // out of range -> clamped
+  FilmParams p = readParams(r);
+  CHECK(p.masterEnable);
+  CHECK_NEAR(p.mix, 0.5f, 1e-6f);
+  CHECK(p.space == WorkingSpace::Linear);
+  CHECK(p.quality == Quality::High);
+  CHECK(p.grain.enabled && p.grain.seed == 77 && p.grain.color == GrainColor::Color);
+  CHECK(p.bloom.radius <= 25.f);
+}
+TEST(frame_keys_from_host_time) {
+  // 23.976 in Premiere ticks: 10594584000 per frame
+  const int64_t tpf = 10594584000LL;
+  CHECK(frameKeyFromTime(0, tpf) == 0);
+  CHECK(frameKeyFromTime(5 * tpf, tpf) == 5);
+  CHECK(frameKeyFromTime(5 * tpf + 1, tpf) != 5);  // sub-frame time does not collide
+  CHECK(frameKeyFromTime(5 * tpf + 1, tpf) != frameKeyFromTime(5 * tpf + 2, tpf));
+  // AE-style units: current_time / time_step in time_scale units (e.g. 1001/24000)
+  CHECK(frameKeyFromTime(1001 * 9, 1001) == 9);
 }
 
 // ---------- sizes / timing smoke ----------
