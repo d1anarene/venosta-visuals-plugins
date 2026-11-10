@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Track Range Exporter – AME</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="index.js"></script>
+</head>
+<body>
+  <h1>Track Range Exporter – AME</h1>
+  <div class="help">Load the job file written by the Premiere panel. Each job is added with its own In/Out range; your Premiere sequence is not modified. AME renders the <b>saved</b> project file.</div>
+  <div class="row buttons">
+    <sp-button id="btn-load" variant="secondary" size="s">Load Job File…</sp-button>
+  </div>
+  <div id="info" class="path"></div>
+  <div id="jobs" class="job-list"></div>
+  <div class="row buttons">
+    <sp-button id="btn-enqueue" variant="cta" size="s" disabled>Add Jobs to Queue</sp-button>
+    <sp-button id="btn-cancel" variant="secondary" size="s">Cancel</sp-button>
+  </div>
+  <div class="row buttons">
+    <sp-button id="btn-start" variant="secondary" size="s" quiet>Start Queue</sp-button>
+  </div>
+  <div id="messages" class="messages" aria-live="polite"></div>
+</body>
+</html>

@@ -9,7 +9,7 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "lib": ["ES2020", "DOM"],
-    "types": []
+    "types": ["@adobe/premierepro"]
   },
   "include": ["src/**/*.ts", "ame-companion/src/**/*.ts", "tests/**/*.ts"]
 }
