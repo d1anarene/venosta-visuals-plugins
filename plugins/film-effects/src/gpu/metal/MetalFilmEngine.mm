@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <simd/simd.h>
 #include <vector>
 
 #include "blur/blur.h"

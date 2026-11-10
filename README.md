@@ -55,6 +55,9 @@ cd plugins/track-range-exporter && npm install && npm test
 cd plugins/film-effects && ./scripts/run-core-tests.sh
 ```
 
+GitHub Actions (`.github/workflows/tests.yml`) runs these on every push, plus a macOS job that
+compiles the Film Effects Metal GPU code and compares it with the CPU reference.
+
 Each plugin has an `AGENTS.md` (specification), `PROGRESS.md` (current state) and docs for
 its technical decisions. Repository-wide rules are in [AGENTS.md](AGENTS.md).
 
