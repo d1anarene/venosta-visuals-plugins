@@ -58,6 +58,6 @@ tests/core           unit/image tests (no dependencies)
 Both backends use the same plan functions (`planBloom`, `planHalation`, `planGaussian`), the same
 Gaussian weights (`gaussianKernel`) and the same per-pixel functions (`fe_kernels.h`). Remaining
 differences: GPU `pow`/`exp` precision (compile with `-fno-fast-math`), half-float frames (16f), and
-possible vertical orientation of the grain field if GPU frames are stored bottom-up. The planned
-tolerance is |Δ| ≤ 2/255 on SDR output and ≤ 0.5 % relative on bloom energy — **to be measured on a
-Mac** (`tests/gpu/README.md`).
+possible vertical orientation of the grain field if Premiere's GPU frames are stored bottom-up.
+**Measured** in CI on a Metal GPU: < 0.001/255 for 32f frames and ≤ 0.062/255 for 16f frames across
+all scenes and presets (`tests/gpu/README.md`).

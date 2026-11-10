@@ -15,7 +15,7 @@ delivery. More plugins (and possibly other Adobe apps) will follow.
 | Plugin | What it does | Status |
 | --- | --- | --- |
 | [Track Range Exporter](plugins/track-range-exporter/README.md) | Pick a guide track (e.g. V1). Every clip on it becomes its own export job in Adobe Media Encoder, rendering the **full graded sequence** (all tracks, adjustment layers, Lumetri, audio) for exactly that clip's time range. | In development — unit-tested, **not yet tested inside Premiere** |
-| [Film Effects](plugins/film-effects/README.md) | Native video effect with **Bloom**, **Halation** and **Film Grain**, designed to sit after Lumetri or on an adjustment layer. | In development — image-processing core unit-tested, **native plugin not yet compiled/tested inside Premiere** |
+| [Film Effects](plugins/film-effects/README.md) | Native video effect with **Bloom**, **Halation** and **Film Grain**, designed to sit after Lumetri or on an adjustment layer. | In development — image core unit-tested, Metal GPU code verified in CI, **native plugin not yet built/tested inside Premiere** |
 
 Each plugin folder has its own README with installation steps, usage and known limitations.
 

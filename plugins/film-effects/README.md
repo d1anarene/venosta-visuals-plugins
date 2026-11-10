@@ -4,9 +4,9 @@ A native Premiere Pro video effect with three film-finishing tools — **Bloom**
 **Film Grain** — made to sit after Lumetri Color on a clip, or on an adjustment layer above your
 graded timeline. Each tool can be switched on and off independently.
 
-> ⚠️ **Status: in development — not yet compiled or tested inside Premiere Pro.** The image
-> processing core is built and unit-tested; the native plugin and the Metal GPU path still need
-> their first build on a Mac (see [PROGRESS.md](PROGRESS.md)). Provided without any guarantee —
+> ⚠️ **Status: in development — not yet tested inside Premiere Pro.** The image processing core is
+> unit-tested and the Metal GPU code is verified against it on a Mac GPU in CI; the native plugin
+> itself still needs its first build with the Adobe SDK (see [PROGRESS.md](PROGRESS.md)). Provided without any guarantee —
 > see the [root README](../../README.md#️-no-guarantee).
 
 Downloads will also be available at [venostavisuals.com](https://venostavisuals.com).

@@ -13,8 +13,10 @@ _Date: 2026-11-10_
 | C++ toolchain | g++ 13.3, clang 18, CMake 3.28 |
 | Network | Adobe developer sites blocked; GitHub reachable |
 
-**Consequence:** the native plugin and the Metal backend are written but **not compiled and not
+**Consequence:** the native plugin is written but **not compiled against the Adobe SDK and not
 host-tested**. The host-independent core is compiled and tested here (`scripts/run-core-tests.sh`).
+The Metal kernels and engine (no Adobe SDK needed) are compiled and verified against the CPU
+reference on a GPU in GitHub Actions' macOS runners (`tests/gpu/README.md`).
 
 ## Sources read
 
