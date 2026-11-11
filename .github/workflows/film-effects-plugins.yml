@@ -140,3 +140,49 @@ jobs:
           name: FilmEffects-mac-installer
           path: out/FilmEffects-mac.pkg
           if-no-files-found: error
+  windows-installer:
+    # One Setup.exe with both Windows builds (CUDA pre-selected when an NVIDIA driver is present).
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check SDK access
+        id: sdk
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.ADOBE_SDK_TOKEN || secrets.ADBE_SDK_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then echo "available=false" >> "$GITHUB_OUTPUT"; else echo "available=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Download CPU build
+        if: steps.sdk.outputs.available == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: FilmEffects-win
+          path: _win/cpu
+      - name: Download CUDA build
+        if: steps.sdk.outputs.available == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: FilmEffects-win-cuda
+          path: _win/cuda
+      - name: Build installer (Inno Setup)
+        if: steps.sdk.outputs.available == 'true'
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Installing Inno Setup failed' }
+          }
+          $version = "$((Get-Content VERSION -Raw).Trim()).$env:GITHUB_RUN_NUMBER"
+          $root = (Get-Location).Path
+          & $iscc "/DAppVersion=$version" "/DCpuDir=$root\_win\cpu" "/DCudaDir=$root\_win\cuda" "/DRepoRoot=$root" "/DOutputDir=$root\out" "plugins\film-effects\installer\windows\FilmEffects.iss"
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compile failed' }
+          Get-ChildItem out
+      - name: Upload Windows installer
+        if: steps.sdk.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: FilmEffects-windows-installer
+          path: out/FilmEffects-Windows-Setup.exe
+          if-no-files-found: error

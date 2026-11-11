@@ -66,7 +66,16 @@ some with e.g. `./scripts/install-dev-macos.sh FilmEffects FilmGrain`.
 Restart Premiere Pro. The effects are in **Effects → Video Effects → Venosta Visuals**.
 
 ## 3b. Install (Windows)
-Download and extract **one** of the Windows ZIPs from Releases. Choose CUDA for a compatible
+**Recommended:** run `FilmEffects-Windows-Setup-<version>.exe` from Releases (Inno Setup wizard,
+needs admin rights). It installs the four `.aex` files into
+`C:\Program Files\Adobe\Common\Plugins\7.0\MediaCore`, pre-selects the CUDA build when
+`nvcuda.dll` (NVIDIA driver) is present and the CPU-only build otherwise, and registers an
+uninstaller in Settings → Apps. Running a newer Setup upgrades in place. It is not code-signed:
+SmartScreen may show "Windows protected your PC" → "More info" → "Run anyway". Source:
+`installer/windows/FilmEffects.iss`, built in CI. The installer itself has not yet been run on a
+Windows machine.
+
+**Manual alternative:** download and extract **one** of the Windows ZIPs from Releases. Choose CUDA for a compatible
 NVIDIA GPU (including GTX 1080 / Pascal), or CPU-only for the software-only build. Both install
 the same four filenames; installing a different variant replaces the previous one, with backups.
 The CUDA build uses Toolkit 12.9.1, includes native `sm_61` code, and statically links its runtime.

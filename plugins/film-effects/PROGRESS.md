@@ -2,7 +2,33 @@
 
 _Last update: 2026-11-11_
 
-## Windows CUDA package (in progress, 2026-11-11)
+## Windows Setup.exe installer (2026-11-11)
+
+- User asked for something better than the PowerShell install script. Added an Inno Setup 6
+  installer (`installer/windows/FilmEffects.iss`) bundling the CPU and CUDA builds; CI job
+  `windows-installer` in `film-effects-plugins.yml` compiles it, and releases attach
+  `FilmEffects-Windows-Setup-<tag>.exe` (ZIPs kept as manual alternative).
+- Pre-selects CUDA when `nvcuda.dll` exists, else CPU-only; admin install into the MediaCore
+  folder; uninstall entry in Settings → Apps; unsigned (SmartScreen warning expected).
+- **Status:** compiled in CI only; not yet run on a Windows PC. User will test on the GTX 1080 PC.
+
+## Windows CUDA release published (2026-11-11)
+
+- [**v1.0.5**](https://github.com/d1anarene/venosta-visuals-plugins/releases/tag/v1.0.5)
+  includes `FilmEffects-Windows-CUDA-experimental-v1.0.5.zip` alongside the CPU-only Windows
+  fallback, Mac installer and Track Range Exporter CCX downloads. Release workflow
+  `43051349682` passed and all five assets were verified in GitHub's release response.
+- Corrected candidate `d91878c`: native run `43050168045` passed all three builds; push tests
+  `43050168151` and PR tests `43050231863` both passed all six jobs before PR #8 was merged.
+- All four CUDA plugins compiled/linked and passed checks for `xGPUFilterEntry`, no dynamic
+  cudart DLL dependency, and Pascal `sm_61` device code. The ZIP includes NVIDIA license/notices.
+- CUDA 12.9.1 is intentional: the user owns a GTX 1080 (Pascal), which CUDA 13 cannot target.
+  The build also includes sm_75, sm_86, sm_89 and forward PTX for compatible newer NVIDIA GPUs;
+  it is not restricted to the user's card. CPU-only remains a separate download.
+- **No NVIDIA runtime or Windows Premiere host test was performed.** The user will test at home.
+  DaVinci Resolve integration remains unimplemented; no Resolve build is claimed.
+
+## Windows CUDA packaging history (2026-11-11)
 
 - User requests a CUDA-enabled Windows download for home testing, alongside the CPU fallback.
 - Existing CUDA engine and Premiere entry point were present, but v1.0.3 explicitly built with
