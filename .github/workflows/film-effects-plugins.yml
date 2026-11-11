@@ -1,0 +1,95 @@
+name: film-effects-plugins
+# Builds the native Film Effects plugins (Film Effects, Film Bloom, Film Halation, Film Grain) for
+# macOS and Windows. The Adobe SDKs are NOT in this repository: they are downloaded at build time
+# from the private repository d1anarene/vvp-sdk using the ADOBE_SDK_TOKEN secret, used only on the
+# temporary build machine, and never uploaded anywhere. Only the compiled plugins are kept.
+on:
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      ADOBE_SDK_TOKEN:
+        required: false
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+          - os: windows-latest
+            platform: win
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check SDK access
+        id: sdk
+        env:
+          TOKEN: ${{ secrets.ADOBE_SDK_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::notice::ADOBE_SDK_TOKEN is not set - skipping the native plugin build."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Fetch Adobe SDKs (private)
+        if: steps.sdk.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: d1anarene/vvp-sdk
+          token: ${{ secrets.ADOBE_SDK_TOKEN }}
+          path: _sdk_zips
+      - name: Unpack SDKs
+        if: steps.sdk.outputs.available == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/sdk/ae" "$RUNNER_TEMP/sdk/pr"
+          if [ "${{ matrix.platform }}" = mac ]; then ae='*AfterEffects*mac*.zip'; pr='*Premiere*Mac*.zip'; else ae='*AfterEffects*win*.zip'; pr='*Premiere*Windows*.zip'; fi
+          unzip -q _sdk_zips/$ae -d "$RUNNER_TEMP/sdk/ae"
+          unzip -q _sdk_zips/$pr -d "$RUNNER_TEMP/sdk/pr"
+          rm -rf _sdk_zips
+          AE=$(dirname "$(dirname "$(find "$RUNNER_TEMP/sdk/ae" -name AE_Effect.h -path '*Examples/Headers/*' | head -1)")")
+          PR=$(dirname "$(dirname "$(dirname "$(find "$RUNNER_TEMP/sdk/pr" -name PrSDKAESupport.h -path '*Examples/Headers/*' | head -1)")")")
+          echo "AE SDK Examples: $AE"; echo "Premiere SDK: $PR"
+          [ -d "$AE/Headers" ] && [ -d "$PR/Examples/Headers" ] || { echo "SDK layout not recognised"; exit 1; }
+          if [ "${{ matrix.platform }}" = win ]; then AE=$(cygpath -m "$AE"); PR=$(cygpath -m "$PR"); fi
+          echo "AE_SDK=$AE" >> "$GITHUB_ENV"
+          echo "PR_SDK=$PR" >> "$GITHUB_ENV"
+      - name: Build (macOS, CPU + Metal)
+        if: steps.sdk.outputs.available == 'true' && matrix.platform == 'mac'
+        working-directory: plugins/film-effects
+        run: |
+          cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=Release -DFE_BUILD_PLUGIN=ON -DAE_SDK_DIR="$AE_SDK" -DPR_SDK_DIR="$PR_SDK"
+          cmake --build build-mac --config Release --parallel --target FilmEffects FilmBloom FilmHalation FilmGrain
+          mkdir -p ../../out/FilmEffects-mac
+          find build-mac -maxdepth 3 -name 'Film*.plugin' -exec cp -R {} ../../out/FilmEffects-mac/ \;
+          cp scripts/install-mac.command ../../out/FilmEffects-mac/
+          ls -R ../../out/FilmEffects-mac | head -40
+      - name: Build (Windows, CPU)
+        if: steps.sdk.outputs.available == 'true' && matrix.platform == 'win'
+        shell: pwsh
+        working-directory: plugins/film-effects
+        run: |
+          cmake -S . -B build-win -G "Visual Studio 17 2022" -A x64 -DFE_BUILD_PLUGIN=ON "-DAE_SDK_DIR=$env:AE_SDK" "-DPR_SDK_DIR=$env:PR_SDK"
+          foreach ($t in "FilmEffects", "FilmBloom", "FilmHalation", "FilmGrain") {
+            cmake --build build-win --config Release --target $t
+            if ($LASTEXITCODE -ne 0) { throw "build of $t failed" }
+          }
+          New-Item -ItemType Directory -Force -Path ../../out/FilmEffects-win | Out-Null
+          Get-ChildItem -Recurse build-win -Filter "Film*.aex" | Copy-Item -Destination ../../out/FilmEffects-win/
+          Copy-Item scripts/install-windows.ps1 ../../out/FilmEffects-win/
+          Get-ChildItem ../../out/FilmEffects-win
+      - name: Upload plugins
+        if: steps.sdk.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: FilmEffects-${{ matrix.platform }}
+          path: out/FilmEffects-${{ matrix.platform }}
+          if-no-files-found: error
