@@ -1,6 +1,10 @@
 # Licensing
 
 - Film Effects source code: MIT (repository `LICENSE`). Free, no warranty.
+- DaVinci Resolve / OpenFX build: uses the OpenFX headers and C++ Support library (Academy
+  Software Foundation, BSD-3-Clause, https://github.com/AcademySoftwareFoundation/openfx). They
+  are downloaded at build time (pinned commit) and compiled into `FilmEffects.ofx`; they are not
+  stored in this repository. BSD-3-Clause allows redistribution in binary form with its notice.
 - Algorithms written for this project from general image-processing principles (soft-knee
   thresholds, Gaussian pyramids, hashed value noise). No Dehancer or other proprietary code, assets
   or names are used.

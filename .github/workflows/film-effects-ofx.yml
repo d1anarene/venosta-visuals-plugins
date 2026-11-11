@@ -1,0 +1,89 @@
+name: film-effects-ofx
+# Builds the Film Effects OpenFX plug-in for DaVinci Resolve (macOS universal, Windows x64,
+# Linux x86-64). Needs no Adobe SDK: the BSD-licensed OpenFX SDK is fetched at configure time.
+# Checks: core tests, loading the bundle like an OFX host, and (Windows) a silent install and
+# uninstall of the Setup. Not a test inside DaVinci Resolve.
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  ofx:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+          - os: windows-latest
+            platform: windows
+          - os: ubuntu-latest
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: plugins/film-effects
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version
+        run: echo "FE_VERSION=$(tr -d ' \n\r' < ../../VERSION).${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+      - name: Configure and build
+        run: |
+          extra=()
+          [ "${{ matrix.platform }}" = mac ] && extra+=(-DCMAKE_OSX_DEPLOYMENT_TARGET=12.0)
+          cmake -S . -B build-ofx -DCMAKE_BUILD_TYPE=Release -DFE_BUILD_OFX=ON "-DFE_OFX_VERSION=$FE_VERSION" "${extra[@]}"
+          cmake --build build-ofx --config Release --parallel
+      - name: Test (core + OFX load)
+        run: ctest --test-dir build-ofx -C Release --output-on-failure
+      - name: Package (macOS .pkg)
+        if: matrix.platform == 'mac'
+        run: |
+          mkdir -p ../../out
+          bash scripts/package-resolve-macos.sh build-ofx/FilmEffects.ofx.bundle ../../out/FilmEffects-Resolve-mac.pkg "$FE_VERSION"
+      - name: Package (Linux .tar.gz)
+        if: matrix.platform == 'linux'
+        run: |
+          mkdir -p ../../out
+          cp ../../LICENSE build-ofx/LICENSE.txt
+          tar -C build-ofx -czf ../../out/FilmEffects-Resolve-linux.tar.gz FilmEffects.ofx.bundle LICENSE.txt
+      - name: Package (Windows Setup.exe)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        working-directory: .
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Installing Inno Setup failed' }
+          }
+          $root = (Get-Location).Path
+          & $iscc "/DAppVersion=$env:FE_VERSION" "/DBundleDir=$root\plugins\film-effects\build-ofx\FilmEffects.ofx.bundle" "/DRepoRoot=$root" "/DOutputDir=$root\out" "plugins\film-effects\installer\windows\FilmEffectsResolve.iss"
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compile failed' }
+      - name: Test Windows Setup (silent install + uninstall)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        working-directory: .
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bin = "${env:CommonProgramFiles}\OFX\Plugins\FilmEffects.ofx.bundle\Contents\Win64\FilmEffects.ofx"
+          $p = Start-Process (Resolve-Path out\FilmEffects-Resolve-Windows-Setup.exe) -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=$env:RUNNER_TEMP\setup.log" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\setup.log"; throw "Setup exit code $($p.ExitCode)" }
+          if (-not (Test-Path $bin)) { throw "Missing $bin" }
+          & plugins\film-effects\build-ofx\Release\fe_ofx_load_test.exe $bin
+          if ($LASTEXITCODE -ne 0) { throw 'Installed bundle failed the load test' }
+          $uninst = "$env:ProgramFiles\Venosta Visuals\Film Effects for Resolve\unins000.exe"
+          Start-Process $uninst -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+          for ($i = 0; $i -lt 60 -and (Test-Path $bin); $i++) { Start-Sleep 1 }
+          if (Test-Path "${env:CommonProgramFiles}\OFX\Plugins\FilmEffects.ofx.bundle") { throw 'Uninstall left the bundle' }
+          Write-Host 'Resolve installer tests passed'
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: FilmEffects-Resolve-${{ matrix.platform }}
+          path: out/FilmEffects-Resolve-*
+          if-no-files-found: error

@@ -17,7 +17,7 @@ delivery. More plugins (and possibly other Adobe apps) will follow.
 | Plugin | What it does | Status |
 | --- | --- | --- |
 | [Track Range Exporter](plugins/track-range-exporter/README.md) | Pick a guide track (e.g. V1). Every clip on it becomes its own export job in Adobe Media Encoder, rendering the **full graded sequence** (all tracks, adjustment layers, Lumetri, audio) for exactly that clip's time range. | Early version — **works in Premiere Pro 27 on macOS** (user-tested); frame-exact checks and Windows still open |
-| [Film Effects](plugins/film-effects/README.md) | Native video effects with **Bloom**, **Halation** and **Film Grain** — combined in one effect or as three standalone effects — designed to sit after Lumetri or on an adjustment layer. | **Host-tested on macOS** — user-tested in Premiere Pro 27 on Apple Silicon; CPU tests and Metal comparison pass in CI. Mac installer available in releases (macOS 26+); Windows Setup.exe (CPU + CUDA builds) experimental, host-unverified |
+| [Film Effects](plugins/film-effects/README.md) | Native video effects with **Bloom**, **Halation** and **Film Grain** — combined in one effect or as three standalone effects — designed to sit after Lumetri or on an adjustment layer. | **Host-tested on macOS** — user-tested in Premiere Pro 27 on Apple Silicon; CPU tests and Metal comparison pass in CI. Mac installer available in releases (macOS 26+); Windows Setup.exe (CPU + CUDA builds) experimental. **DaVinci Resolve (OpenFX) version in development** — CPU only, not yet tested in Resolve |
 
 Each plugin folder has its own README with installation steps, usage and known limitations.
 
@@ -37,6 +37,7 @@ See [LICENSE](LICENSE) for the full terms.
 
 - Adobe Premiere Pro (current version; see each plugin's README for tested versions)
 - Adobe Media Encoder for plugins that queue exports
+- Film Effects also has an experimental DaVinci Resolve (OpenFX) build for Windows, macOS and Linux
 - Windows and macOS: Track Range Exporter is a UXP panel (both systems); Film Effects builds on
   both; the Mac release includes Metal acceleration, while experimental Windows downloads offer CPU-only or CUDA acceleration
 
@@ -56,6 +57,12 @@ cd plugins/track-range-exporter && npm install && npm test
 
 ```bash
 cd plugins/film-effects && ./scripts/run-core-tests.sh
+```
+
+Build the DaVinci Resolve (OpenFX) plug-in (any OS, no Adobe SDK needed):
+
+```bash
+cd plugins/film-effects && cmake -S . -B build-ofx -DFE_BUILD_OFX=ON && cmake --build build-ofx && ctest --test-dir build-ofx
 ```
 
 Package prebuilt Mac bundles (on macOS, with Xcode):
