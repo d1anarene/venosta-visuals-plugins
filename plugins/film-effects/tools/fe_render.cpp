@@ -16,7 +16,9 @@
 
 #include "common/fe_kernels.h"
 #include "pipeline/pipeline.h"
+#ifndef _WIN32
 #include <sys/resource.h>
+#endif
 #include "scenes.h"
 
 using namespace fe;
@@ -94,13 +96,17 @@ int main(int argc, char** argv) {
   Image src = makeScene(scene, w, h);
   if (!before.empty()) writePPM(src, before);
   Image img = src;
-  auto peakKB = [] {
+  auto peakKB = []() -> long {
+#ifdef _WIN32
+    return 0;  // --mem is not implemented on Windows
+#else
     struct rusage ru;
     getrusage(RUSAGE_SELF, &ru);
 #ifdef __APPLE__
     return ru.ru_maxrss / 1024;  // bytes on macOS
 #else
     return ru.ru_maxrss;  // KiB on Linux
+#endif
 #endif
   };
   long peakBefore = peakKB();

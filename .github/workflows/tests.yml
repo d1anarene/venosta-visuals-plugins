@@ -28,6 +28,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: ./scripts/run-core-tests.sh
+  film-effects-core-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: plugins/film-effects
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build core, tests and CLI with MSVC
+        run: |
+          cmake -S . -B build
+          cmake --build build --config Release --parallel
+      - name: Run core tests
+        run: ./build/Release/fe_core_tests.exe
   film-effects-metal:
     runs-on: macos-latest
     defaults:
