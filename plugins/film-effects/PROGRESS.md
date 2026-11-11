@@ -10,7 +10,13 @@ _Last update: 2026-11-11_
 - Added a separate `windows-2022` / VS 2022 job installing CUDA 12.9.1 compiler, runtime and VS
   integration (pinned cuda-toolkit action v0.2.36). CUDA is mandatory in this job; CPU download
   remains separate. Inspect every `.aex` for `xGPUFilterEntry` and reject dynamic cudart imports.
-- CUDA Windows build/linking and runtime verification pending. User hardware: **GTX 1080**.
+- First Windows CUDA job at `80f7d8a` compiled and linked all four plugins, verified GPU entry
+  exports and static runtime linkage (run `43048689025`). Final GTX 1080-targeted job at
+  `a79d9b4` failed configuration: PowerShell unwrapped a single-item conditional array, then
+  splatted the architecture-list string into characters (run `43048994443`).
+- PR #7 was merged before that failure was correctly caught. Its release cannot publish unless
+  native builds pass. Follow-up fixes argument construction with one explicit array.
+- Final CUDA package and runtime verification pending. User hardware: **GTX 1080**.
   Explicit native `sm_61` target added; inspect CUDA ELF sections for Pascal code in each plugin. No NVIDIA hardware is available
   here; successful compilation will not establish GPU execution or Premiere compatibility.
 - DaVinci Resolve audit: no OpenFX adapter, build target, tests or installer exists in this repo.

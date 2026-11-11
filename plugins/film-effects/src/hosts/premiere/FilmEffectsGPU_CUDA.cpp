@@ -2,7 +2,7 @@
 // SDK's GPU filter extension (xGPUFilterEntry / PrGPUFilter). Counterpart of FilmEffectsGPU.mm
 // (Metal); both call an engine that shares its maths with the tested CPU reference.
 //
-// STATUS: DRAFT, NOT YET COMPILED against the Premiere SDK. Documented facts used (Premiere SDK
+// STATUS: compiled/linked in Windows CI; not yet run in Premiere on an NVIDIA GPU. Facts from the SDK
 // guide, gpu-effects-transitions/*): GPU entry supplements the software effect; CreateInstance
 // returning an error makes Premiere render in software; Render may work in place; result keeps
 // the input pixel format; GetParam() reads parameters; CUDA via the runtime API is supported when
