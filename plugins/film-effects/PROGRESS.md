@@ -12,7 +12,8 @@ _Last update: 2026-11-11_
   Export matching, CPU-vs-Metal inside Premiere, HDR, saved-project recall, long timeline
   stability, Intel host behavior and measured performance remain unverified.
 - Repository version moves to `1.0`. Release workflow builds native plugins with private SDKs,
-  includes a reproducible Mac `.pkg`, and labels the Windows CPU ZIP experimental. No SDK
+  includes a reproducible Mac `.pkg`. Windows builds stay as CI artifacts until host-tested;
+  no Windows Film Effects download is published. No SDK
   sources are included. The Mac package is ad hoc signed only; installer unsigned/not notarized.
 - CUDA CI initially retried the official Ubuntu archive, but that hostname also failed DNS
   resolution (run `43042608039`). NVIDIA downloads worked. Updated setup to extract the compiler,

@@ -46,17 +46,10 @@ jobs:
         with:
           name: FilmEffects-mac-installer
           path: out
-      - name: Download Film Effects Windows build
-        uses: actions/download-artifact@v4
-        with:
-          name: FilmEffects-win
-          path: native-win
       - name: Name native release downloads
         run: |
           tag=${{ steps.version.outputs.tag }}
           mv out/FilmEffects-mac.pkg "out/FilmEffects-mac-${tag}.pkg"
-          cp LICENSE native-win/LICENSE.txt
-          (cd native-win && zip -r "../out/FilmEffects-Windows-CPU-experimental-${tag}.zip" .)
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -74,10 +67,10 @@ jobs:
           ### Film Effects
           - \`FilmEffects-mac-${tag}.pkg\`: quit Premiere, double-click to install, then restart Premiere. Includes Film Effects, Film Bloom, Film Halation and Film Grain under Video Effects → Venosta Visuals.
           - Mac: macOS 26+, Apple Silicon + Intel. User-tested in Premiere Pro 27 on an Apple Silicon Mac. Installer is unsigned, bundles are ad hoc signed, and this release is not Apple-notarized.
-          - \`FilmEffects-Windows-CPU-experimental-${tag}.zip\`: CPU-only build; extract and run install-windows.ps1. Windows host behavior is unverified.
+          - Film Effects is released for macOS only. Windows builds remain CI artifacts until tested inside Premiere on Windows.
           - CPU tests and Metal GPU comparisons are automated. Export matching, long timeline stability, HDR workflows and measured playback performance remain unverified. No Adobe SDK files are included.
 
           Status of each plugin: see the README and each plugin's PROGRESS.md.
           NOTES
-          gh release create "$tag" out/*.ccx out/*.pkg out/*.zip --target "$GITHUB_SHA" --title "$tag" \
+          gh release create "$tag" out/*.ccx out/*.pkg --target "$GITHUB_SHA" --title "$tag" \
             --notes-file notes.md --generate-notes ${{ steps.version.outputs.pre }}
