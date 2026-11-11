@@ -66,10 +66,13 @@ jobs:
       - name: Install CUDA compiler (NVIDIA apt repository)
         working-directory: .
         run: |
+          # The runner's Azure Ubuntu mirror repeatedly failed DNS resolution. Keep apt's
+          # mirror transport, but use the official Ubuntu archive for Ubuntu packages.
+          echo 'https://archive.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
           wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
           sudo dpkg -i cuda-keyring_1.1-1_all.deb
-          sudo apt-get update -q
-          sudo apt-get install -y -q cuda-nvcc-12-6 cuda-cudart-dev-12-6
+          sudo apt-get -o Acquire::Retries=3 update --error-on=any -q
+          sudo apt-get -o Acquire::Retries=3 install -y -q cuda-nvcc-12-6 cuda-cudart-dev-12-6
           echo "/usr/local/cuda-12.6/bin" >> "$GITHUB_PATH"
       - name: Compile CUDA kernels and engine with nvcc (no GPU on the runner, compile only)
         run: |

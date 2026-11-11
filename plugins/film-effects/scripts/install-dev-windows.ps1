@@ -6,8 +6,8 @@ param([string[]]$Names = @("FilmEffects", "FilmBloom", "FilmHalation", "FilmGrai
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 # Documented common plug-in location (Premiere Pro SDK guide, "Plugin Installation").
-$Dest = Join-Path $env:ProgramFiles "Adobe\Common\Plugins\7.0\MediaCore"
-$Alt = Join-Path $env:ProgramFiles "Adobe\Common\Plug-ins\7.0\MediaCore"
+$Dest = Join-Path $env:ProgramFiles "Adobe\Common\Plug-ins\7.0\MediaCore"
+$Alt = Join-Path $env:ProgramFiles "Adobe\Common\Plugins\7.0\MediaCore"
 New-Item -ItemType Directory -Force -Path $Dest | Out-Null
 foreach ($name in $Names) {
   $src = Get-ChildItem -Recurse build-win -Filter "$name.aex" | Select-Object -First 1

@@ -69,18 +69,19 @@ jobs:
         if: steps.sdk.outputs.available == 'true' && matrix.platform == 'mac'
         working-directory: plugins/film-effects
         run: |
-          cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=Release -DFE_BUILD_PLUGIN=ON -DAE_SDK_DIR="$AE_SDK" -DPR_SDK_DIR="$PR_SDK"
+          cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0 -DFE_BUILD_PLUGIN=ON -DAE_SDK_DIR="$AE_SDK" -DPR_SDK_DIR="$PR_SDK"
           cmake --build build-mac --config Release --parallel --target FilmEffects FilmBloom FilmHalation FilmGrain
           mkdir -p ../../out/FilmEffects-mac
           find build-mac -maxdepth 3 -name 'Film*.plugin' -exec cp -R {} ../../out/FilmEffects-mac/ \;
           cp scripts/install-mac.command ../../out/FilmEffects-mac/
+          bash scripts/package-macos.sh ../../out/FilmEffects-mac ../../out/FilmEffects-mac.pkg "$(tr -d ' \n\r' < ../../VERSION).${GITHUB_RUN_NUMBER}"
           ls -R ../../out/FilmEffects-mac | head -40
       - name: Build (Windows, CPU)
         if: steps.sdk.outputs.available == 'true' && matrix.platform == 'win'
         shell: pwsh
         working-directory: plugins/film-effects
         run: |
-          cmake -S . -B build-win -A x64 -DFE_BUILD_PLUGIN=ON "-DAE_SDK_DIR=$env:AE_SDK" "-DPR_SDK_DIR=$env:PR_SDK"
+          cmake -S . -B build-win -A x64 -DFE_BUILD_PLUGIN=ON -DFE_WITH_CUDA=OFF "-DAE_SDK_DIR=$env:AE_SDK" "-DPR_SDK_DIR=$env:PR_SDK"
           foreach ($t in "FilmEffects", "FilmBloom", "FilmHalation", "FilmGrain") {
             cmake --build build-win --config Release --target $t
             if ($LASTEXITCODE -ne 0) { throw "build of $t failed" }
@@ -95,4 +96,11 @@ jobs:
         with:
           name: FilmEffects-${{ matrix.platform }}
           path: out/FilmEffects-${{ matrix.platform }}
+          if-no-files-found: error
+      - name: Upload Mac installer
+        if: steps.sdk.outputs.available == 'true' && matrix.platform == 'mac'
+        uses: actions/upload-artifact@v4
+        with:
+          name: FilmEffects-mac-installer
+          path: out/FilmEffects-mac.pkg
           if-no-files-found: error

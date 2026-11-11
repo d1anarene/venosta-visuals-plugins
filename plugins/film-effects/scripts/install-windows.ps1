@@ -2,7 +2,7 @@
 # the folder that contains the Film*.aex files. Older copies are renamed to a timestamped backup.
 $ErrorActionPreference = "Stop"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$dest = Join-Path $env:ProgramFiles "Adobe\Common\Plugins\7.0\MediaCore"
+$dest = Join-Path $env:ProgramFiles "Adobe\Common\Plug-ins\7.0\MediaCore"
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
   Start-Process powershell -Verb RunAs -ArgumentList "-ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`""

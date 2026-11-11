@@ -1,20 +1,21 @@
 # Building and installing
 
-> The plugin has **not yet been built or tested on a Mac**. These are the intended steps; please
-> report problems.
+> Mac: user-tested in Premiere Pro 27 on Apple Silicon; macOS 26+.
+> Windows: CI-built CPU-only download; host testing pending. Mac downloads are unsigned and
+> not Apple-notarized. Export matching, long timeline stability and HDR workflows are unverified.
 
 | | macOS | Windows |
 | --- | --- | --- |
 | Plugin files | `Film*.plugin` bundles (arm64 + x86_64) | `Film*.aex` (x64) |
-| Rendering | CPU + Metal GPU | CPU + CUDA GPU (NVIDIA); CPU only if built without the CUDA toolkit |
-| Status | written, not yet built | written, not yet built |
+| Rendering | CPU + Metal GPU | Release ZIP: CPU only; CUDA available for source builds |
+| Status | User-tested in Premiere Pro 27 on Apple Silicon | CI-built; host testing pending |
 
 ## 1. Get the SDKs
 Download from the Adobe Developer Console (free Adobe account): **After Effects Plug-in SDK** and
 **Premiere Pro C++ SDK** (same year as your Premiere). Unzip both.
 
 ## 2. Build (macOS)
-Requirements: macOS 13+, Xcode 15+ (Metal toolchain), CMake 3.20+.
+Release requires macOS 26+. Source-build requirements: macOS 13+, Xcode 15+ (Metal toolchain), CMake 3.20+.
 ```bash
 cd plugins/film-effects
 ./scripts/build-macos.sh "/path/to/AfterEffectsSDK/Examples" "/path/to/Premiere Pro SDK"
@@ -46,10 +47,20 @@ CMake prints "CUDA GPU path enabled" when it found the CUDA toolkit. In Premiere
 *File → Project Settings → General → Renderer* is "Mercury Playback Engine GPU Acceleration (CUDA)".
 
 ## 3. Install (macOS)
+
+Download `FilmEffects-mac-v*.pkg` from the Releases page. Quit Premiere, double-click the installer, then restart
+Premiere and look in **Effects → Video Effects → Venosta Visuals**. The destination is
+`/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/` (**with a hyphen**).
+Premiere 27.0's actual loading log confirms it scans this folder. The initial installer used
+`Common/Plugins`, which was not scanned. The corrected installer leaves those inactive files
+alone and installs into the scanned folder. Existing copies in the correct folder are backed
+up under `/Library/Application Support/Venosta Visuals/Backups/`.
+
+For a local development build:
 ```bash
 ./scripts/install-dev-macos.sh
 ```
-Copies the four bundles to `/Library/Application Support/Adobe/Common/Plugins/7.0/MediaCore/`
+Copies the four bundles to `/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/`
 (admin password required; an existing copy is moved to a timestamped backup first). Install only
 some with e.g. `./scripts/install-dev-macos.sh FilmEffects FilmGrain`.
 Restart Premiere Pro. The effects are in **Effects → Video Effects → Venosta Visuals**.
@@ -59,7 +70,7 @@ In PowerShell **as administrator**:
 ```powershell
 .\scripts\install-dev-windows.ps1
 ```
-Copies the `.aex` files to `C:\Program Files\Adobe\Common\Plugins\7.0\MediaCore\` (existing copies
+Copies the `.aex` files to `C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\` (existing copies
 are renamed to a timestamped backup first). Restart Premiere Pro.
 
 Unsigned plugins may be blocked by Gatekeeper on first load; sign with your Developer ID or allow it
@@ -71,3 +82,18 @@ folder above (and any `.backup-*` copies
 you no longer need), install the new build, restart Premiere. Projects keep their settings because
 the match names (`VVIS FilmEffects`, `VVIS FilmBloom`, `VVIS FilmHalation`, `VVIS FilmGrain`) and
 parameter IDs never change.
+
+## Package a Mac installer
+
+On macOS with Xcode, from the repository root:
+
+```bash
+bash plugins/film-effects/scripts/package-macos.sh /path/to/bundles /path/to/FilmEffects.pkg 1.0.0
+```
+
+The bundle folder must contain all four `.plugin` bundles with their PiPL and Metal resources.
+The script restores executable permissions, validates both CPU architectures and PiPL resources,
+ad hoc signs each bundle, and creates a non-relocatable package for the confirmed MediaCore path.
+The installer requires macOS 26+, asks Premiere to be closed, and backs up installed copies before
+updating. Ad hoc signing does not provide Apple Developer ID trust or notarization. The package
+identifier is retained from the preview so existing installations can update.

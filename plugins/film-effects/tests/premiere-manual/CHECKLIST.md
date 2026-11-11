@@ -1,10 +1,11 @@
 # Premiere host acceptance checklist
 
-Nothing here has been run yet. Record date, macOS, Mac model, Premiere version and results in
-`PROGRESS.md`. A ✓ only counts when observed in Premiere.
+First user test (2026-11-11): all four effects appear in Premiere Pro 27 on an Apple Silicon Mac;
+the user reports the plugin works well enough for release. Detailed checks below remain open
+unless explicitly observed. Record further results in `PROGRESS.md`.
 
 ## A. Stage 1 proof — load, passthrough, CPU vs GPU
-- [ ] Effect appears in Effects → Video Effects → Venosta Visuals → Film Effects (and via search)
+- [x] All four effects appear under Venosta Visuals (user screenshot, 2026-11-11). Search not checked.
 - [ ] Applied to a clip with all groups off: image identical to effect disabled (difference blend = black)
 - [ ] Project Settings → Renderer = Metal: render works, timeline not red when playing 1080p
 - [ ] Renderer = Software Only: same look (software path)

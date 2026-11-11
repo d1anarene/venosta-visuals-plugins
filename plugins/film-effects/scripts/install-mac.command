@@ -5,7 +5,7 @@
 # carry it are blocked by macOS). Needs your Mac password once.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-DEST="/Library/Application Support/Adobe/Common/Plugins/7.0/MediaCore"
+DEST="/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore"
 echo "Film Effects installer"
 echo "Destination: $DEST"
 shopt -s nullglob

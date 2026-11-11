@@ -2,6 +2,60 @@
 
 _Last update: 2026-11-11_
 
+## First Mac release (2026-11-11)
+
+- **User host verification:** after the corrected installer, a Premiere screenshot shows
+  Film Effects, Film Bloom, Film Halation and Film Grain under Venosta Visuals. The user reports
+  satisfactory operation and approves release. Environment: Premiere Pro 27, macOS 27.2,
+  Apple Silicon (architecture/version inspected locally; Mac model not recorded).
+- This is a limited user smoke test, not completion of the manual acceptance checklist.
+  Export matching, CPU-vs-Metal inside Premiere, HDR, saved-project recall, long timeline
+  stability, Intel host behavior and measured performance remain unverified.
+- Repository version moves to `1.0`. Release workflow builds native plugins with private SDKs,
+  includes a reproducible Mac `.pkg`, and labels the Windows CPU ZIP experimental. No SDK
+  sources are included. The Mac package is ad hoc signed only; installer unsigned/not notarized.
+- Fixed CUDA CI dependency setup to use the official Ubuntu archive instead of the failing
+  Azure mirror, with retries and strict apt-update errors. New CI results will be recorded after the release checks finish.
+
+## Release preparation checks (2026-11-11)
+
+- Local `./scripts/run-core-tests.sh`: **19,931 checks passed, 0 failed**.
+- GPU pass emulation: **96 cases passed**; half conversion: **0 mismatches**.
+- `scripts/package-macos.sh` built a package from the existing CI artifact; verified universal
+  architectures, signatures and PiPL resources. Installer execution is not part of this check.
+- Updated workflow YAML parses successfully; shell syntax and `git diff --check` pass.
+
+## Latest build and preview packaging (2026-11-11)
+
+- Native build [run 43034676457](https://github.com/d1anarene/venosta-visuals-plugins/actions/runs/43034676457)
+  at `22a5199`: **macOS and Windows succeeded**, producing all four effects.
+- Tests [run 43034676360, attempt 2](https://github.com/d1anarene/venosta-visuals-plugins/actions/runs/43034676360):
+  CPU on Linux/macOS/Windows, Metal GPU comparison and Track Range Exporter **passed**.
+  CUDA installation failed again resolving `azure.archive.ubuntu.com`, before CUDA compilation.
+- Created local `FilmEffects-mac-preview-22a5199.pkg` from the successful Mac artifact.
+  All four bundles contain arm64 + x86_64; embedded minimum OS is **macOS 26.0**.
+  Restored executable permissions lost by artifact ZIP packaging; ad hoc signed and verified
+  each bundle. Installer is unsigned and not notarized. Existing bundles are backed up outside
+  Adobe's plugin scan directory before updating. No Adobe SDK files are included.
+- Package expanded and payload/signatures checked locally. **Installer execution, Premiere
+  loading/rendering, and export remain unverified**. No installation was performed in this chat.
+- Historical "unbuilt" / "blocked" labels below describe earlier work; the successful native CI
+  build supersedes them. Stage 1 still needs its first Premiere host proof.
+
+## First installation diagnosis and corrected package (2026-11-11)
+
+- User installed the first preview; the package receipt and all four bundles were present.
+  Premiere's Effects panel did not show Venosta Visuals.
+- Read the local Premiere 27.0 `Plugin Loading.log`: it scans
+  `/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore`, while the first installer
+  placed files in `Common/Plugins` (no hyphen). None of our bundles appeared in its scan log.
+- Corrected Mac installation scripts and documentation to use `Common/Plug-ins`.
+  Repackaged the same binaries as `FilmEffects-mac-preview-22a5199-fixed.pkg`, receipt version
+  `0.1.0.5`. Expanded and checked the corrected destination, resources, executable permissions
+  and signatures for all four bundles; PiPL resource decoded successfully with `DeRez -useDF`.
+- **Corrected installer not yet executed; Premiere loading and rendering still unverified.**
+  Old inactive files are left intact; no preferences, projects or plugin cache were changed.
+
 ## Verification legend
 - **tested**: compiled and run here (`scripts/run-core-tests.sh`, Linux, g++ 13)
 - **syntax**: compiled only against a throwaway stand-in for the SDK headers (not committed; proves
@@ -9,18 +63,22 @@ _Last update: 2026-11-11_
 - **ci-gpu**: compiled with Apple's Metal toolchain and run on a GPU in GitHub Actions
   (`macos-latest`, "Apple Paravirtual device"), compared with the CPU reference
 - **unbuilt**: written, never compiled
-- **host**: verified inside Premiere Pro — **nothing yet**
+- **host**: limited user smoke test in Premiere Pro 27 on Apple Silicon; detailed checklist pending
 
 ## Stage status
 
 | Stage | State |
 | --- | --- |
 | 0 Feasibility audit | ✅ `docs/FEASIBILITY.md` |
-| 1 Thin native plugin compiled + run in Premiere | ⛔ **Blocked**: no Mac, Adobe SDKs or Premiere in this environment. Plugin source is ready to build. |
+| 1 Native plugin built + run in Premiere | ✅ Native builds in CI; user reports Mac operation satisfactory and confirms all four effects load. Detailed acceptance checks pending. |
 | 2 CPU cores + tests + CLI | ✅ tested — 37 test cases, ~19.8k checks pass |
-| 3 Native GPU effects | 🟡 Metal kernels + engine **ci-gpu verified** (matches CPU on 8 scenes × 6 presets, 32f and 16f); Premiere GPU entry point (`FilmEffectsGPU.mm`) **unbuilt**; CUDA engine compiles (nvcc, CI) and its pass sequence matches the CPU exactly in emulation, not yet run on NVIDIA; CUDA GPU entry **unbuilt** |
-| 4 Usability (groups, presets, standalone effects, docs) | 🟡 params/groups/presets + 3 standalone effects written (**syntax** for CPU entry); docs done; host tests pending |
+| 3 Native GPU effects | 🟡 Metal engine verified against CPU in CI; native Metal entry builds. GPU activation inside Premiere and CUDA hardware execution unverified. |
+| 4 Usability | ✅ First Mac installer and all four effects user-tested; detailed preset/keyframe/export checks pending. |
 | 5 Optional UXP companion | not started (only after Stage 4 works in host) |
+
+## Earlier development record (historical verification labels)
+
+The entries below retain the original verification history; current status is above.
 
 ## Done
 - Core: params + sanitising + 7 presets; pixel I/O (BGRA 8u/32f, ARGB 8u/16u/32f premultiplied, strides incl. negative) — tested
