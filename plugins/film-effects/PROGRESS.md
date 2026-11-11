@@ -1,6 +1,6 @@
 # PROGRESS — Film Effects
 
-_Last update: 2026-11-10_
+_Last update: 2026-11-11_
 
 ## Verification legend
 - **tested**: compiled and run here (`scripts/run-core-tests.sh`, Linux, g++ 13)
@@ -19,7 +19,7 @@ _Last update: 2026-11-10_
 | 1 Thin native plugin compiled + run in Premiere | ⛔ **Blocked**: no Mac, Adobe SDKs or Premiere in this environment. Plugin source is ready to build. |
 | 2 CPU cores + tests + CLI | ✅ tested — 37 test cases, ~19.8k checks pass |
 | 3 Native Metal effects | 🟡 Metal kernels + engine **ci-gpu verified** (matches CPU on 8 scenes × 6 presets, 32f and 16f); Premiere GPU entry point (`FilmEffectsGPU.mm`) **unbuilt** |
-| 4 Usability (groups, presets, docs) | 🟡 params/groups/presets written (**syntax** for CPU entry); docs done; host tests pending |
+| 4 Usability (groups, presets, standalone effects, docs) | 🟡 params/groups/presets + 3 standalone effects written (**syntax** for CPU entry); docs done; host tests pending |
 | 5 Optional UXP companion | not started (only after Stage 4 works in host) |
 
 ## Done
@@ -33,6 +33,10 @@ _Last update: 2026-11-10_
   ≤ 0.062/255 (16f frames), mean ≤ 0.019/255; tolerance 2/255 (see tests/gpu/README.md)
 - CLI renderer, synthetic fixtures, A/B images, CPU benchmarks (docs/PERFORMANCE.md)
 - Parameter mapping and host time → grain key — tested
+- Standalone effects Film Bloom / Film Halation / Film Grain: same sources built per variant,
+  one parameter table (stable disk IDs), bit-identical to the combined effect — table and
+  equivalence tested; host code **syntax** for all 4 variants
+- CPU memory cut by more than half and CPU path faster (docs/PERFORMANCE.md); output bit-identical — tested
 
 ## Blocked / needs a person with a Mac
 1. `./scripts/build-macos.sh <AE SDK Examples> <Premiere SDK>` — fix any SDK naming differences
@@ -42,8 +46,6 @@ _Last update: 2026-11-10_
    uses the GPU path (Metal renderer) — the engine underneath is already verified in CI.
 
 ## Next (after host proof)
-- Reduce CPU memory (reuse planes, process bloom/halation at reduced precision where safe)
-- Standalone entries Film Bloom / Film Halation / Film Grain (same core, separate match names)
 - Windows: CUDA path (or software only first)
 - Optional UXP preset panel (Stage 5)
 

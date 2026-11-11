@@ -1,7 +1,25 @@
 // PiPL resource for Film Effects. Values must agree with GlobalSetup() in FilmEffects.cpp.
 // STATUS: not yet compiled (needs the After Effects SDK: AE_General.r, AE_EffectVers.h).
+// Compile once per variant with -d FE_VARIANT=0..3 (see plugin.cmake); names must match FilmEffects.h.
 #include "AEConfig.h"
 #include "AE_EffectVers.h"
+
+#ifndef FE_VARIANT
+  #define FE_VARIANT 0
+#endif
+#if FE_VARIANT == 0
+  #define FE_PIPL_NAME "Film Effects"
+  #define FE_PIPL_MATCH "VVIS FilmEffects"
+#elif FE_VARIANT == 1
+  #define FE_PIPL_NAME "Film Bloom"
+  #define FE_PIPL_MATCH "VVIS FilmBloom"
+#elif FE_VARIANT == 2
+  #define FE_PIPL_NAME "Film Halation"
+  #define FE_PIPL_MATCH "VVIS FilmHalation"
+#else
+  #define FE_PIPL_NAME "Film Grain"
+  #define FE_PIPL_MATCH "VVIS FilmGrain"
+#endif
 
 #ifndef AE_OS_WIN
   #include <AE_General.r>
@@ -10,7 +28,7 @@
 resource 'PiPL' (16000) {
   {
     Kind { AEEffect },
-    Name { "Film Effects" },
+    Name { FE_PIPL_NAME },
     Category { "Venosta Visuals" },
 #ifdef AE_OS_WIN
   #if defined(AE_PROC_INTELx64)
@@ -31,7 +49,7 @@ resource 'PiPL' (16000) {
     AE_Effect_Global_OutFlags { 0x02000000 },
     /* PF_OutFlag2_FLOAT_COLOR_AWARE (1 << 12) | PF_OutFlag2_SUPPORTS_THREADED_RENDERING (1 << 27) */
     AE_Effect_Global_OutFlags_2 { 0x08001000 },
-    AE_Effect_Match_Name { "VVIS FilmEffects" },
+    AE_Effect_Match_Name { FE_PIPL_MATCH },
     AE_Reserved_Info { 0 },
     AE_Effect_Support_URL { "https://venostavisuals.com" }
 #ifdef FE_PIPL_SEARCH_KEYWORDS

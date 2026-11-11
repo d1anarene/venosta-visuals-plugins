@@ -11,9 +11,19 @@ src/core/            host-independent C++17, compiled and unit-tested everywhere
   pipeline/            process(): the effect order below
 src/gpu/metal/       FilmEffects.metal (kernels) + MetalFilmEngine (encodes the same passes)
 src/hosts/premiere/  AE-API effect (CPU entry), PiPL, Premiere GPU entry (Metal), CMake
+                     FilmEffectsParams.h: one parameter table for all effect variants
 tools/fe_render      development CLI (synthetic scenes, A/B images, benchmarks) - not the product
 tests/core           unit/image tests (no dependencies)
 ```
+
+## Effect variants
+
+Premiere loads one effect per plugin binary, so the same sources are built four times with
+`FE_VARIANT` (0 Film Effects, 1 Film Bloom, 2 Film Halation, 3 Film Grain), each with its own match
+name. `FilmEffectsParams.h` holds one table of every control (stable on-disk IDs); each variant
+lists the controls it shows. Controls a variant hides take their defaults, and a standalone
+variant enables only its own effect, so it renders bit-identically to the combined effect with
+only that section on (tested: `standalone_renders_identically_to_combined_section`).
 
 ## Processing order
 

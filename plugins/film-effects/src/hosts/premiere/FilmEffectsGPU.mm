@@ -29,11 +29,12 @@
 
 namespace {
 
-// Path of FilmEffects.metallib inside this plugin bundle (Contents/Resources/).
+// Path of FilmEffects.metallib inside this plugin bundle (Contents/Resources/). Every variant
+// bundle ships the same metallib.
 std::string metallibPath() {
   Dl_info info;
   if (dladdr(reinterpret_cast<const void*>(&metallibPath), &info) && info.dli_fname) {
-    std::string bin = info.dli_fname;  // .../FilmEffects.plugin/Contents/MacOS/FilmEffects
+    std::string bin = info.dli_fname;  // .../<Bundle>.plugin/Contents/MacOS/<Bundle>
     auto pos = bin.rfind("/MacOS/");
     if (pos != std::string::npos) return bin.substr(0, pos) + "/Resources/FilmEffects.metallib";
   }
@@ -68,7 +69,7 @@ class FilmEffectsGPU : public PrGPUFilterBase {
     } reader;
     reader.self = this;
     reader.t = inRenderParams->inClipTime;
-    const fe::FilmParams params = fe::readParams(reader);
+    const fe::FilmParams params = fe::readParams(reader, static_cast<fe::Variant>(FE_VARIANT));
 
     void* srcData = nullptr;
     void* dstData = nullptr;

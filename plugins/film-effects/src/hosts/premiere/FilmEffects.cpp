@@ -55,99 +55,46 @@ PF_Err GlobalSetup(PF_InData* in_data, PF_OutData* out_data) {
   return PF_Err_NONE;
 }
 
+constexpr fe::Variant kVariant = static_cast<fe::Variant>(FE_VARIANT);
+
+int idx(fe::ParamKey k) { return fe::paramIndex(kVariant, k); }
+
 PF_Err ParamsSetup(PF_InData* in_data, PF_OutData* out_data) {
   PF_ParamDef def;
-  const fe::FilmParams d;  // defaults come from the core
-
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_POPUPX("Preset", 8, 1, FE_PRESET_ITEMS, PF_ParamFlag_SUPERVISE | PF_ParamFlag_CANNOT_TIME_VARY, ID_PRESET);
-
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_CHECKBOXX("Master Enable", d.masterEnable, 0, ID_MASTER_ENABLE);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Global Mix", 0, 100, 0, 100, d.mix * 100.0, PF_Precision_TENTHS, PF_ValueDisplayFlag_PERCENT,
-                       0, ID_MIX);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_POPUPX("Working Space", 3, 1, FE_SPACE_ITEMS, PF_ParamFlag_CANNOT_TIME_VARY, ID_WORKING_SPACE);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_POPUPX("Processing Quality", 2, 1, FE_QUALITY_ITEMS, PF_ParamFlag_CANNOT_TIME_VARY, ID_QUALITY);
-
-  // ---- Bloom ----
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_TOPICX("Bloom", PF_ParamFlag_START_COLLAPSED, ID_BLOOM_GROUP);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_CHECKBOXX("Bloom Enable", d.bloom.enabled, 0, ID_BLOOM_ENABLE);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Intensity", 0, 1, 0, 1, d.bloom.intensity, PF_Precision_HUNDREDTHS, PF_ValueDisplayFlag_NONE, 0,
-                       ID_BLOOM_INTENSITY);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Threshold", 0, 16, 0, 2, d.bloom.threshold, PF_Precision_HUNDREDTHS, PF_ValueDisplayFlag_NONE,
-                       0, ID_BLOOM_THRESHOLD);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Soft Knee", 0.001, 4, 0.01, 1, d.bloom.knee, PF_Precision_HUNDREDTHS, PF_ValueDisplayFlag_NONE,
-                       0, ID_BLOOM_KNEE);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Radius (% of height)", 0.05, 25, 0.5, 15, d.bloom.radius, PF_Precision_TENTHS,
-                       PF_ValueDisplayFlag_NONE, 0, ID_BLOOM_RADIUS);
-  AEFX_CLR_STRUCT(def);
-  PF_END_TOPIC(ID_BLOOM_GROUP_END);
-
-  // ---- Halation ----
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_TOPICX("Halation", PF_ParamFlag_START_COLLAPSED, ID_HAL_GROUP);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_CHECKBOXX("Halation Enable", d.halation.enabled, 0, ID_HAL_ENABLE);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Intensity", 0, 1, 0, 1, d.halation.intensity, PF_Precision_HUNDREDTHS,
-                       PF_ValueDisplayFlag_NONE, 0, ID_HAL_INTENSITY);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Threshold", 0, 16, 0, 2, d.halation.threshold, PF_Precision_HUNDREDTHS,
-                       PF_ValueDisplayFlag_NONE, 0, ID_HAL_THRESHOLD);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Radius (% of height)", 0.05, 10, 0.1, 3, d.halation.radius, PF_Precision_HUNDREDTHS,
-                       PF_ValueDisplayFlag_NONE, 0, ID_HAL_RADIUS);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Warmth (red to orange)", 0, 1, 0, 1, d.halation.warmth, PF_Precision_HUNDREDTHS,
-                       PF_ValueDisplayFlag_NONE, 0, ID_HAL_WARMTH);
-  AEFX_CLR_STRUCT(def);
-  PF_END_TOPIC(ID_HAL_GROUP_END);
-
-  // ---- Grain ----
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_TOPICX("Film Grain", PF_ParamFlag_START_COLLAPSED, ID_GRAIN_GROUP);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_CHECKBOXX("Grain Enable", d.grain.enabled, 0, ID_GRAIN_ENABLE);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Amount", 0, 1, 0, 1, d.grain.amount, PF_Precision_HUNDREDTHS, PF_ValueDisplayFlag_NONE, 0,
-                       ID_GRAIN_AMOUNT);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Size (px @1080)", 0.5, 8, 0.5, 4, d.grain.size, PF_Precision_HUNDREDTHS,
-                       PF_ValueDisplayFlag_NONE, 0, ID_GRAIN_SIZE);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Roughness", 0, 1, 0, 1, d.grain.roughness, PF_Precision_HUNDREDTHS, PF_ValueDisplayFlag_NONE,
-                       0, ID_GRAIN_ROUGHNESS);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Shadow Response", 0, 2, 0, 2, d.grain.shadows, PF_Precision_HUNDREDTHS,
-                       PF_ValueDisplayFlag_NONE, 0, ID_GRAIN_SHADOWS);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Midtone Response", 0, 2, 0, 2, d.grain.midtones, PF_Precision_HUNDREDTHS,
-                       PF_ValueDisplayFlag_NONE, 0, ID_GRAIN_MIDTONES);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Highlight Response", 0, 2, 0, 2, d.grain.highlights, PF_Precision_HUNDREDTHS,
-                       PF_ValueDisplayFlag_NONE, 0, ID_GRAIN_HIGHLIGHTS);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_POPUPX("Color Mode", 2, 1, FE_GRAIN_COLOR_ITEMS, 0, ID_GRAIN_COLOR);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_FLOAT_SLIDERX("Color Amount", 0, 1, 0, 1, d.grain.chroma, PF_Precision_HUNDREDTHS, PF_ValueDisplayFlag_NONE,
-                       0, ID_GRAIN_CHROMA);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_SLIDER("Seed", 0, 99999, 0, 999, d.grain.seed, ID_GRAIN_SEED);
-  AEFX_CLR_STRUCT(def);
-  PF_ADD_CHECKBOXX("Animate", d.grain.animate, 0, ID_GRAIN_ANIMATE);
-  AEFX_CLR_STRUCT(def);
-  PF_END_TOPIC(ID_GRAIN_GROUP_END);
-
-  out_data->num_params = FE_NUM_PARAMS;
+  const auto keys = fe::variantKeys(kVariant);
+  for (fe::ParamKey key : keys) {
+    const fe::ParamSpec& s = fe::specFor(key);
+    PF_ParamFlags flags = 0;
+    if (s.supervise) flags |= PF_ParamFlag_SUPERVISE;
+    if (s.cannotTimeVary) flags |= PF_ParamFlag_CANNOT_TIME_VARY;
+    if (s.startCollapsed) flags |= PF_ParamFlag_START_COLLAPSED;
+    AEFX_CLR_STRUCT(def);
+    switch (s.kind) {
+      case fe::ParamKind::GroupStart:
+        PF_ADD_TOPICX(s.name, flags, s.diskId);
+        break;
+      case fe::ParamKind::GroupEnd:
+        PF_END_TOPIC(s.diskId);
+        break;
+      case fe::ParamKind::Checkbox:
+        PF_ADD_CHECKBOXX(s.name, s.dflt != 0.0, flags, s.diskId);
+        break;
+      case fe::ParamKind::Float:
+        PF_ADD_FLOAT_SLIDERX(s.name, s.validMin, s.validMax, s.sliderMin, s.sliderMax, s.dflt,
+                             s.precision == 1 ? PF_Precision_TENTHS : PF_Precision_HUNDREDTHS,
+                             s.percent ? PF_ValueDisplayFlag_PERCENT : PF_ValueDisplayFlag_NONE, flags, s.diskId);
+        break;
+      case fe::ParamKind::Popup:
+        PF_ADD_POPUPX(s.name, s.itemCount, static_cast<int>(s.dflt), s.items, flags, s.diskId);
+        break;
+      case fe::ParamKind::IntSlider:
+        PF_ADD_SLIDER(s.name, static_cast<int>(s.validMin), static_cast<int>(s.validMax),
+                      static_cast<int>(s.sliderMin), static_cast<int>(s.sliderMax), static_cast<int>(s.dflt),
+                      s.diskId);
+        break;
+    }
+  }
+  out_data->num_params = static_cast<A_long>(keys.size()) + 1;  // + input layer
   return PF_Err_NONE;
 }
 
@@ -162,59 +109,60 @@ struct PFParamReader : fe::ParamReader {
   int popup(int i) const override { return params[i]->u.pd.value; }
 };
 
-// Applying a preset writes the preset's values into the visible parameters (so every value stays
-// a normal, keyframeable, project-saved parameter) and resets the popup.
+// Applying a preset (combined effect only) writes the preset's values into the visible
+// parameters, so every value stays a normal, keyframeable, project-saved parameter.
 PF_Err UserChangedParam(PF_InData* in_data, PF_OutData* out_data, PF_ParamDef* params[],
                         const PF_UserChangedParamExtra* extra) {
-  if (extra->param_index != FE_PRESET) return PF_Err_NONE;
-  const int choice = params[FE_PRESET]->u.pd.value;  // 1 = "(choose to apply)"
+  (void)in_data;
+  using K = fe::ParamKey;
+  if (kVariant != fe::Variant::Combined || extra->param_index != idx(K::Preset)) return PF_Err_NONE;
+  const int choice = params[idx(K::Preset)]->u.pd.value;  // 1 = "(choose to apply)"
   static const char* kNames[] = {nullptr, "Subtle Film", "Soft Highlight Glow", "Night Lights", "Fine 35mm Grain",
                                  "Coarse 16mm Grain", "Halation Only", "Off"};
-  if (choice < 2 || choice > 8) return PF_Err_NONE;
+  if (choice < 2 || choice > FE_PRESET_COUNT) return PF_Err_NONE;
   const fe::Preset* preset = fe::findPreset(kNames[choice - 1]);
   if (!preset) return PF_Err_NONE;
   const fe::FilmParams& p = preset->params;
 
-  auto setF = [&](int i, double v) {
-    params[i]->u.fs_d.value = v;
-    params[i]->uu.change_flags = PF_ChangeFlag_CHANGED_VALUE;
+  auto setF = [&](K k, double v) {
+    params[idx(k)]->u.fs_d.value = v;
+    params[idx(k)]->uu.change_flags = PF_ChangeFlag_CHANGED_VALUE;
   };
-  auto setB = [&](int i, bool v) {
-    params[i]->u.bd.value = v ? 1 : 0;
-    params[i]->uu.change_flags = PF_ChangeFlag_CHANGED_VALUE;
+  auto setB = [&](K k, bool v) {
+    params[idx(k)]->u.bd.value = v ? 1 : 0;
+    params[idx(k)]->uu.change_flags = PF_ChangeFlag_CHANGED_VALUE;
   };
-  auto setP = [&](int i, int v) {
-    params[i]->u.pd.value = v;
-    params[i]->uu.change_flags = PF_ChangeFlag_CHANGED_VALUE;
+  auto setP = [&](K k, int v) {
+    params[idx(k)]->u.pd.value = v;
+    params[idx(k)]->uu.change_flags = PF_ChangeFlag_CHANGED_VALUE;
   };
-  setB(FE_BLOOM_ENABLE, p.bloom.enabled);
-  setF(FE_BLOOM_INTENSITY, p.bloom.intensity);
-  setF(FE_BLOOM_THRESHOLD, p.bloom.threshold);
-  setF(FE_BLOOM_KNEE, p.bloom.knee);
-  setF(FE_BLOOM_RADIUS, p.bloom.radius);
-  setB(FE_HAL_ENABLE, p.halation.enabled);
-  setF(FE_HAL_INTENSITY, p.halation.intensity);
-  setF(FE_HAL_THRESHOLD, p.halation.threshold);
-  setF(FE_HAL_RADIUS, p.halation.radius);
-  setF(FE_HAL_WARMTH, p.halation.warmth);
-  setB(FE_GRAIN_ENABLE, p.grain.enabled);
-  setF(FE_GRAIN_AMOUNT, p.grain.amount);
-  setF(FE_GRAIN_SIZE, p.grain.size);
-  setF(FE_GRAIN_ROUGHNESS, p.grain.roughness);
-  setF(FE_GRAIN_SHADOWS, p.grain.shadows);
-  setF(FE_GRAIN_MIDTONES, p.grain.midtones);
-  setF(FE_GRAIN_HIGHLIGHTS, p.grain.highlights);
-  setP(FE_GRAIN_COLOR, p.grain.color == fe::GrainColor::Color ? 2 : 1);
-  setF(FE_GRAIN_CHROMA, p.grain.chroma);
-  setP(FE_PRESET, 1);
+  setB(K::BloomEnable, p.bloom.enabled);
+  setF(K::BloomIntensity, p.bloom.intensity);
+  setF(K::BloomThreshold, p.bloom.threshold);
+  setF(K::BloomKnee, p.bloom.knee);
+  setF(K::BloomRadius, p.bloom.radius);
+  setB(K::HalEnable, p.halation.enabled);
+  setF(K::HalIntensity, p.halation.intensity);
+  setF(K::HalThreshold, p.halation.threshold);
+  setF(K::HalRadius, p.halation.radius);
+  setF(K::HalWarmth, p.halation.warmth);
+  setB(K::GrainEnable, p.grain.enabled);
+  setF(K::GrainAmount, p.grain.amount);
+  setF(K::GrainSize, p.grain.size);
+  setF(K::GrainRoughness, p.grain.roughness);
+  setF(K::GrainShadows, p.grain.shadows);
+  setF(K::GrainMidtones, p.grain.midtones);
+  setF(K::GrainHighlights, p.grain.highlights);
+  setP(K::GrainColor, p.grain.color == fe::GrainColor::Color ? 2 : 1);
+  setF(K::GrainChroma, p.grain.chroma);
+  setP(K::Preset, 1);
   out_data->out_flags |= PF_OutFlag_FORCE_RERENDER | PF_OutFlag_REFRESH_UI;
-  (void)in_data;
   return PF_Err_NONE;
 }
 
 PF_Err Render(PF_InData* in_data, PF_OutData* out_data, PF_ParamDef* params[], PF_LayerDef* output) {
-  PF_EffectWorld* input = &params[FE_INPUT]->u.ld;
-  const fe::FilmParams p = fe::readParams(PFParamReader(params));
+  PF_EffectWorld* input = &params[0]->u.ld;
+  const fe::FilmParams p = fe::readParams(PFParamReader(params), kVariant);
 
   // Bypass: exact copy, no colour conversion at all.
   if (!p.anyEffectActive()) return PF_COPY(input, output, nullptr, nullptr);

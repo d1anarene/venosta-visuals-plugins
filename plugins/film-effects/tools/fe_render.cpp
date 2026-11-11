@@ -16,6 +16,7 @@
 
 #include "common/fe_kernels.h"
 #include "pipeline/pipeline.h"
+#include <sys/resource.h>
 #include "scenes.h"
 
 using namespace fe;
@@ -68,6 +69,7 @@ bool setParam(FilmParams& p, const std::string& kv) {
 int main(int argc, char** argv) {
   std::string scene = "night-street", out = "out.ppm", before;
   int w = 1920, h = 1080, bench = 0;
+  bool mem = false;
   int64_t frame = 0;
   FilmParams p;
   p.bloom.enabled = p.halation.enabled = p.grain.enabled = true;
@@ -79,6 +81,7 @@ int main(int argc, char** argv) {
     else if (a == "--before") before = next();
     else if (a == "--frame") frame = std::stoll(next());
     else if (a == "--bench") bench = std::stoi(next());
+    else if (a == "--mem") mem = true;
     else if (a == "--size") { std::string s = next(); std::sscanf(s.c_str(), "%dx%d", &w, &h); }
     else if (a == "--preset") {
       const Preset* pr = findPreset(next());
@@ -91,7 +94,20 @@ int main(int argc, char** argv) {
   Image src = makeScene(scene, w, h);
   if (!before.empty()) writePPM(src, before);
   Image img = src;
+  auto peakKB = [] {
+    struct rusage ru;
+    getrusage(RUSAGE_SELF, &ru);
+#ifdef __APPLE__
+    return ru.ru_maxrss / 1024;  // bytes on macOS
+#else
+    return ru.ru_maxrss;  // KiB on Linux
+#endif
+  };
+  long peakBefore = peakKB();
   process(img, p, RenderContext{frame});
+  if (mem)
+    std::printf("process() extra peak memory: %ld MB (frame %dx%d, image copy %zu MB)\n", (peakKB() - peakBefore) / 1024,
+                w, h, img.px.size() * sizeof(float) >> 20);
   writePPM(img, out);
   if (bench > 0) {
     std::vector<double> ms;

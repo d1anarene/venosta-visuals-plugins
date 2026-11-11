@@ -496,34 +496,121 @@ TEST(presets_exist_and_are_sane) {
 }
 
 // ---------- host parameter mapping (no SDK needed) ----------
+// Reader backed by a key->value map for a given variant (simulates the host's params array).
 struct FakeReader : ParamReader {
-  double nums[FE_NUM_PARAMS] = {};
-  bool flags[FE_NUM_PARAMS] = {};
-  int pops[FE_NUM_PARAMS] = {};
-  double number(int i) const override { return nums[i]; }
-  bool flag(int i) const override { return flags[i]; }
-  int popup(int i) const override { return pops[i]; }
+  Variant v;
+  std::vector<double> vals;
+  explicit FakeReader(Variant var) : v(var) {
+    const auto keys = variantKeys(var);
+    vals.assign(keys.size() + 1, 0.0);
+    for (size_t i = 0; i < keys.size(); ++i) vals[i + 1] = specFor(keys[i]).dflt;  // host starts at defaults
+  }
+  void set(ParamKey k, double x) {
+    int i = paramIndex(v, k);
+    if (i > 0) vals[i] = x;
+  }
+  double number(int i) const override { return vals[i]; }
+  bool flag(int i) const override { return vals[i] != 0.0; }
+  int popup(int i) const override { return static_cast<int>(vals[i]); }
 };
-TEST(host_param_mapping) {
-  FakeReader r;
-  r.flags[FE_MASTER_ENABLE] = true;
-  r.nums[FE_MIX] = 50.0;
-  r.pops[FE_WORKING_SPACE] = 3;
-  r.pops[FE_QUALITY] = 2;
-  r.flags[FE_GRAIN_ENABLE] = true;
-  r.nums[FE_GRAIN_AMOUNT] = 0.3;
-  r.nums[FE_GRAIN_SIZE] = 2.0;
-  r.nums[FE_GRAIN_SEED] = 77;
-  r.pops[FE_GRAIN_COLOR] = 2;
-  r.nums[FE_BLOOM_RADIUS] = 1e9;  // out of range -> clamped
-  FilmParams p = readParams(r);
+
+TEST(param_table_is_complete_and_stable) {
+  const auto& all = allParams();
+  CHECK(all.size() == static_cast<size_t>(ParamKey::Count));
+  std::vector<int> ids;
+  for (int k = 0; k < static_cast<int>(ParamKey::Count); ++k) {
+    const ParamSpec& sp = specFor(static_cast<ParamKey>(k));
+    CHECK(sp.key == static_cast<ParamKey>(k));  // table order == enum order
+    ids.push_back(sp.diskId);
+    if (sp.kind == ParamKind::Float || sp.kind == ParamKind::IntSlider) {
+      CHECK(sp.validMin <= sp.sliderMin && sp.sliderMin < sp.sliderMax && sp.sliderMax <= sp.validMax);
+      CHECK(sp.dflt >= sp.validMin && sp.dflt <= sp.validMax);
+    }
+    if (sp.kind == ParamKind::Popup) CHECK(sp.items && sp.itemCount > 1 && sp.dflt >= 1 && sp.dflt <= sp.itemCount);
+  }
+  std::sort(ids.begin(), ids.end());
+  CHECK(std::adjacent_find(ids.begin(), ids.end()) == ids.end());  // disk IDs unique
+  // The combined effect keeps its original on-disk IDs (projects depend on them).
+  CHECK(specFor(ParamKey::Preset).diskId == 1);
+  CHECK(specFor(ParamKey::BloomRadius).diskId == 11);
+  CHECK(specFor(ParamKey::GrainGroupEnd).diskId == 32);
+}
+
+TEST(param_groups_balanced_in_every_variant) {
+  for (Variant v : {Variant::Combined, Variant::Bloom, Variant::Halation, Variant::Grain}) {
+    int depth = 0;
+    for (ParamKey k : variantKeys(v)) {
+      ParamKind kind = specFor(k).kind;
+      if (kind == ParamKind::GroupStart) ++depth;
+      if (kind == ParamKind::GroupEnd) --depth;
+      CHECK(depth >= 0 && depth <= 1);
+    }
+    CHECK(depth == 0);
+    CHECK(paramIndex(v, ParamKey::Mix) == 1 || v == Variant::Combined);
+  }
+  CHECK(paramIndex(Variant::Combined, ParamKey::Preset) == 1);
+  CHECK(paramIndex(Variant::Bloom, ParamKey::GrainAmount) == -1);
+}
+
+TEST(host_param_mapping_combined) {
+  FakeReader r(Variant::Combined);
+  r.set(ParamKey::Mix, 50.0);
+  r.set(ParamKey::WorkingSpace, 3);
+  r.set(ParamKey::Quality, 2);
+  r.set(ParamKey::GrainEnable, 1);
+  r.set(ParamKey::GrainAmount, 0.3);
+  r.set(ParamKey::GrainSeed, 77);
+  r.set(ParamKey::GrainColor, 2);
+  r.set(ParamKey::BloomRadius, 1e9);  // out of range -> clamped
+  FilmParams p = readParams(r, Variant::Combined);
   CHECK(p.masterEnable);
   CHECK_NEAR(p.mix, 0.5f, 1e-6f);
   CHECK(p.space == WorkingSpace::Linear);
   CHECK(p.quality == Quality::High);
   CHECK(p.grain.enabled && p.grain.seed == 77 && p.grain.color == GrainColor::Color);
+  CHECK(!p.bloom.enabled && !p.halation.enabled);  // table defaults
   CHECK(p.bloom.radius <= 25.f);
+  // Defaults of the host table equal the core defaults
+  FilmParams d = readParams(FakeReader(Variant::Combined), Variant::Combined);
+  FilmParams core;
+  CHECK(d.bloom.intensity == core.bloom.intensity && d.grain.size == core.grain.size && d.mix == core.mix);
 }
+
+TEST(standalone_variants_enable_only_their_effect) {
+  FilmParams b = readParams(FakeReader(Variant::Bloom), Variant::Bloom);
+  FilmParams h = readParams(FakeReader(Variant::Halation), Variant::Halation);
+  FilmParams g = readParams(FakeReader(Variant::Grain), Variant::Grain);
+  CHECK(b.bloom.enabled && !b.halation.enabled && !b.grain.enabled && b.masterEnable);
+  CHECK(!h.bloom.enabled && h.halation.enabled && !h.grain.enabled);
+  CHECK(!g.bloom.enabled && !g.halation.enabled && g.grain.enabled && g.grain.animate);
+  CHECK(b.anyEffectActive() && h.anyEffectActive() && g.anyEffectActive());
+}
+
+TEST(standalone_renders_identically_to_combined_section) {
+  // Same settings through a standalone variant and through the combined effect with only that
+  // section enabled must give bit-identical pixels.
+  struct Case { Variant v; ParamKey enable; std::vector<std::pair<ParamKey, double>> sets; };
+  std::vector<Case> cases = {
+      {Variant::Bloom, ParamKey::BloomEnable, {{ParamKey::BloomIntensity, 0.4}, {ParamKey::BloomRadius, 6.0}, {ParamKey::Mix, 80}}},
+      {Variant::Halation, ParamKey::HalEnable, {{ParamKey::HalIntensity, 0.3}, {ParamKey::HalWarmth, 0.8}}},
+      {Variant::Grain, ParamKey::GrainEnable, {{ParamKey::GrainAmount, 0.5}, {ParamKey::GrainSeed, 9}, {ParamKey::GrainColor, 2}}},
+  };
+  for (auto& c : cases) {
+    FakeReader solo(c.v), comb(Variant::Combined);
+    comb.set(c.enable, 1);
+    for (auto& [k, x] : c.sets) {
+      solo.set(k, x);
+      comb.set(k, x);
+    }
+    Image a = solid(160, 90, 0.3f, 0.3f, 0.3f);
+    rect(a, 60, 30, 100, 60, 1.6f, 1.4f, 1.2f);
+    Image b = a;
+    process(a, readParams(solo, c.v), RenderContext{4});
+    process(b, readParams(comb, Variant::Combined), RenderContext{4});
+    CHECK(sameImage(a, b));
+  }
+}
+
 TEST(frame_keys_from_host_time) {
   // 23.976 in Premiere ticks: 10594584000 per frame
   const int64_t tpf = 10594584000LL;

@@ -54,6 +54,40 @@ Plane gaussianBlurDirect(const Plane& src, float sigma) {
   return dst;
 }
 
+void gaussianBlurAccumulate(const Plane& src, float sigma, float weight, Plane& acc) {
+  // Same arithmetic as gaussianBlurDirect (horizontal pass, then vertical pass summed in the same
+  // tap order); the vertical result is scaled and added instead of stored.
+  const size_t rowLen = static_cast<size_t>(src.width) * src.channels;
+  if (sigma < 0.05f) {
+    for (size_t i = 0; i < acc.v.size(); ++i) acc.v[i] += weight * src.v[i];
+    return;
+  }
+  const auto k = gaussianKernel(sigma);
+  const int r = static_cast<int>(k.size() / 2);
+  const int w = src.width, h = src.height, c = src.channels;
+  Plane tmp(w, h, c);
+  parallelRows(h, [&](int y) {
+    for (int x = 0; x < w; ++x) {
+      float a[3] = {0, 0, 0};
+      for (int i = -r; i <= r; ++i) {
+        const float* s = src.at(std::clamp(x + i, 0, w - 1), y);
+        for (int ch = 0; ch < c; ++ch) a[ch] += s[ch] * k[i + r];
+      }
+      for (int ch = 0; ch < c; ++ch) tmp.at(x, y)[ch] = a[ch];
+    }
+  });
+  parallelRows(h, [&](int y) {
+    std::vector<float> row(rowLen, 0.0f);
+    for (int i = -r; i <= r; ++i) {
+      const float* in = tmp.at(0, std::clamp(y + i, 0, h - 1));
+      const float kv = k[i + r];
+      for (size_t j = 0; j < rowLen; ++j) row[j] += in[j] * kv;
+    }
+    float* out = acc.at(0, y);
+    for (size_t j = 0; j < rowLen; ++j) out[j] += weight * row[j];
+  });
+}
+
 Plane downsample2(const Plane& src) {
   // Separable [1 3 3 1]/8 filter, decimated by 2: much less aliasing (and less shimmer on moving
   // highlights) than a plain 2x2 box. Output pixel i is centred on input coordinate 2i + 0.5.
