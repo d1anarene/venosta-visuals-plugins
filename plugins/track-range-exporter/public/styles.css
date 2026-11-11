@@ -1,8 +1,10 @@
 /* Plain block layout: UXP does not style <header>/<section>/<details> like a browser. */
-html, body { height: 100%; overflow-y: auto; }
+html, body { height: 100%; overflow-y: auto; overflow-x: hidden; }
 body { margin: 0; padding: 0; font-size: 12px; color: var(--uxp-host-text-color, #ddd);
        background: var(--uxp-host-background-color, #232323); }
-.panel { display: flex; flex-direction: column; padding: 10px 12px; }
+.panel { display: flex; flex-direction: column; padding: 10px 12px; box-sizing: border-box; width: 100%; max-width: 100%; }
+.panel * { max-width: 100%; box-sizing: border-box; }
+.field, .row { min-width: 0; }
 .title { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
 .field { display: flex; flex-direction: column; margin-bottom: 8px; }
 .field sp-label { margin-bottom: 2px; }
@@ -36,6 +38,6 @@ body { margin: 0; padding: 0; font-size: 12px; color: var(--uxp-host-text-color,
 .msg { font-size: 11px; margin: 2px 0; }
 .msg-warn { color: #e6c35c; }
 .messages { max-height: 140px; overflow-y: auto; margin-top: 6px; opacity: 0.85; }
-.value-label { font-size: 11px; opacity: 0.85; }
+.value-label { font-size: 11px; opacity: 0.85; white-space: nowrap; margin-left: 6px; }
 sp-slider { width: 100%; }
-#audio-options > * { margin-right: 6px; }
+#audio-options > * { margin-right: 6px; min-width: 0; flex: 1; }

@@ -106,7 +106,7 @@ class PanelController {
 
   // ---------- wiring ----------
   private bind(): void {
-    $("btn-refresh-context").addEventListener("click", () => void this.refreshContext());
+    $("btn-refresh-context").addEventListener("click", () => void this.refreshContext(true));
     $("btn-scan").addEventListener("click", () => void this.scan());
     $("btn-select-all").addEventListener("click", () => this.setAll(true));
     $("btn-select-none").addEventListener("click", () => this.setAll(false));
@@ -216,9 +216,10 @@ class PanelController {
 
   // ---------- context ----------
   /** Refresh the sequence list and the tracks of the chosen sequence. */
-  async refreshContext(): Promise<void> {
-    await this.refreshSequences(true);
-    await this.refreshTracks();
+  /** `loud` = report problems (↻ button); automatic refreshes stay quiet and only log them. */
+  async refreshContext(loud = false): Promise<void> {
+    await this.refreshSequences(loud);
+    await this.refreshTracks(loud);
     $("ame-state").textContent = isAmeInstalled() ? "" : "Adobe Media Encoder was not found.";
   }
 
@@ -235,7 +236,7 @@ class PanelController {
       const key = seqs.map((q) => q.guid + q.name).join("|") + "#" + shown;
       if (key === this.lastSeqKey) {
         // Menu is current; still make sure the track list belongs to the shown sequence.
-        if (shown && shown !== this.tracksFor) await this.refreshTracks();
+        if (shown && shown !== this.tracksFor) await this.refreshTracks(reportErrors);
         return;
       }
       this.lastSeqKey = key;
@@ -260,8 +261,9 @@ class PanelController {
         this.selectedTrack = 0;
         this.clearPlan("Active sequence changed — press Scan Track.");
       }
-      if (shown && shown !== this.tracksFor) await this.refreshTracks();
+      if (shown && shown !== this.tracksFor) await this.refreshTracks(reportErrors);
     } catch (e) {
+      diag("debug", "Refreshing sequences failed", e);
       if (reportErrors) this.error(String(e instanceof Error ? e.message : e));
     }
   }
@@ -273,7 +275,7 @@ class PanelController {
   /** Sequence whose tracks are currently in the Guide track list. */
   private tracksFor: string | null = null;
 
-  private async refreshTracks(): Promise<void> {
+  private async refreshTracks(reportErrors = true): Promise<void> {
     try {
       const ctx = await getContext(this.pickedSequence ?? this.shownSequence);
       const tracks = await listVideoTracks(ctx.sequence);
@@ -290,9 +292,10 @@ class PanelController {
         menu.appendChild(item);
       });
       (picker as HTMLElement & { selectedIndex?: number }).selectedIndex = this.selectedTrack;
-      if (tracks.length === 0) this.error("This sequence has no video tracks.");
+      if (tracks.length === 0 && reportErrors) this.error("This sequence has no video tracks.");
     } catch (e) {
-      this.error(String(e instanceof Error ? e.message : e));
+      diag("debug", "Loading tracks failed", e);
+      if (reportErrors) this.error(String(e instanceof Error ? e.message : e));
     }
   }
 

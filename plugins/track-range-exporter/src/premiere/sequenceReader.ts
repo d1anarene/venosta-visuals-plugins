@@ -39,10 +39,41 @@ export interface SequenceRef {
   active: boolean;
 }
 
+let lastProject: Project | null = null;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * The active project. Premiere 27 sometimes reports no active project for a moment (e.g. while
+ * this panel has focus or was just docked), so retry briefly and fall back to the last project we
+ * saw, as long as Premiere still knows it (looked up by GUID).
+ */
 async function activeProject(): Promise<Project> {
-  const project = await ppro().Project.getActiveProject();
-  if (!project) throw new HostError("No project is open in Premiere Pro.");
-  return project;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const project = await ppro().Project.getActiveProject();
+      if (project) {
+        lastProject = project;
+        return project;
+      }
+    } catch (e) {
+      diag("debug", `getActiveProject attempt ${attempt + 1} threw`, e);
+    }
+    await sleep(150);
+  }
+  if (lastProject) {
+    try {
+      const again = ppro().Project.getProject(lastProject.guid);
+      if (again) {
+        diag("debug", "No active project reported; using the last known project");
+        return again;
+      }
+    } catch (e) {
+      diag("debug", "Last known project lookup failed", e);
+    }
+  }
+  diag("warn", "Premiere reports no open project");
+  throw new HostError("Premiere reports no open project. Click into the Timeline, then press ↻.");
 }
 
 /** All sequences of the active project, with the active one marked. */
