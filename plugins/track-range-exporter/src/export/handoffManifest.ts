@@ -7,6 +7,7 @@
  * paths. AME renders from the saved .prproj on disk, not from Premiere's live state.
  */
 import { parseTicks } from "../domain/frameMath";
+import { nfc } from "../domain/naming";
 
 export const MANIFEST_FORMAT = "venosta.track-range-exporter.jobs";
 export const MANIFEST_VERSION = 1;
@@ -82,7 +83,7 @@ export function parseManifest(text: string): JobManifest {
       throw new ManifestError(`${where}: invalid tick range`);
     }
     req(end > start, `${where}: end must be after start`);
-    const key = (job.outputPath as string).normalize("NFC").toLowerCase();
+    const key = nfc(job.outputPath as string).toLowerCase();
     req(!outputs.has(key), `${where}: duplicate output path ${String(job.outputPath)}`);
     outputs.add(key);
     return {

@@ -7,74 +7,89 @@
   <script src="index.js"></script>
 </head>
 <body>
-  <header>
-    <h1>Track Range Exporter</h1>
-    <sp-label for="seq-picker">Sequence</sp-label>
-    <div class="row">
-      <sp-picker id="seq-picker" size="s" label="Sequence" class="grow"><sp-menu slot="options"></sp-menu></sp-picker>
-      <sp-action-button id="btn-refresh-context" quiet aria-label="Refresh sequences and tracks">↻</sp-action-button>
-    </div>
-    <div id="ame-state" class="warn-text"></div>
-  </header>
+  <div class="panel">
+    <div class="title">Track Range Exporter</div>
 
-  <section>
-    <sp-label for="track-picker">Guide track</sp-label>
-    <sp-picker id="track-picker" size="s" label="Guide track"><sp-menu slot="options"></sp-menu></sp-picker>
-    <div class="row buttons">
+    <div class="field">
+      <sp-label>Sequence</sp-label>
+      <div class="row">
+        <sp-picker id="seq-picker" size="s" label="Sequence" class="grow"><sp-menu slot="options"></sp-menu></sp-picker>
+        <sp-action-button id="btn-refresh-context" quiet title="Reload sequences and tracks" aria-label="Reload sequences and tracks">↻</sp-action-button>
+      </div>
+    </div>
+
+    <div class="field">
+      <sp-label>Guide track</sp-label>
+      <sp-picker id="track-picker" size="s" label="Guide track" class="full"><sp-menu slot="options"></sp-menu></sp-picker>
+    </div>
+
+    <div class="row actions">
       <sp-button id="btn-scan" variant="cta" size="s">Scan Track</sp-button>
-      <sp-button id="btn-select-all" variant="secondary" size="s" quiet>All</sp-button>
-      <sp-button id="btn-select-none" variant="secondary" size="s" quiet>None</sp-button>
+      <sp-action-button id="btn-select-all" size="s" quiet>Select all</sp-action-button>
+      <sp-action-button id="btn-select-none" size="s" quiet>Select none</sp-action-button>
     </div>
     <div id="status" class="status" role="status" aria-live="polite"></div>
     <div id="summary" class="summary">0 selected / 0 queued</div>
     <div id="job-list" class="job-list" role="list" aria-label="Export jobs"></div>
-  </section>
 
-  <section>
-    <div class="row">
-      <sp-button id="btn-folder" variant="secondary" size="s">Choose Folder…</sp-button>
+    <div class="divider"></div>
+
+    <div class="field">
+      <sp-label>Output folder</sp-label>
+      <div class="row">
+        <div id="folder-path" class="path grow">No folder chosen</div>
+        <sp-button id="btn-folder" variant="secondary" size="s">Choose…</sp-button>
+      </div>
     </div>
-    <div id="folder-path" class="path">No folder chosen</div>
-    <div class="row">
-      <sp-button id="btn-preset" variant="secondary" size="s">Choose AME Preset…</sp-button>
+
+    <div class="field">
+      <sp-label>Export preset (.epr)</sp-label>
+      <div class="row">
+        <div id="preset-path" class="path grow">No preset chosen</div>
+        <sp-button id="btn-preset" variant="secondary" size="s">Choose…</sp-button>
+      </div>
     </div>
-    <div id="preset-path" class="path">No preset chosen</div>
 
-    <sp-label for="mode-picker">Queue method</sp-label>
-    <sp-picker id="mode-picker" size="s" label="Queue method">
-      <sp-menu slot="options">
-        <sp-menu-item value="direct" selected>Premiere direct (one click)</sp-menu-item>
-        <sp-menu-item value="ame">Media Encoder companion (no timeline change)</sp-menu-item>
-      </sp-menu>
-    </sp-picker>
-    <div id="mode-help" class="help"></div>
-
-    <details>
-      <summary>Advanced</summary>
-      <sp-checkbox id="chk-disabled">Include disabled guide clips</sp-checkbox>
-      <sp-label for="convention-picker">Out point sent to Adobe</sp-label>
-      <sp-picker id="convention-picker" size="s" label="Out point convention">
+    <div class="field">
+      <sp-label>Queue method</sp-label>
+      <sp-picker id="mode-picker" size="s" label="Queue method" class="full">
         <sp-menu slot="options">
-          <sp-menu-item value="exclusive" selected>Clip end (exclusive) — default</sp-menu-item>
-          <sp-menu-item value="inclusive">Last frame of clip (inclusive)</sp-menu-item>
+          <sp-menu-item value="direct" selected>Premiere direct (one click)</sp-menu-item>
+          <sp-menu-item value="ame">Media Encoder companion (no timeline change)</sp-menu-item>
         </sp-menu>
       </sp-picker>
-      <div class="help">Change only if the spike test shows every export has one frame too many.</div>
-    </details>
-  </section>
+      <div id="mode-help" class="help"></div>
+    </div>
 
-  <footer>
-    <div class="row buttons">
+    <sp-action-button id="btn-advanced" size="s" quiet>Advanced ▸</sp-action-button>
+    <div id="advanced" class="hidden">
+      <div class="field">
+        <sp-checkbox id="chk-disabled">Include disabled guide clips</sp-checkbox>
+      </div>
+      <div class="field">
+        <sp-label>Out point sent to Adobe</sp-label>
+        <sp-picker id="convention-picker" size="s" label="Out point convention" class="full">
+          <sp-menu slot="options">
+            <sp-menu-item value="exclusive" selected>Clip end (exclusive) — default</sp-menu-item>
+            <sp-menu-item value="inclusive">Last frame of clip (inclusive)</sp-menu-item>
+          </sp-menu>
+        </sp-picker>
+        <div class="help">Change only if every export has one frame too many.</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="row actions">
       <sp-button id="btn-queue" variant="cta" size="s" disabled>Add Selected to AME Queue</sp-button>
       <sp-button id="btn-cancel" variant="secondary" size="s" disabled>Cancel</sp-button>
     </div>
-    <div class="row buttons">
-      <sp-button id="btn-start" variant="secondary" size="s" quiet>Start AME Queue</sp-button>
+    <div class="row actions">
+      <sp-action-button id="btn-start" size="s" quiet>Start AME Queue</sp-action-button>
+      <sp-action-button id="btn-copy-log" size="s" quiet>Copy Log</sp-action-button>
     </div>
-    <div class="row buttons">
-      <sp-button id="btn-copy-log" variant="secondary" size="s" quiet>Copy Log</sp-button>
-    </div>
+    <div id="ame-state" class="warn-text"></div>
     <div id="messages" class="messages" aria-live="polite"></div>
-  </footer>
+  </div>
 </body>
 </html>

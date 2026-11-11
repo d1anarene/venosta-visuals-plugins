@@ -8,6 +8,8 @@ const dist = process.argv[2] || path.resolve(__dirname, "../dist/premiere-panel"
   const page = await browser.newPage({ viewport: { width: 340, height: 1100 } });
   page.on('pageerror', e => console.log('PAGEERROR', e.message));
   await page.addInitScript(() => {
+    // Simulate APIs missing in Premiere's UXP runtime (found in host testing).
+    delete window.TextEncoder; delete window.TextDecoder; Element.prototype.toggleAttribute = undefined;
     const TPF = 10160640000; // 25 fps
     const T = (f) => ({ ticks: String(f * TPF), seconds: f / 25 });
     const log = (window.__log = []);

@@ -69,6 +69,12 @@ function pickerValue(e: Event): string {
   return String(picker.value ?? "");
 }
 
+/** Enable/disable an element (Element.toggleAttribute is not available in UXP). */
+function setDisabled(el: Element, disabled: boolean): void {
+  if (disabled) el.setAttribute("disabled", "");
+  else el.removeAttribute("disabled");
+}
+
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 class PanelController {
@@ -109,6 +115,13 @@ class PanelController {
       this.info("Cancelling after the current job…");
     });
     $("btn-start").addEventListener("click", () => void this.startQueue());
+    $("btn-advanced").addEventListener("click", () => {
+      const adv = $("advanced");
+      const open = adv.classList.contains("hidden");
+      if (open) adv.classList.remove("hidden");
+      else adv.classList.add("hidden");
+      $("btn-advanced").textContent = open ? "Advanced ▾" : "Advanced ▸";
+    });
     $("btn-copy-log").addEventListener("click", async () => {
       const ok = await copyDiagnostics();
       if (ok) this.info("Log copied to the clipboard — paste it into a message.");
@@ -183,7 +196,11 @@ class PanelController {
       if (this.pickedSequence && !seqs.some((q) => q.guid === this.pickedSequence)) this.pickedSequence = null;
       const shown = this.pickedSequence ?? seqs.find((q) => q.active)?.guid ?? seqs[0]?.guid ?? null;
       const key = seqs.map((q) => q.guid + q.name).join("|") + "#" + shown;
-      if (key === this.lastSeqKey) return;  // nothing changed: do not rebuild the menu
+      if (key === this.lastSeqKey) {
+        // Menu is current; still make sure the track list belongs to the shown sequence.
+        if (shown && shown !== this.tracksFor) await this.refreshTracks();
+        return;
+      }
       this.lastSeqKey = key;
       diag("debug", `Sequences: ${seqs.map((q) => q.name + (q.active ? " (active)" : "")).join(", ") || "none"}`);
       const followedBefore = this.shownSequence;
@@ -201,12 +218,12 @@ class PanelController {
       });
       this.shownSequence = shown;
       if (seqs.length === 0 && reportErrors) this.error("This project has no sequences.");
-      // Following the active sequence and it changed: reload tracks and drop the old scan.
+      // Following the active sequence and it changed: drop the old scan.
       if (!this.pickedSequence && followedBefore !== null && followedBefore !== shown) {
         this.selectedTrack = 0;
         this.clearPlan("Active sequence changed — press Scan Track.");
-        await this.refreshTracks();
       }
+      if (shown && shown !== this.tracksFor) await this.refreshTracks();
     } catch (e) {
       if (reportErrors) this.error(String(e instanceof Error ? e.message : e));
     }
@@ -214,11 +231,14 @@ class PanelController {
 
   private lastSeqKey = "";
   private shownSequence: string | null = null;
+  /** Sequence whose tracks are currently in the Guide track list. */
+  private tracksFor: string | null = null;
 
   private async refreshTracks(): Promise<void> {
     try {
       const ctx = await getContext(this.pickedSequence ?? this.shownSequence);
       const tracks = await listVideoTracks(ctx.sequence);
+      this.tracksFor = ctx.sequence.guid.toString();
       const picker = $("track-picker");
       const menu = picker.querySelector("sp-menu") ?? picker;
       menu.innerHTML = "";
@@ -269,8 +289,15 @@ class PanelController {
       this.renderRows();
     } catch (e) {
       diag("error", "Scan failed", e);
-      this.clearPlan("");
-      this.error(String(e instanceof Error ? e.message : e));
+      // Report first, then clean up: the message must appear even if cleanup fails.
+      this.error(`Scan failed: ${e instanceof Error ? e.message : String(e)}`);
+      try {
+        this.plan = null;
+        this.rows = [];
+        this.renderRows();
+      } catch (cleanupError) {
+        diag("error", "Cleanup after scan failure failed", cleanupError);
+      }
     }
   }
 
@@ -290,7 +317,7 @@ class PanelController {
         "'Track Range Exporter – AME' panel in Media Encoder (27.0+) and load it. AME renders the saved project."
       : "One click. Temporarily sets the sequence In/Out per job while queueing, then restores your " +
         "original In/Out. Not yet verified in a real Premiere host — run the spike test first.";
-    $("btn-start").toggleAttribute("disabled", isAme || this.busy);
+    setDisabled($("btn-start"), isAme || this.busy);
     ($("chk-disabled") as HTMLInputElement).checked = this.prefs.includeDisabledClips;
     this.selectPicker("mode-picker", this.prefs.mode);
     this.selectPicker("convention-picker", this.prefs.outPointConvention);
@@ -360,7 +387,7 @@ class PanelController {
       name.textContent = row.job.guideClipName;
       name.title = row.job.guideClipName;
       const status = document.createElement("span");
-      status.className = "status";
+      status.className = "status-chip";
       status.textContent = STATUS_LABEL[row.status];
       head.append(chk, ord, name, status);
 
@@ -420,14 +447,14 @@ class PanelController {
       dur = ` · ${ticksToTimecode(frames * rate.ticksPerFrame, rate)} total`;
     }
     $("summary").textContent = `${sel.length} selected / ${queued} queued${dur}`;
-    $("btn-queue").toggleAttribute("disabled", this.busy || sel.length === 0);
-    $("btn-cancel").toggleAttribute("disabled", !this.busy);
+    setDisabled($("btn-queue"), this.busy || sel.length === 0);
+    setDisabled($("btn-cancel"), !this.busy);
   }
 
   private setBusy(b: boolean): void {
     this.busy = b;
     for (const id of ["btn-scan", "btn-refresh-context", "btn-folder", "btn-preset", "btn-select-all", "btn-select-none"]) {
-      $(id).toggleAttribute("disabled", b);
+      setDisabled($(id), b);
     }
     this.renderSettings();
     this.renderRows();
@@ -612,6 +639,15 @@ class PanelController {
   }
 }
 
+let controller: PanelController | null = null;
+
 export function startPanel(): void {
-  void new PanelController().init();
+  if (controller) return;
+  controller = new PanelController();
+  void controller.init();
+}
+
+/** Called when the panel is shown again (UXP entrypoint "show"): re-read sequences and tracks. */
+export function onPanelShown(): void {
+  if (controller) void controller.refreshContext();
 }

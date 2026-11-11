@@ -27,6 +27,17 @@ _Last update: 2026-11-11_
   status line under Scan, robust frame-rate reading (timebase → ticksPerFrame → fps), labelled
   scan steps, **Copy Log** button with host info and step details.
 
+## Second host feedback (2026-11-11, Premiere 27.0.0 build 88, UXP 9.4, macOS arm64)
+- ✅ host: sequence picker lists the sequence; Copy Log works (clipboard).
+- ✅ host: scan reads 3 video tracks, 8 clips on V1, clip ticks and timebase (10594584000 = 23.976).
+- ❌ host: crash `TextEncoder is not defined` while building names; error then hidden because
+  `Element.toggleAttribute` is also missing, leaving "Scanning…" forever. Layout broken because
+  UXP does not style `<header>/<section>/<footer>/<details>`.
+- Fixes in 0.1.3 (not yet host-tested): own UTF-8 length, guarded `normalize`, no
+  `toggleAttribute`, error shown before cleanup, div-based layout, refresh on panel show, track
+  list reloads when the shown sequence changes. Regression guards: `tests/uxpCompat.test.ts` and
+  the browser smoke test now removes those APIs.
+
 ## Blocked
 - **Milestone 2 (verified two-job export)**: no Premiere/AME in the build environment (Linux container).
   Needs a person with Premiere to run `docs/HOST_TEST_PLAN.md` → "Spike test".
