@@ -2,6 +2,20 @@
 
 _Last update: 2026-11-11_
 
+## Published release (2026-11-11)
+
+- [**v1.0.3**](https://github.com/d1anarene/venosta-visuals-plugins/releases/tag/v1.0.3)
+  published as a stable release from merge commit `49f5307` via PR #6.
+- Final release candidate `930fbcf`: push tests `43044044530`, PR tests `43044067346` and native
+  builds `43044044213` **all passed**. Includes CUDA compilation, CPU tests on three OSes,
+  Metal GPU comparison and Track Range Exporter checks.
+- Release workflow `43044645114` **passed**; verified both Film Effects assets are attached:
+  `FilmEffects-mac-v1.0.3.pkg` and `FilmEffects-Windows-CPU-experimental-v1.0.3.zip`.
+  Existing Track Range Exporter Premiere and Media Encoder CCX downloads are also included.
+- Windows CPU package is explicitly experimental and awaits the user's at-home Premiere test.
+  Mac host verification remains the limited user smoke test documented below. No claim of
+  export matching, long-run stability, HDR verification or NVIDIA GPU execution is made.
+
 ## First Mac release (2026-11-11)
 
 - **User host verification:** after the corrected installer, a Premiere screenshot shows
