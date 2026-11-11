@@ -86,6 +86,7 @@ struct FrameInfo {
   uint32_t width, height, rowPixels;
   int32_t space;
   float bloomThreshold, bloomKnee, halThreshold, halKnee;
+  int32_t rgba;  // 1: host frame is RGBA (OpenFX), 0: BGRA (Premiere)
 };
 struct PlaneInfo {
   uint32_t width, height;
@@ -100,15 +101,17 @@ struct CompositeInfo {
   float grainChroma;
   uint32_t grainKey;
   float mix;
+  int32_t rgba;     // 1: RGBA frame (OpenFX), 0: BGRA (Premiere)
+  int32_t bottomUp; // 1: row 0 is the bottom row (OpenFX); grain uses top-down rows like the CPU path
 };
 
 FE_HD int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
-// 1. Linearise the host frame (BGRA) and extract bloom/halation sources.
+// 1. Linearise the host frame (BGRA or RGBA) and extract bloom/halation sources.
 template <typename T>
 FE_HD void pxPrepare(const T* frame, F4* lin, F4* bright, F4* halSrc, const FrameInfo& fi, uint32_t x, uint32_t y) {
   F4 px = loadPx(frame, y * fi.rowPixels + x);
-  fe_float3 l = fe_to_linear(fe_make3(px.z, px.y, px.x), fi.space);  // BGRA -> RGB
+  fe_float3 l = fe_to_linear(fi.rgba ? fe_make3(px.x, px.y, px.z) : fe_make3(px.z, px.y, px.x), fi.space);
   uint32_t i = y * fi.width + x;
   lin[i] = F4{l.x, l.y, l.z, 0.0f};
   float w = fe_soft_knee_weight(fe_luma(l), fi.bloomThreshold, fi.bloomKnee);
@@ -188,7 +191,8 @@ FE_HD void pxComposite(const T* src, T* dst, const F4* lin, const F4* bloom, con
   const uint32_t fi = y * ci.rowPixels + x;
   const uint32_t pi = y * ci.width + x;
   const F4 s = loadPx(src, fi);
-  const float orig[3] = {s.z, s.y, s.x};  // BGRA -> RGB
+  const float orig[3] = {ci.rgba ? s.x : s.z, s.y, ci.rgba ? s.z : s.x};
+  const uint32_t gy = ci.bottomUp ? ci.height - 1 - y : y;  // grain rows counted from the top
   float o[3] = {orig[0], orig[1], orig[2]};
   if (s.w > 0.0f) {
     if (ci.doBloom || ci.doHal) {
@@ -211,9 +215,9 @@ FE_HD void pxComposite(const T* src, T* dst, const F4* lin, const F4* bloom, con
       float a = ci.grainAmp * fe_grain_response(fe_luma(fe_make3(o[0], o[1], o[2])), ci.grainShadows, ci.grainMids,
                                                 ci.grainHighs);
       if (a > 0.0f) {
-        float base = grainAt(x, y, ci, 0);
+        float base = grainAt(x, gy, ci, 0);
         for (int c = 0; c < 3; ++c)
-          o[c] += ci.grainColor ? a * (base + ci.grainChroma * grainAt(x, y, ci, c + 1)) : a * base;
+          o[c] += ci.grainColor ? a * (base + ci.grainChroma * grainAt(x, gy, ci, c + 1)) : a * base;
       }
     }
     for (int c = 0; c < 3; ++c) {
@@ -221,7 +225,8 @@ FE_HD void pxComposite(const T* src, T* dst, const F4* lin, const F4* bloom, con
       o[c] = isFiniteF(v) ? v : orig[c];
     }
   }
-  storePx(dst, fi, F4{o[2], o[1], o[0], s.w});  // RGB -> BGRA, alpha passed through
+  if (ci.rgba) storePx(dst, fi, F4{o[0], o[1], o[2], s.w});  // alpha passed through
+  else storePx(dst, fi, F4{o[2], o[1], o[0], s.w});          // RGB -> BGRA
 }
 
 }  // namespace gpu

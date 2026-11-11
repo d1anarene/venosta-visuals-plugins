@@ -124,7 +124,7 @@ int main() {
   EmuBackend backend;
   Pipeline<EmuBackend> pipe(backend);
   const double kMax32 = 1e-4, kMax16 = 4.0 / 255.0;  // 32f: same maths, only summation order
-  double worst32 = 0, worst16 = 0;
+  double worst32 = 0, worst16 = 0, worstOfx = 0;
   int cases = 0;
   for (const char* scene : scenes::kAll) {
     const Image src = scenes::makeScene(scene, 320, 180);
@@ -167,6 +167,40 @@ int main() {
       }
     }
   }
+  // OpenFX layout: RGBA, bottom row first. Must give the same picture (grain included) as the
+  // CPU reference on the top-down image.
+  for (const char* scene : scenes::kAll) {
+    const Image in = scenes::makeScene(scene, 320, 180);
+    for (const Preset& pr : builtinPresets()) {
+      if (!pr.params.anyEffectActive()) continue;
+      const size_t W = size_t(in.width), H = size_t(in.height);
+      std::vector<F4> f(W * H);
+      for (size_t y = 0; y < H; ++y)
+        for (size_t x = 0; x < W; ++x) {
+          const float* p = in.at(int(x), int(y));
+          f[(H - 1 - y) * W + x] = F4{p[0], p[1], p[2], p[3]};
+        }
+      Image ref = in;
+      process(ref, pr.params, RenderContext{12});
+      CHECK(pipe.run(f.data(), f.data(), false, uint32_t(W), uint32_t(H), uint32_t(W), pr.params, 12, true, true));
+      Image got(in.width, in.height);
+      for (size_t y = 0; y < H; ++y)
+        for (size_t x = 0; x < W; ++x) {
+          const F4 q = f[(H - 1 - y) * W + x];
+          float* g = got.at(int(x), int(y));
+          g[0] = q.x; g[1] = q.y; g[2] = q.z; g[3] = q.w;
+        }
+      bool alphaOk;
+      const double d = compare(ref, got, alphaOk);
+      // Bottom-up rows mirror the bloom pyramid's sampling grid, so allow a small blur difference.
+      const bool ok = alphaOk && d <= 2.0 / 255.0;
+      if (!ok) std::printf("  FAIL OFX layout %s / %s: max %.6f (x255 = %.3f)\n", scene, pr.name.c_str(), d, d * 255);
+      failures += ok ? 0 : 1;
+      worstOfx = std::fmax(worstOfx, d);
+      ++cases;
+    }
+  }
+  std::printf("OpenFX layout (RGBA, bottom-up) vs CPU reference: worst x255 = %.4f\n", worstOfx * 255);
   std::printf("GPU pass emulation vs CPU reference: %d cases, worst 32f %.2e (x255 = %.4f), worst 16f x255 = %.3f\n",
               cases, worst32, worst32 * 255, worst16 * 255);
   std::printf("%s\n", failures ? "FAIL" : "PASS");

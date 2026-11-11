@@ -38,9 +38,42 @@ if(MSVC)
   target_compile_definitions(fe_ofx_support PUBLIC NOMINMAX _CRT_SECURE_NO_WARNINGS)
 endif()
 
-add_library(FilmEffectsOFX MODULE src/hosts/ofx/FilmEffectsOFX.cpp)
-target_include_directories(FilmEffectsOFX PRIVATE src/hosts/premiere src/core)
+add_library(FilmEffectsOFX MODULE src/hosts/ofx/FilmEffectsOFX.cpp src/hosts/ofx/FilmEffectsOFXCuda.cpp)
+target_include_directories(FilmEffectsOFX PRIVATE src/hosts/ofx src/hosts/premiere src/core)
 target_link_libraries(FilmEffectsOFX PRIVATE fe_ofx_support fe_core)
+
+# GPU: Metal on macOS (always), CUDA where a CUDA toolkit is found (Windows/Linux; optional).
+if(APPLE)
+  enable_language(OBJCXX)
+  set(FE_OFX_METALLIB ${CMAKE_BINARY_DIR}/ofx/FilmEffects.metallib)
+  add_custom_command(OUTPUT ${FE_OFX_METALLIB}
+    COMMAND xcrun -sdk macosx metal -fno-fast-math -I ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+            -c ${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/metal/FilmEffects.metal -o ${CMAKE_BINARY_DIR}/ofx/FilmEffects.air
+    COMMAND xcrun -sdk macosx metallib ${CMAKE_BINARY_DIR}/ofx/FilmEffects.air -o ${FE_OFX_METALLIB}
+    DEPENDS src/gpu/metal/FilmEffects.metal src/core/common/fe_kernels.h)
+  add_custom_target(fe_ofx_metallib DEPENDS ${FE_OFX_METALLIB})
+  add_dependencies(FilmEffectsOFX fe_ofx_metallib)
+  target_sources(FilmEffectsOFX PRIVATE src/hosts/ofx/FilmEffectsOFXMetal.mm src/gpu/metal/MetalFilmEngine.mm)
+  target_include_directories(FilmEffectsOFX PRIVATE src/gpu/metal)
+  target_compile_options(FilmEffectsOFX PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
+  target_link_libraries(FilmEffectsOFX PRIVATE "-framework Foundation" "-framework Metal")
+else()
+  include(CheckLanguage)
+  check_language(CUDA)
+  set(FE_OFX_CUDA_DEFAULT OFF)
+  if(CMAKE_CUDA_COMPILER)
+    set(FE_OFX_CUDA_DEFAULT ON)
+  endif()
+  option(FE_OFX_WITH_CUDA "Build the CUDA GPU path of the OpenFX plug-in" ${FE_OFX_CUDA_DEFAULT})
+  if(FE_OFX_WITH_CUDA)
+    include(${CMAKE_CURRENT_LIST_DIR}/../../../cmake/fe_cuda_engine.cmake)
+    target_compile_definitions(FilmEffectsOFX PRIVATE FE_OFX_CUDA)
+    target_link_libraries(FilmEffectsOFX PRIVATE fe_cuda_engine)
+    message(STATUS "Film Effects OFX: CUDA GPU path enabled")
+  else()
+    message(STATUS "Film Effects OFX: no CUDA toolkit - CPU rendering only")
+  endif()
+endif()
 set_target_properties(FilmEffectsOFX PROPERTIES PREFIX "" SUFFIX ".ofx" OUTPUT_NAME FilmEffects
                                                 CXX_VISIBILITY_PRESET hidden)
 
@@ -59,6 +92,12 @@ add_custom_command(TARGET FilmEffectsOFX POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:FilmEffectsOFX> ${FE_OFX_BUNDLE}/Contents/${FE_OFX_ARCH}/
   COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/ofx/Info.plist ${FE_OFX_BUNDLE}/Contents/Info.plist
   VERBATIM)
+if(APPLE)
+  add_custom_command(TARGET FilmEffectsOFX POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${FE_OFX_BUNDLE}/Contents/Resources
+    COMMAND ${CMAKE_COMMAND} -E copy ${FE_OFX_METALLIB} ${FE_OFX_BUNDLE}/Contents/Resources/
+    VERBATIM)
+endif()
 
 # Load test: dlopen the plug-in like a host and check the four effects are exported.
 add_executable(fe_ofx_load_test tests/ofx/ofx_load_test.cpp)

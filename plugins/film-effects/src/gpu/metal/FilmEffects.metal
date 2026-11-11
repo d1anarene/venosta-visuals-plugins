@@ -18,6 +18,7 @@ struct FrameInfo {
   float bloomKnee;
   float halThreshold;
   float halKnee;
+  int rgba;            // 1: RGBA host frame (OpenFX), 0: BGRA (Premiere)
 };
 
 struct PlaneInfo {
@@ -54,6 +55,8 @@ struct CompositeInfo {
   float grainChroma;
   uint grainKey;         // per-frame key, channel keys derived like the CPU path
   float mix;
+  int rgba;              // 1: RGBA host frame (OpenFX), 0: BGRA (Premiere)
+  int bottomUp;          // 1: row 0 is the bottom row (OpenFX); grain rows count from the top
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -64,7 +67,7 @@ static void prepare_impl(device const T* frame, device float4* lin, device float
                          constant FrameInfo& fi, uint2 gid) {
   if (gid.x >= fi.width || gid.y >= fi.height) return;
   float4 px = float4(frame[gid.y * fi.rowPixels + gid.x]);
-  float3 enc = float3(px.z, px.y, px.x);  // BGRA -> RGB
+  float3 enc = fi.rgba != 0 ? px.xyz : float3(px.z, px.y, px.x);  // BGRA -> RGB
   float3 l = fe_to_linear(enc, fi.space);
   uint i = gid.y * fi.width + gid.x;
   lin[i] = float4(l, 0.0f);
@@ -179,8 +182,9 @@ static void composite_impl(device const T* src, device T* dst, device const floa
   uint fi = gid.y * ci.rowPixels + gid.x;
   uint pi = gid.y * ci.width + gid.x;
   float4 s = float4(src[fi]);
-  float3 orig = float3(s.z, s.y, s.x);
+  float3 orig = ci.rgba != 0 ? s.xyz : float3(s.z, s.y, s.x);
   float alpha = s.w;
+  uint gy = ci.bottomUp != 0 ? ci.height - 1 - gid.y : gid.y;  // grain rows counted from the top
   float3 o = orig;
   if (ci.doBloom != 0 || ci.doHal != 0) {
     float3 add = 0.0f;
@@ -197,13 +201,13 @@ static void composite_impl(device const T* src, device T* dst, device const floa
   if (ci.doGrain != 0) {
     float a = ci.grainAmp * fe_grain_response(fe_luma(o), ci.grainShadows, ci.grainMids, ci.grainHighs);
     if (a > 0.0f) {
-      float base = grain_sample(gid.x, gid.y, ci, 0);
+      float base = grain_sample(gid.x, gy, ci, 0);
       if (ci.grainColor == 0) {
         o += a * base;
       } else {
-        o.x += a * (base + ci.grainChroma * grain_sample(gid.x, gid.y, ci, 1));
-        o.y += a * (base + ci.grainChroma * grain_sample(gid.x, gid.y, ci, 2));
-        o.z += a * (base + ci.grainChroma * grain_sample(gid.x, gid.y, ci, 3));
+        o.x += a * (base + ci.grainChroma * grain_sample(gid.x, gy, ci, 1));
+        o.y += a * (base + ci.grainChroma * grain_sample(gid.x, gy, ci, 2));
+        o.z += a * (base + ci.grainChroma * grain_sample(gid.x, gy, ci, 3));
       }
     }
   }
@@ -213,7 +217,7 @@ static void composite_impl(device const T* src, device T* dst, device const floa
     o = orig + (o - orig) * ci.mix;
   }
   if (!all(isfinite(o))) o = orig;
-  dst[fi] = T(float4(o.z, o.y, o.x, alpha));  // RGB -> BGRA, alpha passed through
+  dst[fi] = ci.rgba != 0 ? T(float4(o, alpha)) : T(float4(o.z, o.y, o.x, alpha));  // alpha passed through
 }
 
 kernel void fe_composite_f32(device const float4* src [[buffer(0)]], device float4* dst [[buffer(1)]],

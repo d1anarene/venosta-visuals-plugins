@@ -22,11 +22,12 @@ class CudaFilmEngine {
   bool ok() const;
   const std::string& error() const;
 
-  /** Process one BGRA frame on the current CUDA device. `src`/`dst` are device pointers (may be
+  /** Process one frame on the current CUDA device. `src`/`dst` are device pointers (may be
    *  the same, in place); `half` = 16-bit float frame (GPU_BGRA_4444_16f), else 32-bit float.
+   *  Default layout: BGRA, top row first (Premiere). OpenFX hosts: rgba = true, bottomUp = true.
    *  Work runs on the default stream and is finished before this returns. */
   bool render(const void* src, void* dst, bool half, uint32_t width, uint32_t height, uint32_t rowPixels,
-              const FilmParams& params, int64_t frameKey);
+              const FilmParams& params, int64_t frameKey, bool rgba = false, bool bottomUp = false);
 
  private:
   struct Impl;
