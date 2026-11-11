@@ -2,6 +2,21 @@
 
 _Last update: 2026-11-11_
 
+## DaVinci Resolve (OpenFX) — milestone 2: GPU rendering (2026-11-11)
+
+- v1.0.8 published the CPU-only Resolve downloads (Windows Setup, macOS pkg, Linux tarball).
+- GPU engines take the OpenFX frame layout (`rgba`, `bottomUp`; grain rows still counted from the
+  top, so CPU and GPU frames match). `tests/gpu` checks the OpenFX layout against the CPU
+  reference (worst difference 0/255 at 320x180); deliberately wrong channel order or missing flip
+  makes 26 / 32 cases fail, so the test is effective.
+- OFX plug-in declares Metal (macOS) and CUDA (Windows, default stream, no CUDA streams) render
+  support and runs the Premiere engines (`FilmEffectsOFXMetal.mm`, `FilmEffectsOFXCuda.cpp`).
+- CI run `43105983642`: Windows CUDA 12.9.1 build with sm_61 device code and static runtime,
+  NVIDIA EULA shipped by the Setup; macOS bundle contains `FilmEffects.metallib`; Linux CPU only.
+  Linker warning LNK4098 (LIBCMT from the static CUDA runtime) also noted; harmless in practice
+  but worth watching.
+- **Still not run in DaVinci Resolve, CPU or GPU.**
+
 ## DaVinci Resolve (OpenFX) — milestone 1: CPU plug-in (2026-11-11)
 
 - User asked to start the DaVinci Resolve version after the installer fix release.
