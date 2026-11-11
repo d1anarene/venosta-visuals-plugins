@@ -3,8 +3,11 @@
 ;   ISCC /DAppVersion=1.0.6 /DCpuDir=<cpu .aex folder> /DCudaDir=<cuda .aex folder>
 ;        /DRepoRoot=<repository root> /DOutputDir=<out> FilmEffects.iss
 ; Installs Film Effects, Film Bloom, Film Halation and Film Grain into Adobe's shared MediaCore
-; plug-in folder (Premiere Pro SDK guide, "Plugin Installation"), with an entry in
-; Settings > Apps for uninstalling. The CUDA build is pre-selected when an NVIDIA driver is
+; plug-in folder: the Plug-InsDir registry value Premiere writes
+; (HKLM\SOFTWARE\Adobe\Premiere Pro\CurrentVersion), falling back to
+; C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore (WITH a hyphen). The uninstaller lives in
+; C:\Program Files\Venosta Visuals\Film Effects, not in Adobe's folder; Settings > Apps lists it.
+; v1.0.6 wrongly used ...\Common\Plugins\7.0\MediaCore (no hyphen); upgrades clean that up. The CUDA build is pre-selected when an NVIDIA driver is
 ; present (nvcuda.dll), the CPU-only build otherwise; the user can change the choice.
 
 #ifndef AppVersion
@@ -23,7 +26,10 @@ AppVerName=Film Effects {#AppVersion}
 AppPublisher=Venosta Visuals
 AppPublisherURL=https://venostavisuals.com
 AppSupportURL=https://github.com/d1anarene/venosta-visuals-plugins
-DefaultDirName={commonpf64}\Adobe\Common\Plugins\7.0\MediaCore
+DefaultDirName={code:GetPluginDir}
+; Never reuse the folder of a previous install: v1.0.6 recorded the wrong one.
+UsePreviousAppDir=no
+UninstallFilesDir={commonpf64}\Venosta Visuals\Film Effects
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 DirExistsWarning=no
@@ -55,6 +61,18 @@ Source: "{#CpuDir}\*.aex"; DestDir: "{app}"; Components: cpu; Flags: ignoreversi
 Source: "{#RepoRoot}\LICENSE"; DestDir: "{commonpf64}\Venosta Visuals\Film Effects"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "{#CudaDir}\NVIDIA-CUDA-EULA.html"; DestDir: "{commonpf64}\Venosta Visuals\Film Effects"; Components: cuda; Flags: ignoreversion skipifsourcedoesntexist
 
+[InstallDelete]
+; Clean up the wrong folder used by v1.0.6 (only when our files are found there).
+Type: files; Name: "{commonpf64}\Adobe\Common\Plugins\7.0\MediaCore\FilmEffects.aex"; Check: HasStrayInstall
+Type: files; Name: "{commonpf64}\Adobe\Common\Plugins\7.0\MediaCore\FilmBloom.aex"; Check: HasStrayInstall
+Type: files; Name: "{commonpf64}\Adobe\Common\Plugins\7.0\MediaCore\FilmHalation.aex"; Check: HasStrayInstall
+Type: files; Name: "{commonpf64}\Adobe\Common\Plugins\7.0\MediaCore\FilmGrain.aex"; Check: HasStrayInstall
+Type: files; Name: "{commonpf64}\Adobe\Common\Plugins\7.0\MediaCore\unins000.exe"; Check: HasStrayInstall
+Type: files; Name: "{commonpf64}\Adobe\Common\Plugins\7.0\MediaCore\unins000.dat"; Check: HasStrayInstall
+Type: dirifempty; Name: "{commonpf64}\Adobe\Common\Plugins\7.0\MediaCore"
+Type: dirifempty; Name: "{commonpf64}\Adobe\Common\Plugins\7.0"
+Type: dirifempty; Name: "{commonpf64}\Adobe\Common\Plugins"
+
 [UninstallDelete]
 Type: dirifempty; Name: "{commonpf64}\Venosta Visuals\Film Effects"
 Type: dirifempty; Name: "{commonpf64}\Venosta Visuals"
@@ -63,6 +81,37 @@ Type: dirifempty; Name: "{commonpf64}\Venosta Visuals"
 FinishedLabel=Film Effects is installed. Start (or restart) Premiere Pro and look in Effects > Video Effects > Venosta Visuals.
 
 [Code]
+const
+  StrayDir = '{commonpf64}\Adobe\Common\Plugins\7.0\MediaCore';
+
+function GetPluginDir(Param: String): String;
+var
+  Dir: String;
+begin
+  { Premiere records its shared plug-in folder here; use it when it exists. }
+  if RegQueryStringValue(HKLM64, 'SOFTWARE\Adobe\Premiere Pro\CurrentVersion', 'Plug-InsDir', Dir)
+     and (Trim(Dir) <> '') and DirExists(RemoveBackslashUnlessRoot(Trim(Dir))) then
+    Result := RemoveBackslashUnlessRoot(Trim(Dir))
+  else
+    Result := ExpandConstant('{commonpf64}\Adobe\Common\Plug-ins\7.0\MediaCore');
+end;
+
+var
+  StrayFound: Boolean;
+
+function InitializeSetup(): Boolean;
+begin
+  { Decide once: [InstallDelete] deletes FilmEffects.aex first, so re-checking per entry
+    would skip the remaining stray files. }
+  StrayFound := FileExists(ExpandConstant(StrayDir + '\FilmEffects.aex'));
+  Result := True;
+end;
+
+function HasStrayInstall(): Boolean;
+begin
+  Result := StrayFound;
+end;
+
 function HasNvidiaDriver(): Boolean;
 begin
   { The NVIDIA display driver installs the CUDA driver library into System32. }

@@ -67,8 +67,9 @@ Restart Premiere Pro. The effects are in **Effects → Video Effects → Venosta
 
 ## 3b. Install (Windows)
 **Recommended:** run `FilmEffects-Windows-Setup-<version>.exe` from Releases (Inno Setup wizard,
-needs admin rights). It installs the four `.aex` files into
-`C:\Program Files\Adobe\Common\Plugins\7.0\MediaCore`, pre-selects the CUDA build when
+needs admin rights). It installs the four `.aex` files into Premiere's
+shared plug-in folder (registry value `Plug-InsDir`, normally
+`C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore` — with a hyphen), pre-selects the CUDA build when
 `nvcuda.dll` (NVIDIA driver) is present and the CPU-only build otherwise, and registers an
 uninstaller in Settings → Apps. Running a newer Setup upgrades in place. It is not code-signed:
 SmartScreen may show "Windows protected your PC" → "More info" → "Run anyway". Source:
