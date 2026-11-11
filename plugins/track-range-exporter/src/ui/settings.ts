@@ -21,6 +21,8 @@ export interface Prefs {
   audio: boolean;
   audioKbps: number;
   audioRate: number;
+  /** Start rendering in Media Encoder right after the jobs were queued (opt-in). */
+  autoStart: boolean;
 }
 
 const KEY = "venosta.track-range-exporter.prefs.v1";
@@ -37,6 +39,7 @@ const DEFAULTS: Prefs = {
   audio: true,
   audioKbps: 320,
   audioRate: 48000,
+  autoStart: false,
 };
 
 export function loadPrefs(): Prefs {

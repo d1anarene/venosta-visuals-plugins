@@ -137,6 +137,10 @@ class PanelController {
       this.renderExportLabels();
     });
     br.addEventListener("change", () => savePrefs(this.prefs));
+    $("chk-autostart").addEventListener("change", (e) => {
+      this.prefs.autoStart = !!(e.target as HTMLInputElement).checked;
+      savePrefs(this.prefs);
+    });
     $("chk-audio").addEventListener("change", (e) => {
       this.prefs.audio = !!(e.target as HTMLInputElement).checked;
       savePrefs(this.prefs);
@@ -361,6 +365,9 @@ class PanelController {
         "original In/Out. Not yet verified in a real Premiere host — run the spike test first.";
     setDisabled($("btn-start"), isAme || this.busy);
     ($("chk-disabled") as HTMLInputElement).checked = this.prefs.includeDisabledClips;
+    ($("chk-autostart") as HTMLInputElement).checked = this.prefs.autoStart;
+    if (this.prefs.autoStart) $("chk-autostart").setAttribute("checked", "");
+    else $("chk-autostart").removeAttribute("checked");
     this.selectPicker("mode-picker", this.prefs.mode);
     this.selectPicker("convention-picker", this.prefs.outPointConvention);
   }
@@ -786,8 +793,9 @@ class PanelController {
         (result.failed ? `, ${result.failed} failed` : "") +
         (result.cancelled ? `, ${result.cancelled} not queued` : "") +
         ". Your original In/Out was restored." +
-        (result.queued ? " Check each job's range in AME before rendering." : ""),
+        (result.queued && !this.prefs.autoStart ? " Check each job's range in AME before rendering." : ""),
     );
+    if (result.queued > 0 && result.fatalErrors.length === 0 && this.prefs.autoStart) await this.startQueue();
   }
 
   private async writeJobFile(requests: QueueRequest[]): Promise<void> {
@@ -833,7 +841,9 @@ class PanelController {
     try {
       await launchEncoder();
       const ok = await startBatchEncode();
-      this.info(ok ? "Media Encoder queue started." : "Media Encoder did not confirm the start.");
+      diag("debug", `startBatchEncode returned ${ok}`);
+      if (ok) this.info("Rendering started in Media Encoder.");
+      else this.log("Media Encoder did not confirm the start — press Start in Media Encoder's queue.", "warn");
     } catch (e) {
       this.error(`Could not start Media Encoder: ${e}`);
     }
