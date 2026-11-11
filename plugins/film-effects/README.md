@@ -36,7 +36,9 @@ and keyframe.
 
 ## Install
 
-Build and install steps (macOS, needs the free Adobe SDKs): [docs/INSTALLATION.md](docs/INSTALLATION.md).
+**Platforms:** macOS (CPU + Metal GPU acceleration) and Windows (CPU rendering for now; GPU
+acceleration via CUDA is planned). Build and install steps (need the free Adobe SDKs):
+[docs/INSTALLATION.md](docs/INSTALLATION.md).
 After installing and restarting Premiere: **Effects → Video Effects → Venosta Visuals**.
 
 ## Use

@@ -42,9 +42,14 @@ reference on a GPU in GitHub Actions' macOS runners (`tests/gpu/README.md`).
    instance creation makes Premiere use the software path for that instance (documented).
    GPU frames are `PrPixelFormat_GPU_BGRA_4444_32f` or `_16f` (per the SDK samples).
 4. **Install path** (Premiere 22.0+, documented):
-   `/Library/Application Support/Adobe/Common/Plugins/7.0/MediaCore/`.
+   `/Library/Application Support/Adobe/Common/Plugins/7.0/MediaCore/` (macOS),
+   `[Program Files]\Adobe\Common\Plugins\7.0\MediaCore\` (Windows).
 5. **Parameters**: standard AE params (checkbox, float slider, popup, integer slider, topic groups)
    → Effect Controls, keyframes, undo and project save are handled by the host.
+6. **Windows**: same AE-API effect built as `.aex`; PiPL converted with the SDK's `PiPLtool.exe`
+   (the documented way: "PiPLs are compiled by processing a .r file through pipltool.exe").
+   No GPU entry yet, so Premiere renders it with the CPU path. A CUDA backend is a later step
+   (Premiere's GPU architecture is CUDA/Metal).
 
 ## Symbols used that are documented in the guides
 

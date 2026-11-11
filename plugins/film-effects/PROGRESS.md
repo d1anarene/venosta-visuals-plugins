@@ -36,6 +36,8 @@ _Last update: 2026-11-11_
 - Standalone effects Film Bloom / Film Halation / Film Grain: same sources built per variant,
   one parameter table (stable disk IDs), bit-identical to the combined effect — table and
   equivalence tested; host code **syntax** for all 4 variants
+- Windows: CMake builds `.aex` plugins (PiPLtool step), PowerShell build/install scripts — **unbuilt**;
+  core compiled with MSVC and tested in CI (`film-effects-core-windows`)
 - CPU memory cut by more than half and CPU path faster (docs/PERFORMANCE.md); output bit-identical — tested
 
 ## Blocked / needs a person with a Mac
@@ -46,7 +48,7 @@ _Last update: 2026-11-11_
    uses the GPU path (Metal renderer) — the engine underneath is already verified in CI.
 
 ## Next (after host proof)
-- Windows: CUDA path (or software only first)
+- Windows GPU: CUDA backend (port of the Metal kernels; shared maths header already C++-compatible)
 - Optional UXP preset panel (Stage 5)
 
 ## Commands run (this session)
