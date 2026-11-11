@@ -11,12 +11,11 @@ Four effects are installed under **Venosta Visuals**:
 They share the same processing code, so Film Grain looks exactly like Film Effects with only
 Grain switched on.
 
-> ⚠️ **Status: in development — not yet tested inside Premiere Pro.** The image processing core is
-> unit-tested; the Metal GPU code is verified against it on a Mac GPU in CI; the CUDA GPU code
-> compiles in CI and its exact pass sequence is verified against the core in a CPU emulation, but
-> it has not yet run on an NVIDIA GPU. The plugins still need their first build with the Adobe
-> SDK (see [PROGRESS.md](PROGRESS.md)). Provided without any guarantee —
-> see the [root README](../../README.md#️-no-guarantee).
+> **Status: first Mac release — user-tested in Premiere Pro 27 on Apple Silicon.**
+> All four effects appear in Premiere and the user reports satisfactory operation. CPU tests on
+> Linux/macOS/Windows and the Metal GPU comparison pass in CI. Export matching, long timeline
+> stability, HDR workflows, performance measurements and Windows host operation remain unverified.
+> Free and provided without warranty — see the [root README](../../README.md#️-no-guarantee).
 
 Downloads will also be available at [venostavisuals.com](https://venostavisuals.com).
 
@@ -38,9 +37,18 @@ and keyframe.
 
 ## Install
 
-**Platforms:** Windows with NVIDIA GPUs (CUDA acceleration) and macOS (Metal acceleration). Both
-fall back to CPU rendering automatically when no supported GPU is available. Build and install steps (need the free Adobe SDKs):
-[docs/INSTALLATION.md](docs/INSTALLATION.md).
+Download `FilmEffects-mac-v*.pkg` from the repository's
+[Releases page](https://github.com/d1anarene/venosta-visuals-plugins/releases).
+Quit Premiere, double-click the `.pkg`, then restart Premiere. It installs Film Effects,
+Film Bloom, Film Halation and Film Grain for Apple Silicon and Intel. Requires **macOS 26+**.
+Existing bundles are backed up under `/Library/Application Support/Venosta Visuals/Backups/`.
+The installer is unsigned, its bundles are ad hoc signed, and it is not Apple-notarized. If macOS
+blocks it, use System Settings → Privacy & Security to review and allow this installer.
+
+Film Effects is a native effect; its installer is `.pkg`, rather than a UXP `.ccx`.
+The experimental Windows ZIP contains a **CPU-only**, CI-built version, not yet tested in Premiere
+on Windows. CUDA remains a source-build option; NVIDIA GPU execution is unverified.
+Build, installation and removal details: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 After installing and restarting Premiere: **Effects → Video Effects → Venosta Visuals**.
 
 ## Use

@@ -161,11 +161,9 @@ struct CudaFilmEngine::Impl {
 };
 
 CudaFilmEngine::CudaFilmEngine() : impl_(new Impl) {
-  cudaError_t e = cudaStreamCreateWithFlags(&impl_->backend.stream, cudaStreamNonBlocking);
-  if (e != cudaSuccess) {
-    impl_->error = std::string("cudaStreamCreate failed: ") + cudaGetErrorString(e);
-    return;
-  }
+  // Default stream, as in the Premiere SDK's CUDA sample (SDK_CrossDissolve): Premiere's CUDA
+  // context is current when the GPU entry points are called.
+  impl_->backend.stream = nullptr;
   impl_->pipeline.reset(new gpu::Pipeline<CudaBackend>(impl_->backend));
 }
 
@@ -173,7 +171,6 @@ CudaFilmEngine::~CudaFilmEngine() {
   if (!impl_) return;
   impl_->pipeline.reset();
   impl_->backend.releaseAll();
-  if (impl_->backend.stream) cudaStreamDestroy(impl_->backend.stream);
 }
 
 bool CudaFilmEngine::ok() const { return impl_ && impl_->error.empty() && impl_->pipeline; }

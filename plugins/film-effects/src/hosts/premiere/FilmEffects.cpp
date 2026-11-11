@@ -204,8 +204,11 @@ extern "C" DllExport PF_Err PluginDataEntryFunction2(PF_PluginDataPtr inPtr, PF_
   (void)inSPBasicSuitePtr;
   (void)inHostName;
   (void)inHostVersion;
-  return PF_REGISTER_EFFECT_EXT2(inPtr, inPluginDataCallBackPtr, FE_NAME, FE_MATCH_NAME, FE_CATEGORY,
-                                 AE_RESERVED_INFO, "EffectMain", "https://venostavisuals.com");
+  // The SDK macro assigns to a local named `result` (as in the SDK_Noise sample).
+  PF_Err result = PF_Err_INVALID_CALLBACK;
+  result = PF_REGISTER_EFFECT_EXT2(inPtr, inPluginDataCallBackPtr, FE_NAME, FE_MATCH_NAME, FE_CATEGORY,
+                                   AE_RESERVED_INFO, "EffectMain", "https://venostavisuals.com");
+  return result;
 }
 
 extern "C" DllExport PF_Err EffectMain(PF_Cmd cmd, PF_InData* in_data, PF_OutData* out_data, PF_ParamDef* params[],

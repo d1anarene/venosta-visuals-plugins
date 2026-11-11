@@ -5,7 +5,7 @@
 #   cmake -S . -B build-mac -G Xcode -DFE_BUILD_PLUGIN=ON \
 #         -DAE_SDK_DIR="/path/to/AfterEffectsSDK/Examples" -DPR_SDK_DIR="/path/to/Premiere Pro SDK"
 # Windows (CPU + CUDA GPU; needs the CUDA toolkit for the GPU part, otherwise CPU only):
-#   cmake -S . -B build-win -G "Visual Studio 17 2022" -A x64 -DFE_BUILD_PLUGIN=ON ^
+#   cmake -S . -B build-win -A x64 -DFE_BUILD_PLUGIN=ON ^
 #         -DAE_SDK_DIR="C:/AfterEffectsSDK/Examples" -DPR_SDK_DIR="C:/Premiere Pro SDK"
 #
 # The Adobe SDK file layout changes between releases; if a header or tool is not found, point the
@@ -21,6 +21,7 @@ set(AE_SDK_HEADERS "${AE_SDK_DIR}/Headers" CACHE PATH "")
 set(AE_SDK_UTIL "${AE_SDK_DIR}/Util" CACHE PATH "")
 set(AE_SDK_RESOURCES "${AE_SDK_DIR}/Resources" CACHE PATH "Folder with AE_General.r (and PiPLtool.exe on Windows)")
 set(PR_SDK_HEADERS "${PR_SDK_DIR}/Examples/Headers" CACHE PATH "")
+set(PR_SDK_UTILS "${PR_SDK_DIR}/Examples/Utils" CACHE PATH "")
 set(PR_GPU_UTILS "${PR_SDK_DIR}/Examples/Projects/GPUVideoFilter/Utils" CACHE PATH "Folder with PrGPUFilterModule.h")
 
 set(FE_GPU_DEFAULT OFF)
@@ -54,7 +55,6 @@ endif()
 
 if(APPLE)
   enable_language(OBJCXX)
-  set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "" FORCE)
 endif()
 
 set(FE_PLUGIN_SOURCES
@@ -86,7 +86,7 @@ foreach(variant RANGE 3)
   target_include_directories(${bundle} PRIVATE
     src/hosts/premiere src/gpu/metal src/core
     ${AE_SDK_HEADERS} ${AE_SDK_HEADERS}/SP ${AE_SDK_HEADERS}/adobesdk ${AE_SDK_UTIL}
-    ${PR_SDK_HEADERS} ${PR_GPU_UTILS})
+    ${PR_SDK_HEADERS} ${PR_SDK_UTILS} ${PR_GPU_UTILS})
 
   if(APPLE)
     target_link_libraries(${bundle} PRIVATE "-framework Foundation")

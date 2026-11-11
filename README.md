@@ -17,7 +17,7 @@ delivery. More plugins (and possibly other Adobe apps) will follow.
 | Plugin | What it does | Status |
 | --- | --- | --- |
 | [Track Range Exporter](plugins/track-range-exporter/README.md) | Pick a guide track (e.g. V1). Every clip on it becomes its own export job in Adobe Media Encoder, rendering the **full graded sequence** (all tracks, adjustment layers, Lumetri, audio) for exactly that clip's time range. | Early version — **works in Premiere Pro 27 on macOS** (user-tested); frame-exact checks and Windows still open |
-| [Film Effects](plugins/film-effects/README.md) | Native video effects with **Bloom**, **Halation** and **Film Grain** — combined in one effect or as three standalone effects — designed to sit after Lumetri or on an adjustment layer. | In development — image core unit-tested; Metal GPU code verified on a Mac GPU in CI; CUDA code compiled and verified in CPU emulation (not yet run on an NVIDIA GPU); **native plugin not yet built/tested inside Premiere** |
+| [Film Effects](plugins/film-effects/README.md) | Native video effects with **Bloom**, **Halation** and **Film Grain** — combined in one effect or as three standalone effects — designed to sit after Lumetri or on an adjustment layer. | **Host-tested on macOS** — user-tested in Premiere Pro 27 on Apple Silicon; CPU tests and Metal comparison pass in CI. Mac installer available in releases (macOS 26+); Windows CPU build experimental, host-unverified |
 
 Each plugin folder has its own README with installation steps, usage and known limitations.
 
@@ -38,7 +38,7 @@ See [LICENSE](LICENSE) for the full terms.
 - Adobe Premiere Pro (current version; see each plugin's README for tested versions)
 - Adobe Media Encoder for plugins that queue exports
 - Windows and macOS: Track Range Exporter is a UXP panel (both systems); Film Effects builds on
-  both, with GPU acceleration via CUDA (Windows, NVIDIA) and Metal (macOS)
+  both; the Mac release includes Metal acceleration, while the experimental Windows download is CPU-only
 
 ## For developers
 
@@ -56,6 +56,12 @@ cd plugins/track-range-exporter && npm install && npm test
 
 ```bash
 cd plugins/film-effects && ./scripts/run-core-tests.sh
+```
+
+Package prebuilt Mac bundles (on macOS, with Xcode):
+
+```bash
+bash plugins/film-effects/scripts/package-macos.sh /path/to/bundles /path/to/FilmEffects.pkg 1.0.0
 ```
 
 GitHub Actions (`.github/workflows/tests.yml`) runs these on every push (Linux, macOS, Windows),
