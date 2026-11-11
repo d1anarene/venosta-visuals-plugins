@@ -43,10 +43,36 @@
     </div>
 
     <div class="field">
-      <sp-label>Export preset (.epr)</sp-label>
+      <sp-label>Export preset</sp-label>
+      <sp-picker id="dest-picker" size="s" label="Export preset" class="full"><sp-menu slot="options"></sp-menu></sp-picker>
+      <div id="dest-info" class="help"></div>
+    </div>
+    <div id="custom-preset" class="field hidden">
       <div class="row">
         <div id="preset-path" class="path grow">No preset chosen</div>
-        <sp-button id="btn-preset" variant="secondary" size="s">Choose…</sp-button>
+        <sp-button id="btn-preset" variant="secondary" size="s">Choose .epr…</sp-button>
+      </div>
+    </div>
+    <div id="builtin-settings">
+      <div class="field">
+        <div class="row"><sp-label class="grow">Frame rate</sp-label><span id="fps-value" class="value-label"></span></div>
+        <sp-slider id="fps-slider" min="0" max="8" step="1" value="0" show-value="false"></sp-slider>
+      </div>
+      <div id="bitrate-field" class="field">
+        <div class="row"><sp-label class="grow">Video bitrate</sp-label><span id="bitrate-value" class="value-label"></span></div>
+        <sp-slider id="bitrate-slider" min="5" max="50" step="1" value="16" show-value="false"></sp-slider>
+      </div>
+      <div class="field">
+        <sp-checkbox id="chk-audio" checked>Export audio</sp-checkbox>
+        <div id="audio-options" class="row">
+          <sp-picker id="audio-bitrate-picker" size="s" label="Audio bitrate" class="grow"><sp-menu slot="options"></sp-menu></sp-picker>
+          <sp-picker id="audio-rate-picker" size="s" label="Sample rate" class="grow">
+            <sp-menu slot="options">
+              <sp-menu-item value="48000" selected>48 kHz</sp-menu-item>
+              <sp-menu-item value="44100">44.1 kHz</sp-menu-item>
+            </sp-menu>
+          </sp-picker>
+        </div>
       </div>
     </div>
 

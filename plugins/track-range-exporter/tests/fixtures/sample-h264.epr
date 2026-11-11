@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic test fixture written for this project; same structure as Media Encoder .epr files. -->
+<PremiereData Version="3">
+	<PresetName>($$$/AME/EncoderHost/Presets/00000000-0000-0000-0000-000000000001/PresetName=Match Source - High bitrate)</PresetName>
+	<PresetComments></PresetComments>
+	<ExporterClassID>1702392942</ExporterClassID>
+	<ExporterFileType>1211250228</ExporterFileType>
+	<ExportParamContainer ObjectRef="1"/>
+	<PresetID>00000000-0000-0000-0000-000000000002</PresetID>
+	<DoAudio>true</DoAudio>
+	<DoVideo>true</DoVideo>
+	<ExporterParam ObjectID="13" ClassID="9f049ab7-d48f-43e9-a8ca-4d7f21233625" Version="1">
+		<ParamValue>1920</ParamValue>
+		<ParamType>2</ParamType>
+		<ParamIdentifier>ADBEVideoWidth</ParamIdentifier>
+	</ExporterParam>
+	<ExporterParam ObjectID="14" ClassID="9f049ab7-d48f-43e9-a8ca-4d7f21233625" Version="1">
+		<ParamValue>1080</ParamValue>
+		<ParamType>2</ParamType>
+		<ParamIdentifier>ADBEVideoHeight</ParamIdentifier>
+	</ExporterParam>
+	<ExporterParam ObjectID="15" ClassID="8def7863-204e-4206-8791-54a78f15c66b" Version="1">
+		<ParamValue>10160640000</ParamValue>
+		<ParamType>4</ParamType>
+		<ParamIdentifier>ADBEVideoFPS</ParamIdentifier>
+	</ExporterParam>
+	<ExporterParam ObjectID="6" ClassID="d0f6b8af-8ddb-4381-acf8-3e817480d07d" Version="1">
+		<ParamType>7</ParamType>
+		<ParamIdentifier>ADBEVideoMatchSource</ParamIdentifier>
+	</ExporterParam>
+	<ExporterParam ObjectID="30" ClassID="018cf63d-c58d-4d39-97df-36b6b2d6ef88" Version="1">
+		<ParamValue>10.</ParamValue>
+		<ParamType>3</ParamType>
+		<ParamIsSlider>true</ParamIsSlider>
+		<ParamIdentifier>ADBEVideoTargetBitrate</ParamIdentifier>
+	</ExporterParam>
+	<ExporterParam ObjectID="31" ClassID="018cf63d-c58d-4d39-97df-36b6b2d6ef88" Version="1">
+		<ParamValue>12.</ParamValue>
+		<ParamType>3</ParamType>
+		<ParamIdentifier>ADBEVideoMaxBitrate</ParamIdentifier>
+	</ExporterParam>
+	<ExporterParam ObjectID="73" ClassID="9f049ab7-d48f-43e9-a8ca-4d7f21233625" Version="1">
+		<ParamValue>320</ParamValue>
+		<ParamType>2</ParamType>
+		<ParamIdentifier>ADBEAudioBitrate</ParamIdentifier>
+	</ExporterParam>
+	<ExporterParam ObjectID="74" ClassID="9f049ab7-d48f-43e9-a8ca-4d7f21233625" Version="1">
+		<ParamValue>48000</ParamValue>
+		<ParamType>2</ParamType>
+		<ParamIdentifier>ADBEAudioRatePerSecond</ParamIdentifier>
+	</ExporterParam>
+</PremiereData>

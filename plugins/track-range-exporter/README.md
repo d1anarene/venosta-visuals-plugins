@@ -46,8 +46,17 @@ in Premiere's Plugins preferences first).
 2. Choose the **guide track** (V1 by default) and press **Scan Track**.
 3. Review the list: one row per clip with IN, OUT (exclusive), frame count and file name.
    Untick clips you don't want, rename files if needed.
-4. **Choose Folder…** and **Choose AME Preset…** (an `.epr` file — e.g. exported from Media
-   Encoder's Preset Browser). The file extension comes from the preset.
+4. **Choose…** an output folder and pick an **Export preset**:
+   - built-in destinations: YouTube 1080p / 4K, Vimeo, Instagram Reels / TikTok (9:16), Instagram
+     feed (4:5), square, H.264 or H.265 at sequence size, Apple ProRes 422 / 422 HQ / 4444,
+     DNxHR HQX — with **frame rate** and **bitrate** sliders and **audio** on/off, AAC bitrate and
+     sample rate;
+   - your own saved Media Encoder presets (listed automatically);
+   - or any `.epr` file.
+
+   Built-in destinations are made from Media Encoder's own presets installed on your computer
+   (adjusted copies are saved in the plugin's data folder). The file extension comes from the
+   preset.
 5. Press **Add Selected to AME Queue**, then render in Media Encoder (or press *Start AME Queue*).
 
 Files are named `001_A.mov`, `002_B.mov`, … Existing files are never overwritten — a number is

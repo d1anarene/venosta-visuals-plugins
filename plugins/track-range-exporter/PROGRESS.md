@@ -38,6 +38,18 @@ _Last update: 2026-11-11_
   list reloads when the shown sequence changes. Regression guards: `tests/uxpCompat.test.ts` and
   the browser smoke test now removes those APIs.
 
+## Third host feedback (2026-11-11, macOS)
+- ✅ host: v0.1.3 scan works — 8 clips with correct IN/OUT/frame counts on a 23.976 sequence.
+- Requests: whole panel scrollable; built-in export presets with fps/bitrate sliders and audio options.
+- 0.1.4 (not yet host-tested): whole panel scrolls; Export preset section with 12 destinations,
+  fps + bitrate sliders, audio on/off, AAC bitrate, sample rate; templates found in Premiere's /
+  AME's installed system presets (by format code + name) and patched (`domain/eprPreset.ts`,
+  unit-tested); user's saved AME presets listed; generated preset validated with
+  `getExportFileExtension` before queueing. Manifest now needs `localFileSystem: fullAccess`
+  (to read Adobe's preset folders).
+- Unverified: exact preset folder locations on macOS/Windows, whether AME honours every patched
+  parameter (check the job settings in AME).
+
 ## Blocked
 - **Milestone 2 (verified two-job export)**: no Premiere/AME in the build environment (Linux container).
   Needs a person with Premiere to run `docs/HOST_TEST_PLAN.md` → "Spike test".

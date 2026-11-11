@@ -29,6 +29,8 @@ import {
   startBatchEncode,
 } from "../premiere/sequenceReader";
 import { folderFromToken, listFolderNames, pickFolder, pickPresetFile, writeTextFile, type PickedFolder } from "./fileSystem";
+import { EXPORT_TARGETS, FPS_STEPS, chooseTemplate, findTarget, fpsTicksForStep } from "../domain/exportTargets";
+import { findInstalledPresets, writeAdjustedPreset, type InstalledPreset } from "../premiere/presetLibrary";
 import { copyDiagnostics, diag } from "./diagnostics";
 import { loadPrefs, savePrefs, type Prefs } from "./settings";
 
@@ -95,6 +97,7 @@ class PanelController {
     if (this.prefs.folderToken) this.folder = await folderFromToken(this.prefs.folderToken);
     this.renderSettings();
     await this.refreshContext();
+    void this.loadPresetCatalog();
     // Keep the sequence list current (new/renamed sequences, active sequence changes) while idle.
     this.pollTimer = setInterval(() => {
       if (!this.busy) void this.refreshSequences(false);
@@ -115,6 +118,40 @@ class PanelController {
       this.info("Cancelling after the current job…");
     });
     $("btn-start").addEventListener("click", () => void this.startQueue());
+    $("dest-picker").addEventListener("change", (e) => {
+      const v = this.destValues[pickerIndex(e)];
+      if (!v) return;
+      this.prefs.destination = v;
+      savePrefs(this.prefs);
+      this.renderExportSettings();
+    });
+    const fps = $("fps-slider") as HTMLElement & { value?: number | string };
+    fps.addEventListener("input", () => {
+      this.prefs.fpsStep = Math.round(Number(fps.value) || 0);
+      this.renderExportLabels();
+    });
+    fps.addEventListener("change", () => savePrefs(this.prefs));
+    const br = $("bitrate-slider") as HTMLElement & { value?: number | string };
+    br.addEventListener("input", () => {
+      this.prefs.bitrates[this.prefs.destination] = Number(br.value) || 0;
+      this.renderExportLabels();
+    });
+    br.addEventListener("change", () => savePrefs(this.prefs));
+    $("chk-audio").addEventListener("change", (e) => {
+      this.prefs.audio = !!(e.target as HTMLInputElement).checked;
+      savePrefs(this.prefs);
+      this.renderExportSettings();
+    });
+    $("audio-bitrate-picker").addEventListener("change", (e) => {
+      const t = findTarget(this.prefs.destination);
+      const v = t?.audioBitrates?.[pickerIndex(e)];
+      if (v) this.prefs.audioKbps = v;
+      savePrefs(this.prefs);
+    });
+    $("audio-rate-picker").addEventListener("change", (e) => {
+      this.prefs.audioRate = pickerIndex(e) === 1 ? 44100 : 48000;
+      savePrefs(this.prefs);
+    });
     $("btn-advanced").addEventListener("click", () => {
       const adv = $("advanced");
       const open = adv.classList.contains("hidden");
@@ -229,6 +266,8 @@ class PanelController {
     }
   }
 
+  private installed: InstalledPreset[] | null = null;
+  private destValues: string[] = [];
   private lastSeqKey = "";
   private shownSequence: string | null = null;
   /** Sequence whose tracks are currently in the Guide track list. */
@@ -359,6 +398,155 @@ class PanelController {
     this.renderSettings();
   }
 
+  // ---------- export preset ----------
+  private async loadPresetCatalog(refresh = false): Promise<void> {
+    $("dest-info").textContent = "Looking for Media Encoder presets on this computer…";
+    try {
+      this.installed = await findInstalledPresets(refresh);
+    } catch (e) {
+      diag("error", "Searching presets failed", e);
+      this.installed = [];
+    }
+    this.buildDestMenu();
+    this.renderExportSettings();
+  }
+
+  private buildDestMenu(): void {
+    const picker = $("dest-picker") as HTMLElement & { selectedIndex?: number };
+    const menu = picker.querySelector("sp-menu") ?? picker;
+    menu.innerHTML = "";
+    this.destValues = [];
+    const add = (value: string, label: string, header = false) => {
+      const item = document.createElement("sp-menu-item");
+      item.textContent = label;
+      if (header) item.setAttribute("disabled", "");
+      menu.appendChild(item);
+      this.destValues.push(header ? "" : value);
+    };
+    let group = "";
+    for (const t of EXPORT_TARGETS) {
+      if (t.group !== group) {
+        group = t.group;
+        add("", `— ${group} —`, true);
+      }
+      add(t.id, t.label);
+    }
+    const user = (this.installed ?? []).filter((p) => p.source === "user");
+    if (user.length) {
+      add("", "— Your Media Encoder presets —", true);
+      for (const u of user) add(`user:${u.path}`, u.name);
+    }
+    add("", "— Other —", true);
+    add("custom", "Choose your own .epr file…");
+    if (!this.destValues.includes(this.prefs.destination)) this.prefs.destination = "youtube-1080";
+    const idx = this.destValues.indexOf(this.prefs.destination);
+    menu.querySelectorAll("sp-menu-item")[idx]?.setAttribute("selected", "");
+    picker.selectedIndex = idx;
+  }
+
+  /** Show/hide controls for the current destination and update their ranges. */
+  private renderExportSettings(): void {
+    const dest = this.prefs.destination;
+    const target = findTarget(dest);
+    const show = (id: string, visible: boolean) => {
+      const el = $(id);
+      if (visible) el.classList.remove("hidden");
+      else el.classList.add("hidden");
+    };
+    show("custom-preset", dest === "custom");
+    show("builtin-settings", !!target);
+    let info = "";
+    if (dest === "custom") info = "Uses your .epr file exactly as it is.";
+    else if (dest.startsWith("user:")) info = "Your saved Media Encoder preset, used exactly as it is.";
+    else if (target) {
+      if (this.installed === null) info = "Looking for Media Encoder presets on this computer…";
+      else {
+        const tpl = chooseTemplate(target, this.installed.filter((p) => p.source === "system"));
+        info = tpl
+          ? `Based on Media Encoder's "${tpl.name}" preset.${target.note ? " " + target.note : ""}`
+          : "Matching Media Encoder preset not found on this computer — choose another destination or your own .epr file.";
+      }
+    }
+    $("dest-info").textContent = info;
+    if (target) {
+      show("bitrate-field", !!target.bitrate);
+      if (target.bitrate) {
+        const sl = $("bitrate-slider");
+        sl.setAttribute("min", String(target.bitrate.min));
+        sl.setAttribute("max", String(target.bitrate.max));
+        sl.setAttribute("step", String(target.bitrate.step));
+        const v = this.prefs.bitrates[dest] ?? target.bitrate.default;
+        sl.setAttribute("value", String(v));
+        (sl as HTMLElement & { value?: number }).value = v;
+      }
+      const fps = $("fps-slider") as HTMLElement & { value?: number };
+      fps.setAttribute("value", String(this.prefs.fpsStep));
+      fps.value = this.prefs.fpsStep;
+      ($("chk-audio") as HTMLInputElement).checked = this.prefs.audio;
+      if (this.prefs.audio) $("chk-audio").setAttribute("checked", "");
+      else $("chk-audio").removeAttribute("checked");
+      show("audio-options", this.prefs.audio);
+      show("audio-bitrate-picker", this.prefs.audio && !!target.audioBitrates);
+      const ab = $("audio-bitrate-picker") as HTMLElement & { selectedIndex?: number };
+      const menu = ab.querySelector("sp-menu") ?? ab;
+      menu.innerHTML = "";
+      const rates = target.audioBitrates ?? [];
+      if (!rates.includes(this.prefs.audioKbps)) this.prefs.audioKbps = target.defaultAudioBitrate ?? rates[rates.length - 1] ?? 320;
+      rates.forEach((k, i) => {
+        const item = document.createElement("sp-menu-item");
+        item.textContent = `AAC ${k} kbps`;
+        if (k === this.prefs.audioKbps) {
+          item.setAttribute("selected", "");
+          ab.selectedIndex = i;
+        }
+        menu.appendChild(item);
+      });
+      this.selectPicker("audio-rate-picker", String(this.prefs.audioRate));
+    }
+    this.renderExportLabels();
+  }
+
+  private renderExportLabels(): void {
+    const step = FPS_STEPS[Math.max(0, Math.min(FPS_STEPS.length - 1, this.prefs.fpsStep))];
+    $("fps-value").textContent = step.key ? `${step.label} fps` : "same as sequence";
+    const t = findTarget(this.prefs.destination);
+    if (t?.bitrate) $("bitrate-value").textContent = `${this.prefs.bitrates[t.id] ?? t.bitrate.default} Mbps`;
+  }
+
+  /** Path of the preset to use for this export (generating an adjusted copy for built-ins). */
+  private async resolvePreset(sequenceTicksPerFrame: string): Promise<{ path: string; summary: string }> {
+    const dest = this.prefs.destination;
+    if (dest === "custom") {
+      if (!this.prefs.presetPath) throw new Error("Choose your .epr preset file.");
+      return { path: this.prefs.presetPath, summary: "your own preset" };
+    }
+    if (dest.startsWith("user:")) return { path: dest.slice(5), summary: "your saved Media Encoder preset" };
+    const target = findTarget(dest);
+    if (!target) throw new Error("Choose an export preset.");
+    const installed = this.installed ?? (await findInstalledPresets());
+    const tpl = chooseTemplate(target, installed.filter((p) => p.source === "system"));
+    if (!tpl) throw new Error(`No Media Encoder preset for "${target.label}" was found on this computer. Choose another destination or your own .epr file.`);
+    const bitrate = target.bitrate ? (this.prefs.bitrates[dest] ?? target.bitrate.default) : undefined;
+    const fpsTicks = fpsTicksForStep(this.prefs.fpsStep, sequenceTicksPerFrame);
+    const stamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+    const r = await writeAdjustedPreset(tpl.path, `TRE_${target.id}_${stamp}.epr`, {
+      name: `Track Range Exporter - ${target.label}`,
+      width: target.width,
+      height: target.height,
+      fpsTicks,
+      bitrateMbps: bitrate,
+      audio: this.prefs.audio,
+      audioBitrateKbps: this.prefs.audio && target.audioBitrates ? this.prefs.audioKbps : undefined,
+      audioSampleRate: this.prefs.audio ? this.prefs.audioRate : undefined,
+    });
+    if (r.skipped.length) this.log(`Preset note: not available in "${tpl.name}": ${r.skipped.join(", ")}.`, "warn");
+    const fpsLabel = FPS_STEPS[this.prefs.fpsStep]?.key ? `${FPS_STEPS[this.prefs.fpsStep].label} fps` : "sequence fps";
+    return {
+      path: r.path,
+      summary: `${target.label}, ${fpsLabel}${bitrate ? `, ${bitrate} Mbps` : ""}, audio ${this.prefs.audio ? "on" : "off"}`,
+    };
+  }
+
   // ---------- table ----------
   private renderRows(): void {
     const list = $("job-list");
@@ -483,11 +671,6 @@ class PanelController {
       this.error("Choose an output folder.");
       return null;
     }
-    const presetPath = this.prefs.presetPath;
-    if (!presetPath) {
-      this.error("Choose an AME export preset (.epr).");
-      return null;
-    }
     for (const r of selected) {
       const err = validateBaseName(r.baseName);
       if (err) {
@@ -509,14 +692,29 @@ class PanelController {
       return null;
     }
 
+    let presetPath: string;
+    let presetSummary: string;
+    try {
+      const r = await this.resolvePreset(this.plan.snapshot.ticksPerFrame);
+      presetPath = r.path;
+      presetSummary = r.summary;
+    } catch (e) {
+      diag("error", "Preparing the export preset failed", e);
+      this.error(e instanceof Error ? e.message : String(e));
+      return null;
+    }
+
+    // Premiere reads the preset here: a preset it cannot parse is rejected before anything is queued.
     let extension: string;
     try {
       extension = await getPresetExtension(ctx.sequence, presetPath);
       if (!extension) throw new Error("empty");
-    } catch {
-      this.error("Could not read the output format from the preset. Is the .epr file valid and present?");
+    } catch (e) {
+      diag("error", `Premiere could not read preset ${presetPath}`, e);
+      this.error("Premiere could not read the export preset. Try another preset (and send the log).");
       return null;
     }
+    this.info(`Preset: ${presetSummary} → .${extension}`);
 
     let existing: string[];
     try {

@@ -1,4 +1,5 @@
 /* Plain block layout: UXP does not style <header>/<section>/<details> like a browser. */
+html, body { height: 100%; overflow-y: auto; }
 body { margin: 0; padding: 0; font-size: 12px; color: var(--uxp-host-text-color, #ddd);
        background: var(--uxp-host-background-color, #232323); }
 .panel { display: flex; flex-direction: column; padding: 10px 12px; }
@@ -19,7 +20,7 @@ body { margin: 0; padding: 0; font-size: 12px; color: var(--uxp-host-text-color,
 .status-warn { color: #e6c35c; }
 .status-ok { color: #8fd18f; }
 .summary { font-size: 11px; opacity: 0.8; margin-bottom: 4px; }
-.job-list { max-height: 360px; overflow-y: auto; border-top: 1px solid rgba(128,128,128,0.3); }
+.job-list { border-top: 1px solid rgba(128,128,128,0.3); }
 .job { padding: 6px 0; border-bottom: 1px solid rgba(128,128,128,0.3); }
 .job-head { display: flex; flex-direction: row; align-items: center; }
 .ord { opacity: 0.6; margin: 0 6px 0 2px; font-family: monospace; }
@@ -35,3 +36,6 @@ body { margin: 0; padding: 0; font-size: 12px; color: var(--uxp-host-text-color,
 .msg { font-size: 11px; margin: 2px 0; }
 .msg-warn { color: #e6c35c; }
 .messages { max-height: 140px; overflow-y: auto; margin-top: 6px; opacity: 0.85; }
+.value-label { font-size: 11px; opacity: 0.85; }
+sp-slider { width: 100%; }
+#audio-options > * { margin-right: 6px; }

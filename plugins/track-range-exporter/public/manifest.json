@@ -9,7 +9,7 @@
     "minVersion": "25.6.0"
   },
   "requiredPermissions": {
-    "localFileSystem": "request",
+    "localFileSystem": "fullAccess",
     "clipboard": "readAndWrite"
   },
   "entrypoints": [
