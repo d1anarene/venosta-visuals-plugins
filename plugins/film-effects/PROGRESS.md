@@ -2,6 +2,18 @@
 
 _Last update: 2026-11-11_
 
+## Windows installer folder fix (2026-11-11)
+
+- **Bug found by the user on Windows (Premiere 2027):** v1.0.6 Setup installed into
+  `Common\Plugins\7.0\MediaCore` (no hyphen); Premiere scans `Common\Plug-ins\7.0\MediaCore`
+  (registry `HKLM\SOFTWARE\Adobe\Premiere Pro\CurrentVersion` → `Plug-InsDir`). The effects
+  did not load. The uninstaller also landed in that wrong folder.
+- Fix: Setup reads `Plug-InsDir` (falls back to the hyphenated path), `UsePreviousAppDir=no`,
+  uninstaller moved to `Program Files\Venosta Visuals\Film Effects`, and upgrades delete the
+  stray v1.0.6 files/folders. CI now runs the installer silently on Windows (fallback folder,
+  stray cleanup, registry folder, uninstall).
+- User is copying the `.aex` files by hand to test loading/rendering; results pending.
+
 ## Windows Setup.exe installer (2026-11-11)
 
 - User asked for something better than the PowerShell install script. Added an Inno Setup 6

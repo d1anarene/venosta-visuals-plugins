@@ -179,6 +179,44 @@ jobs:
           & $iscc "/DAppVersion=$version" "/DCpuDir=$root\_win\cpu" "/DCudaDir=$root\_win\cuda" "/DRepoRoot=$root" "/DOutputDir=$root\out" "plugins\film-effects\installer\windows\FilmEffects.iss"
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compile failed' }
           Get-ChildItem out
+      - name: Test installer (silent install, upgrade cleanup, registry folder, uninstall)
+        if: steps.sdk.outputs.available == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = (Resolve-Path out\FilmEffects-Windows-Setup.exe).Path
+          $names = 'FilmEffects.aex', 'FilmBloom.aex', 'FilmHalation.aex', 'FilmGrain.aex'
+          $fallback = "$env:ProgramFiles\Adobe\Common\Plug-ins\7.0\MediaCore"
+          $stray = "$env:ProgramFiles\Adobe\Common\Plugins\7.0\MediaCore"
+          $uninst = "$env:ProgramFiles\Venosta Visuals\Film Effects\unins000.exe"
+          $key = 'HKLM:\SOFTWARE\Adobe\Premiere Pro\CurrentVersion'
+          function Install($log) {
+            $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TYPE=cpu', '/COMPONENTS=cpu', "/LOG=$log" -Wait -PassThru
+            if ($p.ExitCode -ne 0) { Get-Content $log; throw "Setup exit code $($p.ExitCode)" }
+          }
+          function Uninstall($dir) {
+            if (-not (Test-Path $uninst)) { throw "Uninstaller missing: $uninst" }
+            Start-Process $uninst -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+            for ($i = 0; $i -lt 60 -and (Test-Path "$dir\FilmEffects.aex"); $i++) { Start-Sleep 1 }
+            foreach ($n in $names) { if (Test-Path "$dir\$n") { throw "Uninstall left $n" } }
+          }
+          # 1) Upgrade over a simulated v1.0.6 install in the wrong folder, no Premiere registry value.
+          New-Item -ItemType Directory -Force $stray | Out-Null
+          foreach ($n in $names + 'unins000.exe', 'unins000.dat') { Set-Content "$stray\$n" 'old' }
+          Install "$env:RUNNER_TEMP\setup1.log"
+          foreach ($n in $names) { if (-not (Test-Path "$fallback\$n")) { throw "Missing $fallback\$n" } }
+          if (Test-Path "$env:ProgramFiles\Adobe\Common\Plugins") { Get-ChildItem -Recurse "$env:ProgramFiles\Adobe\Common\Plugins"; throw 'Stray Common\Plugins folder not removed' }
+          Uninstall $fallback
+          # 2) Folder taken from Premiere's Plug-InsDir registry value.
+          $custom = 'C:\FE-Test\MediaCore'
+          New-Item -ItemType Directory -Force $custom | Out-Null
+          New-Item -Force $key | Out-Null
+          New-ItemProperty -Force $key -Name 'Plug-InsDir' -Value "$custom\" | Out-Null
+          Install "$env:RUNNER_TEMP\setup2.log"
+          foreach ($n in $names) { if (-not (Test-Path "$custom\$n")) { Get-Content "$env:RUNNER_TEMP\setup2.log"; throw "Missing $custom\$n" } }
+          Uninstall $custom
+          Remove-Item -Recurse -Force 'HKLM:\SOFTWARE\Adobe\Premiere Pro'
+          Write-Host 'Installer tests passed'
       - name: Upload Windows installer
         if: steps.sdk.outputs.available == 'true'
         uses: actions/upload-artifact@v4
