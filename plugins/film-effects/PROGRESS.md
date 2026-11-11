@@ -2,6 +2,16 @@
 
 _Last update: 2026-11-11_
 
+## Windows Setup.exe installer (2026-11-11)
+
+- User asked for something better than the PowerShell install script. Added an Inno Setup 6
+  installer (`installer/windows/FilmEffects.iss`) bundling the CPU and CUDA builds; CI job
+  `windows-installer` in `film-effects-plugins.yml` compiles it, and releases attach
+  `FilmEffects-Windows-Setup-<tag>.exe` (ZIPs kept as manual alternative).
+- Pre-selects CUDA when `nvcuda.dll` exists, else CPU-only; admin install into the MediaCore
+  folder; uninstall entry in Settings → Apps; unsigned (SmartScreen warning expected).
+- **Status:** compiled in CI only; not yet run on a Windows PC. User will test on the GTX 1080 PC.
+
 ## Windows CUDA release published (2026-11-11)
 
 - [**v1.0.5**](https://github.com/d1anarene/venosta-visuals-plugins/releases/tag/v1.0.5)
