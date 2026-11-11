@@ -76,3 +76,21 @@ These come from SDK_ProcAmp / Skeleton sample code, not from the guides:
 - **No Mac / SDK / Premiere here** → Stage 1 ("thin plugin compiled and run in Premiere") could not
   be completed by the agent. The minimal proof is to build with `scripts/build-macos.sh` and run
   `tests/premiere-manual/CHECKLIST.md` (first section: passthrough + toggles).
+
+## Windows CUDA packaging (2026-11-11)
+
+The v1.0.3 Windows release explicitly disabled `FE_WITH_CUDA`; Linux nvcc compilation did not
+exercise the Premiere Windows GPU adapter. A separate Windows Server 2022 / Visual Studio 2022
+job now enables `FE_WITH_CUDA=ON` with CUDA 12.9.1. The CPU-only build stays available. The user
+reports a GTX 1080, so native Pascal `sm_61` code is explicitly included along with 75/86/89 and
+forward PTX. CUDA 13 removes offline Pascal compilation; CUDA 12.x is intentional.
+
+References checked: [NVIDIA CUDA 12.9 Windows installation guide](https://docs.nvidia.com/cuda/archive/12.9.1/cuda-installation-guide-microsoft-windows/index.html),
+[CUDA 13 release notes](https://docs.nvidia.com/cuda/archive/13.0.0/cuda-toolkit-release-notes/index.html),
+[toolkit installer action source](https://github.com/Jimver/cuda-toolkit/tree/b8bf9c6c28f8a92fbb04dcfcaee872e60c57462d).
+
+## DaVinci Resolve status (2026-11-11)
+
+No Resolve/OpenFX host adapter, build target, installer or tests exist in the checked repository
+or available branches. All native host integration currently targets Premiere. No progress toward
+an installable Resolve build is claimed; sharing image algorithms alone is not a Resolve plugin.

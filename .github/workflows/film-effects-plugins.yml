@@ -87,7 +87,7 @@ jobs:
         with:
           cuda: '12.9.1'
           method: network
-          sub-packages: '["nvcc", "cudart", "visual_studio_integration"]'
+          sub-packages: '["nvcc", "cudart", "cuobjdump", "visual_studio_integration"]'
           log-file-suffix: win-cuda
       - name: Build (Windows, CPU or CPU + CUDA)
         if: steps.sdk.outputs.available == 'true' && runner.os == 'Windows'
@@ -96,7 +96,9 @@ jobs:
         run: |
           $cuda = if ('${{ matrix.cuda }}' -eq 'true') { 'ON' } else { 'OFF' }
           $generator = if ($cuda -eq 'ON') { @('-G', 'Visual Studio 17 2022') } else { @() }
-          cmake -S . -B build-win -A x64 @generator -DFE_BUILD_PLUGIN=ON "-DFE_WITH_CUDA=$cuda" "-DAE_SDK_DIR=$env:AE_SDK" "-DPR_SDK_DIR=$env:PR_SDK"
+          # Include native Pascal code for the user's GTX 1080, plus newer GPU targets/PTX.
+          $architectures = if ($cuda -eq 'ON') { @('-DCMAKE_CUDA_ARCHITECTURES=61-real;75-real;86-real;89-real;89-virtual') } else { @() }
+          cmake -S . -B build-win -A x64 @generator @architectures -DFE_BUILD_PLUGIN=ON "-DFE_WITH_CUDA=$cuda" "-DAE_SDK_DIR=$env:AE_SDK" "-DPR_SDK_DIR=$env:PR_SDK"
           if ($LASTEXITCODE -ne 0) { throw 'Windows plugin configuration failed' }
           foreach ($t in "FilmEffects", "FilmBloom", "FilmHalation", "FilmGrain") {
             cmake --build build-win --config Release --target $t
@@ -115,7 +117,10 @@ jobs:
               $imports = & $dumpbin.FullName /dependents $plugin.FullName
               if ($LASTEXITCODE -ne 0) { throw "Cannot inspect $($plugin.Name)" }
               if ($imports -match 'cudart64.*\.dll') { throw 'CUDA runtime must be linked statically' }
+              $deviceCode = & "$env:CUDA_PATH/bin/cuobjdump.exe" --list-elf $plugin.FullName
+              if ($LASTEXITCODE -ne 0 -or -not ($deviceCode -match 'sm_61')) { throw "GTX 1080 device code missing: $($plugin.Name)" }
             }
+            Invoke-WebRequest 'https://docs.nvidia.com/cuda/archive/12.9.1/eula/index.html' -OutFile "$output/NVIDIA-CUDA-EULA.html"
           }
           Get-ChildItem $output
       - name: Upload plugins

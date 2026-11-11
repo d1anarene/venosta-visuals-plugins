@@ -46,8 +46,11 @@ The installer is unsigned, its bundles are ad hoc signed, and it is not Apple-no
 blocks it, use System Settings → Privacy & Security to review and allow this installer.
 
 Film Effects is a native effect; its installer is `.pkg`, rather than a UXP `.ccx`.
-The experimental Windows ZIP contains a **CPU-only**, CI-built version, not yet tested in Premiere
-on Windows. CUDA remains a source-build option; NVIDIA GPU execution is unverified.
+Windows has two experimental downloads: **CPU-only** and **CUDA + CPU fallback**. Install one
+variant, not both. The CUDA build uses CUDA 12.9 and includes Pascal (`sm_61`) code for GTX 1080,
+plus targets for newer NVIDIA GPUs. It links the CUDA runtime statically: a compatible NVIDIA
+driver is required, but the CUDA Toolkit is not. Windows Premiere behavior and NVIDIA GPU
+execution remain unverified until hardware testing.
 Build, installation and removal details: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 After installing and restarting Premiere: **Effects → Video Effects → Venosta Visuals**.
 

@@ -10,3 +10,9 @@
   native plugin.
 - Buckswood post plugins (MIT) were reviewed for research only; no code was copied.
 - All test images are generated procedurally by `tools/fe_render` and may be redistributed.
+
+- Windows CUDA binaries statically link NVIDIA's CUDA Runtime, which is listed in the Toolkit's
+  redistributable components. NVIDIA components retain their own terms, separate from the MIT
+  license of this project's source. The CUDA ZIP includes `NVIDIA-CUDA-EULA.html` from the
+  [CUDA 12.9.1 license and third-party notices](https://docs.nvidia.com/cuda/archive/12.9.1/eula/index.html).
+  CUDA compiler tools, Adobe SDK headers and SDK samples are not included in the download.
