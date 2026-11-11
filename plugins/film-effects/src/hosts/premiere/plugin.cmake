@@ -28,43 +28,50 @@ set(FE_PLUGIN_SOURCES
   ${AE_SDK_UTIL}/AEFX_SuiteHelper.c)
 if(FE_WITH_GPU)
   list(APPEND FE_PLUGIN_SOURCES src/hosts/premiere/FilmEffectsGPU.mm src/gpu/metal/MetalFilmEngine.mm)
-endif()
-
-add_library(FilmEffects MODULE ${FE_PLUGIN_SOURCES})
-target_link_libraries(FilmEffects PRIVATE fe_core "-framework Foundation")
-if(FE_WITH_GPU)
-  target_link_libraries(FilmEffects PRIVATE "-framework Metal")
-  target_compile_options(FilmEffects PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
-endif()
-target_include_directories(FilmEffects PRIVATE
-  src/hosts/premiere src/gpu/metal src/core
-  ${AE_SDK_HEADERS} ${AE_SDK_HEADERS}/SP ${AE_SDK_HEADERS}/adobesdk ${AE_SDK_UTIL}
-  ${PR_SDK_HEADERS} ${PR_GPU_UTILS})
-set_target_properties(FilmEffects PROPERTIES
-  BUNDLE TRUE
-  BUNDLE_EXTENSION plugin
-  MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/src/hosts/premiere/Info.plist.in
-  MACOSX_BUNDLE_GUI_IDENTIFIER com.venostavisuals.filmeffects
-  MACOSX_BUNDLE_BUNDLE_NAME FilmEffects)
-
-# PiPL: compile the .r into the bundle's resource file with Rez.
-set(FE_RSRC ${CMAKE_CURRENT_BINARY_DIR}/FilmEffects.rsrc)
-add_custom_command(OUTPUT ${FE_RSRC}
-  COMMAND xcrun Rez -o ${FE_RSRC} -define __MACH__ -define AE_OS_MAC -useDF
-          -arch arm64 -arch x86_64
-          -i ${AE_SDK_HEADERS} -i ${AE_SDK_HEADERS}/SP -i ${AE_SDK_RESOURCES}
-          ${CMAKE_CURRENT_SOURCE_DIR}/src/hosts/premiere/FilmEffectsPiPL.r
-  DEPENDS src/hosts/premiere/FilmEffectsPiPL.r)
-target_sources(FilmEffects PRIVATE ${FE_RSRC})
-set_source_files_properties(${FE_RSRC} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
-
-if(FE_WITH_GPU)
   set(FE_METALLIB ${CMAKE_CURRENT_BINARY_DIR}/FilmEffects.metallib)
   add_custom_command(OUTPUT ${FE_METALLIB}
     COMMAND xcrun -sdk macosx metal -fno-fast-math -I ${CMAKE_CURRENT_SOURCE_DIR}/src/core
             -c ${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/metal/FilmEffects.metal -o FilmEffects.air
     COMMAND xcrun -sdk macosx metallib FilmEffects.air -o ${FE_METALLIB}
     DEPENDS src/gpu/metal/FilmEffects.metal src/core/common/fe_kernels.h)
-  target_sources(FilmEffects PRIVATE ${FE_METALLIB})
-  set_source_files_properties(${FE_METALLIB} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 endif()
+
+# Premiere loads one effect (PiPL) per binary, so each variant is its own bundle built from the
+# same sources: 0 = Film Effects (combined), 1 = Film Bloom, 2 = Film Halation, 3 = Film Grain.
+set(FE_VARIANT_NAMES FilmEffects FilmBloom FilmHalation FilmGrain)
+foreach(variant RANGE 3)
+  list(GET FE_VARIANT_NAMES ${variant} bundle)
+  add_library(${bundle} MODULE ${FE_PLUGIN_SOURCES})
+  target_compile_definitions(${bundle} PRIVATE FE_VARIANT=${variant})
+  target_link_libraries(${bundle} PRIVATE fe_core "-framework Foundation")
+  if(FE_WITH_GPU)
+    target_link_libraries(${bundle} PRIVATE "-framework Metal")
+    target_compile_options(${bundle} PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
+  endif()
+  target_include_directories(${bundle} PRIVATE
+    src/hosts/premiere src/gpu/metal src/core
+    ${AE_SDK_HEADERS} ${AE_SDK_HEADERS}/SP ${AE_SDK_HEADERS}/adobesdk ${AE_SDK_UTIL}
+    ${PR_SDK_HEADERS} ${PR_GPU_UTILS})
+  set_target_properties(${bundle} PROPERTIES
+    BUNDLE TRUE
+    BUNDLE_EXTENSION plugin
+    MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/src/hosts/premiere/Info.plist.in
+    MACOSX_BUNDLE_GUI_IDENTIFIER com.venostavisuals.${bundle}
+    MACOSX_BUNDLE_BUNDLE_NAME ${bundle})
+
+  # PiPL: compile the .r for this variant into the bundle's resource file with Rez.
+  set(rsrc ${CMAKE_CURRENT_BINARY_DIR}/${bundle}/${bundle}.rsrc)
+  add_custom_command(OUTPUT ${rsrc}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/${bundle}
+    COMMAND xcrun Rez -o ${rsrc} -define __MACH__ -define AE_OS_MAC -define FE_VARIANT=${variant} -useDF
+            -arch arm64 -arch x86_64
+            -i ${AE_SDK_HEADERS} -i ${AE_SDK_HEADERS}/SP -i ${AE_SDK_RESOURCES}
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/hosts/premiere/FilmEffectsPiPL.r
+    DEPENDS src/hosts/premiere/FilmEffectsPiPL.r)
+  target_sources(${bundle} PRIVATE ${rsrc})
+  set_source_files_properties(${rsrc} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+  if(FE_WITH_GPU)
+    target_sources(${bundle} PRIVATE ${FE_METALLIB})
+    set_source_files_properties(${FE_METALLIB} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+  endif()
+endforeach()

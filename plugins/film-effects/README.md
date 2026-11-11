@@ -1,8 +1,15 @@
 # Film Effects (Premiere Pro)
 
-A native Premiere Pro video effect with three film-finishing tools — **Bloom**, **Halation** and
+Native Premiere Pro video effects with three film-finishing tools — **Bloom**, **Halation** and
 **Film Grain** — made to sit after Lumetri Color on a clip, or on an adjustment layer above your
-graded timeline. Each tool can be switched on and off independently.
+graded timeline.
+
+Four effects are installed under **Venosta Visuals**:
+- **Film Effects** — all three tools in one effect, each with its own on/off switch, plus presets
+- **Film Bloom**, **Film Halation**, **Film Grain** — each tool on its own, when you only need one
+
+They share the same processing code, so Film Grain looks exactly like Film Effects with only
+Grain switched on.
 
 > ⚠️ **Status: in development — not yet tested inside Premiere Pro.** The image processing core is
 > unit-tested and the Metal GPU code is verified against it on a Mac GPU in CI; the native plugin
@@ -30,13 +37,14 @@ and keyframe.
 ## Install
 
 Build and install steps (macOS, needs the free Adobe SDKs): [docs/INSTALLATION.md](docs/INSTALLATION.md).
-After installing and restarting Premiere: **Effects → Video Effects → Venosta Visuals → Film Effects**.
+After installing and restarting Premiere: **Effects → Video Effects → Venosta Visuals**.
 
 ## Use
 
 1. Grade your clips with Lumetri as usual.
 2. Add an **Adjustment Layer** above the graded clips (or apply the effect after Lumetri on a clip).
-3. Drag **Film Effects** onto it, pick a preset, then adjust Bloom / Halation / Grain.
+3. Drag **Film Effects** onto it, pick a preset, then adjust Bloom / Halation / Grain
+   (or use Film Bloom / Film Halation / Film Grain on their own).
 4. Effects above it in the stack see the result; effects below it feed into it. On an adjustment
    layer it processes everything visible beneath it.
 

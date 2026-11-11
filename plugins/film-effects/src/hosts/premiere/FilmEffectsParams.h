@@ -1,14 +1,164 @@
-// Mapping between host parameter values and the core FilmParams. Shared by the CPU entry point
-// and the GPU entry point so both read parameters identically. Header-only, no SDK types.
+// Parameter table shared by every host entry point (CPU and GPU) and every effect variant.
+// Header-only, no Adobe SDK types, unit-tested in tests/core.
+//
+// Each control has a stable ParamKey and a stable on-disk ID (saved in projects; append only,
+// never renumber). A variant lists which controls it shows, in order; the host parameter index is
+// the position in that list + 1 (index 0 is the input layer).
 #pragma once
 #include <cstdint>
+#include <vector>
 
-#include "FilmEffects.h"
 #include "params/params.h"
 
 namespace fe {
 
-/** Host-neutral parameter accessor: index -> value (float, bool or 1-based popup index). */
+enum class Variant : int { Combined = 0, Bloom = 1, Halation = 2, Grain = 3 };
+
+enum class ParamKey : int {
+  Preset,
+  MasterEnable,
+  Mix,
+  WorkingSpace,
+  Quality,
+  BloomGroup,
+  BloomEnable,
+  BloomIntensity,
+  BloomThreshold,
+  BloomKnee,
+  BloomRadius,
+  BloomGroupEnd,
+  HalGroup,
+  HalEnable,
+  HalIntensity,
+  HalThreshold,
+  HalRadius,
+  HalWarmth,
+  HalGroupEnd,
+  GrainGroup,
+  GrainEnable,
+  GrainAmount,
+  GrainSize,
+  GrainRoughness,
+  GrainShadows,
+  GrainMidtones,
+  GrainHighlights,
+  GrainColor,
+  GrainChroma,
+  GrainSeed,
+  GrainAnimate,
+  GrainGroupEnd,
+  Count
+};
+
+enum class ParamKind { GroupStart, GroupEnd, Checkbox, Float, Popup, IntSlider };
+
+struct ParamSpec {
+  ParamKey key;
+  ParamKind kind;
+  const char* name;
+  int diskId;  // stable, saved in projects
+  double validMin = 0, validMax = 0, sliderMin = 0, sliderMax = 0, dflt = 0;
+  int precision = 2;      // decimal places shown
+  bool percent = false;   // display as percent
+  const char* items = nullptr;  // popup items, '|' separated
+  int itemCount = 0;
+  bool supervise = false;       // host calls us when the user changes it (presets)
+  bool cannotTimeVary = false;  // not keyframeable
+  bool startCollapsed = false;  // groups
+};
+
+#define FE_PRESET_ITEMS \
+  "(choose to apply)|Subtle Film|Soft Highlight Glow|Night Lights|Fine 35mm Grain|Coarse 16mm Grain|Halation Only|Off"
+#define FE_PRESET_COUNT 8
+
+/** Every control, with defaults taken from the core's FilmParams. */
+inline const std::vector<ParamSpec>& allParams() {
+  static const std::vector<ParamSpec> specs = [] {
+    const FilmParams d;
+    std::vector<ParamSpec> v;
+    auto add = [&](ParamSpec s) { v.push_back(s); };
+    using K = ParamKey;
+    using T = ParamKind;
+    ParamSpec s{};
+    s = {K::Preset, T::Popup, "Preset", 1};
+    s.items = FE_PRESET_ITEMS; s.itemCount = FE_PRESET_COUNT; s.dflt = 1; s.supervise = true; s.cannotTimeVary = true; add(s);
+    s = {K::MasterEnable, T::Checkbox, "Master Enable", 2}; s.dflt = d.masterEnable; add(s);
+    s = {K::Mix, T::Float, "Global Mix", 3, 0, 100, 0, 100, d.mix * 100.0, 1, true}; add(s);
+    s = {K::WorkingSpace, T::Popup, "Working Space", 4};
+    s.items = "Rec.709 / Gamma 2.4 (SDR)|sRGB|Linear"; s.itemCount = 3; s.dflt = 1; s.cannotTimeVary = true; add(s);
+    s = {K::Quality, T::Popup, "Processing Quality", 5};
+    s.items = "Normal|High"; s.itemCount = 2; s.dflt = 1; s.cannotTimeVary = true; add(s);
+
+    s = {K::BloomGroup, T::GroupStart, "Bloom", 6}; s.startCollapsed = true; add(s);
+    s = {K::BloomEnable, T::Checkbox, "Bloom Enable", 7}; s.dflt = d.bloom.enabled; add(s);
+    add({K::BloomIntensity, T::Float, "Intensity", 8, 0, 1, 0, 1, d.bloom.intensity});
+    add({K::BloomThreshold, T::Float, "Threshold", 9, 0, 16, 0, 2, d.bloom.threshold});
+    add({K::BloomKnee, T::Float, "Soft Knee", 10, 0.001, 4, 0.01, 1, d.bloom.knee});
+    add({K::BloomRadius, T::Float, "Radius (% of height)", 11, 0.05, 25, 0.5, 15, d.bloom.radius, 1});
+    add({K::BloomGroupEnd, T::GroupEnd, "", 12});
+
+    s = {K::HalGroup, T::GroupStart, "Halation", 13}; s.startCollapsed = true; add(s);
+    s = {K::HalEnable, T::Checkbox, "Halation Enable", 14}; s.dflt = d.halation.enabled; add(s);
+    add({K::HalIntensity, T::Float, "Intensity", 15, 0, 1, 0, 1, d.halation.intensity});
+    add({K::HalThreshold, T::Float, "Threshold", 16, 0, 16, 0, 2, d.halation.threshold});
+    add({K::HalRadius, T::Float, "Radius (% of height)", 17, 0.05, 10, 0.1, 3, d.halation.radius});
+    add({K::HalWarmth, T::Float, "Warmth (red to orange)", 18, 0, 1, 0, 1, d.halation.warmth});
+    add({K::HalGroupEnd, T::GroupEnd, "", 19});
+
+    s = {K::GrainGroup, T::GroupStart, "Film Grain", 20}; s.startCollapsed = true; add(s);
+    s = {K::GrainEnable, T::Checkbox, "Grain Enable", 21}; s.dflt = d.grain.enabled; add(s);
+    add({K::GrainAmount, T::Float, "Amount", 22, 0, 1, 0, 1, d.grain.amount});
+    add({K::GrainSize, T::Float, "Size (px @1080)", 23, 0.5, 8, 0.5, 4, d.grain.size});
+    add({K::GrainRoughness, T::Float, "Roughness", 24, 0, 1, 0, 1, d.grain.roughness});
+    add({K::GrainShadows, T::Float, "Shadow Response", 25, 0, 2, 0, 2, d.grain.shadows});
+    add({K::GrainMidtones, T::Float, "Midtone Response", 26, 0, 2, 0, 2, d.grain.midtones});
+    add({K::GrainHighlights, T::Float, "Highlight Response", 27, 0, 2, 0, 2, d.grain.highlights});
+    s = {K::GrainColor, T::Popup, "Color Mode", 28};
+    s.items = "Luma (neutral)|Color"; s.itemCount = 2; s.dflt = 1; add(s);
+    add({K::GrainChroma, T::Float, "Color Amount", 29, 0, 1, 0, 1, d.grain.chroma});
+    add({K::GrainSeed, T::IntSlider, "Seed", 30, 0, 99999, 0, 999, double(d.grain.seed), 0});
+    s = {K::GrainAnimate, T::Checkbox, "Animate", 31}; s.dflt = d.grain.animate; add(s);
+    add({K::GrainGroupEnd, T::GroupEnd, "", 32});
+    return v;
+  }();
+  return specs;
+}
+
+inline const ParamSpec& specFor(ParamKey k) {
+  for (const auto& s : allParams())
+    if (s.key == k) return s;
+  return allParams().front();  // unreachable: every key is in the table (tested)
+}
+
+/** Controls shown by a variant, in Effect Controls order. */
+inline std::vector<ParamKey> variantKeys(Variant v) {
+  using K = ParamKey;
+  switch (v) {
+    case Variant::Combined: {
+      std::vector<K> all;
+      for (int i = 0; i < static_cast<int>(K::Count); ++i) all.push_back(static_cast<K>(i));
+      return all;
+    }
+    case Variant::Bloom:  // no groups/enable: the effect itself is the switch
+      return {K::Mix, K::WorkingSpace, K::Quality, K::BloomIntensity, K::BloomThreshold, K::BloomKnee, K::BloomRadius};
+    case Variant::Halation:
+      return {K::Mix, K::WorkingSpace, K::HalIntensity, K::HalThreshold, K::HalRadius, K::HalWarmth};
+    case Variant::Grain:  // grain works in the working encoding and needs no working-space choice
+      return {K::Mix, K::GrainAmount, K::GrainSize, K::GrainRoughness, K::GrainShadows, K::GrainMidtones,
+              K::GrainHighlights, K::GrainColor, K::GrainChroma, K::GrainSeed, K::GrainAnimate};
+  }
+  return {};
+}
+
+/** Host parameter index of `key` in variant `v` (input layer is 0), or -1 if not shown. */
+inline int paramIndex(Variant v, ParamKey key) {
+  const auto keys = variantKeys(v);
+  for (size_t i = 0; i < keys.size(); ++i)
+    if (keys[i] == key) return static_cast<int>(i) + 1;
+  return -1;
+}
+
+/** Host-neutral parameter accessor by host index: float, bool or 1-based popup value. */
 struct ParamReader {
   virtual ~ParamReader() = default;
   virtual double number(int index) const = 0;
@@ -16,33 +166,48 @@ struct ParamReader {
   virtual int popup(int index) const = 0;  // 1-based
 };
 
-inline FilmParams readParams(const ParamReader& r) {
+/** Read a variant's parameters into core FilmParams. Controls the variant does not show take the
+ *  table default; a standalone variant enables only its own effect. */
+inline FilmParams readParams(const ParamReader& r, Variant v = Variant::Combined) {
+  auto num = [&](ParamKey k) {
+    int i = paramIndex(v, k);
+    return i < 0 ? specFor(k).dflt : r.number(i);
+  };
+  auto flag = [&](ParamKey k, bool standaloneValue) {
+    int i = paramIndex(v, k);
+    return i < 0 ? standaloneValue : r.flag(i);
+  };
+  auto pop = [&](ParamKey k) {
+    int i = paramIndex(v, k);
+    return i < 0 ? static_cast<int>(specFor(k).dflt) : r.popup(i);
+  };
+  using K = ParamKey;
   FilmParams p;
-  p.masterEnable = r.flag(FE_MASTER_ENABLE);
-  p.mix = static_cast<float>(r.number(FE_MIX) / 100.0);
-  p.space = static_cast<WorkingSpace>(r.popup(FE_WORKING_SPACE) - 1);
-  p.quality = r.popup(FE_QUALITY) == 2 ? Quality::High : Quality::Normal;
-  p.bloom.enabled = r.flag(FE_BLOOM_ENABLE);
-  p.bloom.intensity = static_cast<float>(r.number(FE_BLOOM_INTENSITY));
-  p.bloom.threshold = static_cast<float>(r.number(FE_BLOOM_THRESHOLD));
-  p.bloom.knee = static_cast<float>(r.number(FE_BLOOM_KNEE));
-  p.bloom.radius = static_cast<float>(r.number(FE_BLOOM_RADIUS));
-  p.halation.enabled = r.flag(FE_HAL_ENABLE);
-  p.halation.intensity = static_cast<float>(r.number(FE_HAL_INTENSITY));
-  p.halation.threshold = static_cast<float>(r.number(FE_HAL_THRESHOLD));
-  p.halation.radius = static_cast<float>(r.number(FE_HAL_RADIUS));
-  p.halation.warmth = static_cast<float>(r.number(FE_HAL_WARMTH));
-  p.grain.enabled = r.flag(FE_GRAIN_ENABLE);
-  p.grain.amount = static_cast<float>(r.number(FE_GRAIN_AMOUNT));
-  p.grain.size = static_cast<float>(r.number(FE_GRAIN_SIZE));
-  p.grain.roughness = static_cast<float>(r.number(FE_GRAIN_ROUGHNESS));
-  p.grain.shadows = static_cast<float>(r.number(FE_GRAIN_SHADOWS));
-  p.grain.midtones = static_cast<float>(r.number(FE_GRAIN_MIDTONES));
-  p.grain.highlights = static_cast<float>(r.number(FE_GRAIN_HIGHLIGHTS));
-  p.grain.color = r.popup(FE_GRAIN_COLOR) == 2 ? GrainColor::Color : GrainColor::Luma;
-  p.grain.chroma = static_cast<float>(r.number(FE_GRAIN_CHROMA));
-  p.grain.seed = static_cast<int32_t>(r.number(FE_GRAIN_SEED));
-  p.grain.animate = r.flag(FE_GRAIN_ANIMATE);
+  p.masterEnable = flag(K::MasterEnable, true);
+  p.mix = static_cast<float>(num(K::Mix) / 100.0);
+  p.space = static_cast<WorkingSpace>(pop(K::WorkingSpace) - 1);
+  p.quality = pop(K::Quality) == 2 ? Quality::High : Quality::Normal;
+  p.bloom.enabled = flag(K::BloomEnable, v == Variant::Bloom);
+  p.bloom.intensity = static_cast<float>(num(K::BloomIntensity));
+  p.bloom.threshold = static_cast<float>(num(K::BloomThreshold));
+  p.bloom.knee = static_cast<float>(num(K::BloomKnee));
+  p.bloom.radius = static_cast<float>(num(K::BloomRadius));
+  p.halation.enabled = flag(K::HalEnable, v == Variant::Halation);
+  p.halation.intensity = static_cast<float>(num(K::HalIntensity));
+  p.halation.threshold = static_cast<float>(num(K::HalThreshold));
+  p.halation.radius = static_cast<float>(num(K::HalRadius));
+  p.halation.warmth = static_cast<float>(num(K::HalWarmth));
+  p.grain.enabled = flag(K::GrainEnable, v == Variant::Grain);
+  p.grain.amount = static_cast<float>(num(K::GrainAmount));
+  p.grain.size = static_cast<float>(num(K::GrainSize));
+  p.grain.roughness = static_cast<float>(num(K::GrainRoughness));
+  p.grain.shadows = static_cast<float>(num(K::GrainShadows));
+  p.grain.midtones = static_cast<float>(num(K::GrainMidtones));
+  p.grain.highlights = static_cast<float>(num(K::GrainHighlights));
+  p.grain.color = pop(K::GrainColor) == 2 ? GrainColor::Color : GrainColor::Luma;
+  p.grain.chroma = static_cast<float>(num(K::GrainChroma));
+  p.grain.seed = static_cast<int32_t>(num(K::GrainSeed));
+  p.grain.animate = flag(K::GrainAnimate, true);
   return sanitized(p);
 }
 

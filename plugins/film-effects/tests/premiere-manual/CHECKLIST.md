@@ -10,6 +10,9 @@ Nothing here has been run yet. Record date, macOS, Mac model, Premiere version a
 - [ ] Renderer = Software Only: same look (software path)
 - [ ] Export (H.264 + ProRes) matches the Program monitor at the same frame
 
+- [ ] Film Bloom, Film Halation and Film Grain each appear and load; each matches Film Effects with
+      only that section enabled at the same settings (difference blend = black)
+
 ## B. Scenario A — adjustment layer
 - [ ] 3 clips with different Lumetri grades on V1, adjustment layer on V2 with Film Effects
 - [ ] Bloom, Halation, Grain each toggle independently; others keep working
