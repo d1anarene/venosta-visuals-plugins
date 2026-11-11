@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "smoke": "node tests/browser-smoke.cjs",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm test && npm run build",
+    "package": "npm run build && ./scripts/package-ccx.sh"
   },
   "devDependencies": {
     "@adobe/premierepro": "27.0.0",

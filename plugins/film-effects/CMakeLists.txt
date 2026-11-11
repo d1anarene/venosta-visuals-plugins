@@ -29,10 +29,24 @@ target_include_directories(fe_core_tests PRIVATE src/hosts/premiere)
 add_executable(fe_render tools/fe_render.cpp)
 target_link_libraries(fe_render PRIVATE fe_core)
 
+# GPU pass sequence (shared by the CUDA backend) emulated on the CPU and compared with the reference.
+add_executable(fe_gpu_emulation_tests tests/gpu/gpu_emulation_test.cpp)
+target_include_directories(fe_gpu_emulation_tests PRIVATE src tools)
+target_link_libraries(fe_gpu_emulation_tests PRIVATE fe_core)
+
 enable_testing()
 add_test(NAME core COMMAND fe_core_tests)
+add_test(NAME gpu_emulation COMMAND fe_gpu_emulation_tests)
 
-# ---- native Premiere plugin (macOS, needs the Adobe SDKs) --------------------------------------
+# ---- CUDA engine (NVIDIA, no Adobe SDK needed) --------------------------------------------------
+# Compiles the CUDA kernels + engine into a static library. Used by the Windows plugin build and by
+# CI to check that the CUDA code compiles with nvcc. Needs the CUDA toolkit (nvcc).
+option(FE_BUILD_CUDA_ENGINE "Build the CUDA engine library (requires the CUDA toolkit)" OFF)
+if(FE_BUILD_CUDA_ENGINE)
+  include(cmake/fe_cuda_engine.cmake)
+endif()
+
+# ---- native Premiere plugins (macOS / Windows, need the Adobe SDKs) --------------------------------------
 # Configure with: -DAE_SDK_DIR=/path/to/AfterEffectsSDK/Examples -DPR_SDK_DIR=/path/to/Premiere SDK
 option(FE_BUILD_PLUGIN "Build the native Premiere plugin (requires Adobe SDKs)" OFF)
 if(FE_BUILD_PLUGIN)

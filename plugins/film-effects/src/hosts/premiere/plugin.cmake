@@ -4,7 +4,7 @@
 # macOS (CPU + Metal GPU):
 #   cmake -S . -B build-mac -G Xcode -DFE_BUILD_PLUGIN=ON \
 #         -DAE_SDK_DIR="/path/to/AfterEffectsSDK/Examples" -DPR_SDK_DIR="/path/to/Premiere Pro SDK"
-# Windows (CPU path; Premiere uses it automatically because there is no CUDA entry yet):
+# Windows (CPU + CUDA GPU; needs the CUDA toolkit for the GPU part, otherwise CPU only):
 #   cmake -S . -B build-win -G "Visual Studio 17 2022" -A x64 -DFE_BUILD_PLUGIN=ON ^
 #         -DAE_SDK_DIR="C:/AfterEffectsSDK/Examples" -DPR_SDK_DIR="C:/Premiere Pro SDK"
 #
@@ -29,7 +29,27 @@ if(APPLE)
 endif()
 option(FE_WITH_GPU "Build the Metal GPU entry point (macOS only)" ${FE_GPU_DEFAULT})
 if(FE_WITH_GPU AND NOT APPLE)
-  message(FATAL_ERROR "FE_WITH_GPU is Metal-only; the Windows CUDA path is not written yet")
+  message(FATAL_ERROR "FE_WITH_GPU is the Metal path (macOS); on Windows use FE_WITH_CUDA")
+endif()
+
+# CUDA GPU entry (Windows). On by default when a CUDA toolkit is found.
+set(FE_CUDA_DEFAULT OFF)
+if(WIN32)
+  include(CheckLanguage)
+  check_language(CUDA)
+  if(CMAKE_CUDA_COMPILER)
+    set(FE_CUDA_DEFAULT ON)
+  endif()
+endif()
+option(FE_WITH_CUDA "Build the CUDA GPU entry point (Windows, needs the CUDA toolkit)" ${FE_CUDA_DEFAULT})
+if(FE_WITH_CUDA)
+  if(NOT WIN32)
+    message(FATAL_ERROR "FE_WITH_CUDA targets Windows")
+  endif()
+  include(${CMAKE_CURRENT_LIST_DIR}/../../../cmake/fe_cuda_engine.cmake)
+  message(STATUS "Film Effects: CUDA GPU path enabled")
+elseif(WIN32)
+  message(STATUS "Film Effects: no CUDA toolkit found - Windows plugins will render on the CPU only")
 endif()
 
 if(APPLE)
@@ -97,6 +117,11 @@ foreach(variant RANGE 3)
     # file the way the SDK samples do it: preprocess the .r, run the SDK's PiPLtool, preprocess
     # the result again with MSWindows defined, then compile the .rc into the DLL.
     set_target_properties(${bundle} PROPERTIES SUFFIX ".aex" PREFIX "")
+    if(FE_WITH_CUDA)
+      target_sources(${bundle} PRIVATE src/hosts/premiere/FilmEffectsGPU_CUDA.cpp)
+      target_include_directories(${bundle} PRIVATE src/gpu/cuda)
+      target_link_libraries(${bundle} PRIVATE fe_cuda_engine)
+    endif()
     target_compile_definitions(${bundle} PRIVATE MSWindows WIN32 _WINDOWS NOMINMAX)
     set(rr ${gen}/${bundle}.rr)
     set(rrc ${gen}/${bundle}.rrc)

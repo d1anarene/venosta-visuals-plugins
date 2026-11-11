@@ -41,6 +41,8 @@ jobs:
           cmake --build build --config Release --parallel
       - name: Run core tests
         run: ./build/Release/fe_core_tests.exe
+      - name: Run GPU pass emulation tests (CUDA maths on CPU)
+        run: ./build/Release/fe_gpu_emulation_tests.exe
   film-effects-metal:
     runs-on: macos-latest
     defaults:
@@ -54,3 +56,23 @@ jobs:
           cmake --build build-gpu --parallel
       - name: Compare GPU with CPU reference
         run: ./build-gpu/fe_metal_vs_cpu build-gpu/FilmEffects.metallib
+  film-effects-cuda:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: plugins/film-effects
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CUDA compiler (NVIDIA apt repository)
+        working-directory: .
+        run: |
+          wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+          sudo dpkg -i cuda-keyring_1.1-1_all.deb
+          sudo apt-get update -q
+          sudo apt-get install -y -q cuda-nvcc-12-6 cuda-cudart-dev-12-6
+          echo "/usr/local/cuda-12.6/bin" >> "$GITHUB_PATH"
+      - name: Compile CUDA kernels and engine with nvcc (no GPU on the runner, compile only)
+        run: |
+          nvcc --version
+          cmake -S . -B build-cuda -DCMAKE_BUILD_TYPE=Release -DFE_BUILD_CUDA_ENGINE=ON
+          cmake --build build-cuda --target fe_cuda_engine --parallel

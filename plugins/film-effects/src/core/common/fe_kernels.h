@@ -1,6 +1,6 @@
 // Film Effects — per-pixel math shared by the C++ CPU reference and the Metal kernels.
 //
-// This header is valid C++17 and valid Metal Shading Language. The CPU tests therefore
+// This header is valid C++17, CUDA C++ and Metal Shading Language. The CPU tests therefore
 // exercise exactly the same formulas the GPU runs, which is how CPU/GPU agreement is kept.
 // Keep it free of std::, pointers, recursion and double precision.
 #ifndef FE_KERNELS_H
@@ -20,7 +20,20 @@
 #else
   #include <cmath>
   #include <cstdint>
-  #define FE_FN inline
+  #ifdef __CUDACC__
+    // CUDA: every function is callable from host and device; float math via the CUDA built-ins.
+    #define FE_FN __host__ __device__ inline
+    #define FE_POWF powf
+    #define FE_EXPF expf
+    #define FE_FLOORF floorf
+    #define FE_FABSF fabsf
+  #else
+    #define FE_FN inline
+    #define FE_POWF std::pow
+    #define FE_EXPF std::exp
+    #define FE_FLOORF std::floor
+    #define FE_FABSF std::fabs
+  #endif
   typedef uint32_t fe_uint;
   struct fe_float3 {
     float x, y, z;
@@ -30,10 +43,10 @@
   FE_FN fe_float3 operator-(fe_float3 a, fe_float3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
   FE_FN fe_float3 operator*(fe_float3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
   FE_FN fe_float3 operator*(fe_float3 a, fe_float3 b) { return {a.x * b.x, a.y * b.y, a.z * b.z}; }
-  FE_FN float fe_pow(float a, float b) { return std::pow(a, b); }
-  FE_FN float fe_exp(float a) { return std::exp(a); }
-  FE_FN float fe_floor(float a) { return std::floor(a); }
-  FE_FN float fe_fabs(float a) { return std::fabs(a); }
+  FE_FN float fe_pow(float a, float b) { return FE_POWF(a, b); }
+  FE_FN float fe_exp(float a) { return FE_EXPF(a); }
+  FE_FN float fe_floor(float a) { return FE_FLOORF(a); }
+  FE_FN float fe_fabs(float a) { return FE_FABSF(a); }
 #endif
 
 FE_FN float fe_clamp(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }

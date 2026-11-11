@@ -1,0 +1,58 @@
+name: release
+# Creates a GitHub release on every push to main (i.e. every merged pull request from dev).
+# Version: <VERSION file>.<run number>, e.g. v0.1.7. Versions starting with "0." are pre-releases.
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+concurrency:
+  group: release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Version
+        id: version
+        run: |
+          base=$(tr -d ' \n\r' < VERSION)
+          echo "tag=v${base}.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          if [[ "$base" == 0.* ]]; then echo "pre=--prerelease" >> "$GITHUB_OUTPUT"; else echo "pre=" >> "$GITHUB_OUTPUT"; fi
+      - name: Build and test Track Range Exporter
+        working-directory: plugins/track-range-exporter
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+      - name: Test Film Effects core
+        working-directory: plugins/film-effects
+        run: ./scripts/run-core-tests.sh
+      - name: Package installers (.ccx)
+        run: plugins/track-range-exporter/scripts/package-ccx.sh "$PWD/out" "-${{ steps.version.outputs.tag }}"
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=${{ steps.version.outputs.tag }}
+          cat > notes.md <<NOTES
+          Free plugins for Adobe Premiere Pro by Venosta Visuals — https://venostavisuals.com
+          Provided "as is", without any warranty. Keep backups of your projects.
+
+          ### Track Range Exporter (Windows + macOS)
+          - \`TrackRangeExporter-Premiere-${tag}.ccx\`: **double-click** to install with Creative Cloud Desktop, restart Premiere, then Window → UXP Plugins → Track Range Exporter.
+          - \`TrackRangeExporter-MediaEncoder-${tag}.ccx\`: optional companion panel for Adobe Media Encoder 27+ (only needed for the "no timeline change" queue method).
+          - Uninstall: Creative Cloud Desktop → Plugins → Manage Plugins.
+
+          ### Film Effects
+          Not included as a download yet: the plugin must be built with Adobe's SDKs, which cannot be redistributed. Build instructions: plugins/film-effects/docs/INSTALLATION.md.
+
+          Status of each plugin: see the README and each plugin's PROGRESS.md.
+          NOTES
+          gh release create "$tag" out/*.ccx --target "$GITHUB_SHA" --title "$tag" \
+            --notes-file notes.md --generate-notes ${{ steps.version.outputs.pre }}

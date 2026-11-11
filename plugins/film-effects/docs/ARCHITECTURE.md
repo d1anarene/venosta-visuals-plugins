@@ -10,6 +10,8 @@ src/core/            host-independent C++17, compiled and unit-tested everywhere
   bloom/ halation/ grain/  the three effects
   pipeline/            process(): the effect order below
 src/gpu/metal/       FilmEffects.metal (kernels) + MetalFilmEngine (encodes the same passes)
+src/gpu/common/      per-pixel GPU pass functions + pass orchestration (C++ and CUDA)
+src/gpu/cuda/        CUDA kernels (thin wrappers) + CudaFilmEngine (Windows/NVIDIA)
 src/hosts/premiere/  AE-API effect (CPU entry), PiPL, Premiere GPU entry (Metal), CMake
                      FilmEffectsParams.h: one parameter table for all effect variants
 tools/fe_render      development CLI (synthetic scenes, A/B images, benchmarks) - not the product
@@ -63,6 +65,16 @@ only that section on (tested: `standalone_renders_identically_to_combined_sectio
 - **Determinism**: CPU threads split work by rows with no shared accumulation; Metal uses serial
   dispatch with fixed per-pixel loops.
 
+## CUDA backend and how it is verified without an NVIDIA GPU
+
+`src/gpu/common/fe_gpu_pixels.h` holds one function per GPU pass that computes a single output
+pixel, exactly like one GPU thread; `fe_gpu_pipeline.h` decides which passes run with which
+buffers (same sequence as the Metal engine). The CUDA kernels only compute (x, y) from the thread
+index and call those functions. `tests/gpu/gpu_emulation_test.cpp` runs the same pipeline with a
+CPU backend that calls the same functions pixel by pixel, in place, for 32f and 16f frames, and
+compares with the CPU reference. CI also compiles the CUDA code with `nvcc`. What remains
+unverified is CUDA-specific execution (device memory, launches, the Premiere GPU entry).
+
 ## CPU vs GPU agreement
 
 Both backends use the same plan functions (`planBloom`, `planHalation`, `planGaussian`), the same
@@ -70,4 +82,6 @@ Gaussian weights (`gaussianKernel`) and the same per-pixel functions (`fe_kernel
 differences: GPU `pow`/`exp` precision (compile with `-fno-fast-math`), half-float frames (16f), and
 possible vertical orientation of the grain field if Premiere's GPU frames are stored bottom-up.
 **Measured** in CI on a Metal GPU: < 0.001/255 for 32f frames and ≤ 0.062/255 for 16f frames across
-all scenes and presets (`tests/gpu/README.md`).
+all scenes and presets (`tests/gpu/README.md`). CUDA pass sequence (CPU emulation): identical for
+32f, ≤ 0.062/255 for 16f. On real NVIDIA hardware small extra differences from GPU `powf`/`expf`
+precision are expected (well within 1/255); to be measured.

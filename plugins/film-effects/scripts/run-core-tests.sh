@@ -5,3 +5,4 @@ cd "$(dirname "$0")/.."
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release >/dev/null
 cmake --build build --parallel >/dev/null
 ./build/fe_core_tests "$@"
+./build/fe_gpu_emulation_tests

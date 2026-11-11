@@ -6,7 +6,7 @@
 | | macOS | Windows |
 | --- | --- | --- |
 | Plugin files | `Film*.plugin` bundles (arm64 + x86_64) | `Film*.aex` (x64) |
-| Rendering | CPU + Metal GPU | CPU only for now (no CUDA path yet); Premiere uses it automatically |
+| Rendering | CPU + Metal GPU | CPU + CUDA GPU (NVIDIA); CPU only if built without the CUDA toolkit |
 | Status | written, not yet built | written, not yet built |
 
 ## 1. Get the SDKs
@@ -31,7 +31,10 @@ the preprocessor define `FE_VARIANT=1` (Bloom), `2` (Halation) or `3` (Grain) to
 the Rez settings.
 
 ## 2b. Build (Windows)
-Requirements: Windows 10/11 x64, Visual Studio 2022 with "Desktop development with C++", CMake 3.20+.
+Requirements: Windows 10/11 x64, Visual Studio 2022 with "Desktop development with C++", CMake 3.20+,
+and the **NVIDIA CUDA Toolkit 12.x** (free, developer.nvidia.com) for GPU acceleration. Without the
+toolkit the build still works and the plugins render on the CPU. The CUDA runtime is linked
+statically, so users only need a normal NVIDIA driver.
 In a **Developer PowerShell for VS 2022**:
 ```powershell
 cd plugins\film-effects
@@ -39,6 +42,8 @@ cd plugins\film-effects
 ```
 This runs the core tests, converts the PiPL with the SDK's `PiPLtool.exe` (the step the SDK sample
 projects use) and builds `FilmEffects.aex`, `FilmBloom.aex`, `FilmHalation.aex`, `FilmGrain.aex`.
+CMake prints "CUDA GPU path enabled" when it found the CUDA toolkit. In Premiere, check
+*File → Project Settings → General → Renderer* is "Mercury Playback Engine GPU Acceleration (CUDA)".
 
 ## 3. Install (macOS)
 ```bash
