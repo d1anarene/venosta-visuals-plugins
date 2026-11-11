@@ -2,6 +2,21 @@
 
 _Last update: 2026-11-11_
 
+## DaVinci Resolve (OpenFX) — milestone 1: CPU plug-in (2026-11-11)
+
+- User asked to start the DaVinci Resolve version after the installer fix release.
+- `src/hosts/ofx/FilmEffectsOFX.cpp`: one `FilmEffects.ofx.bundle` with four effects
+  (`com.venostavisuals.FilmEffects|FilmBloom|FilmHalation|FilmGrain`), parameters generated from the
+  shared table (`FilmEffectsParams.h`, OFX names `fe<diskId>`), presets, bypass via isIdentity,
+  CPU render through the tested core (rows flipped to top-first so grain matches Premiere).
+- Built with the BSD OpenFX Support library fetched at a pinned commit (`src/hosts/ofx/ofx.cmake`).
+- Verified locally on Linux: builds; `fe_ofx_load_test` loads the bundle and finds all four effects.
+- CI `film-effects-ofx.yml`: macOS universal `.pkg`, Windows Setup (silent install/uninstall test),
+  Linux tarball; release attaches them.
+- **Not tested in DaVinci Resolve.** No render test through a real OFX host yet (OpenFX's demo
+  host is 8-bit only). GPU (CUDA/Metal via OFX GPU extensions) is the next milestone; the GPU
+  engines currently assume BGRA and need an RGBA option.
+
 ## Windows installer folder fix (2026-11-11)
 
 - **Bug found by the user on Windows (Premiere 2027):** v1.0.6 Setup installed into

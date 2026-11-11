@@ -58,6 +58,12 @@ if(FE_BUILD_PLUGIN)
   include(src/hosts/premiere/plugin.cmake)
 endif()
 
+# ---- OpenFX plug-in (DaVinci Resolve), no Adobe SDK needed --------------------------------------
+option(FE_BUILD_OFX "Build the OpenFX plug-in bundle (downloads the BSD-licensed OpenFX SDK)" OFF)
+if(FE_BUILD_OFX)
+  include(src/hosts/ofx/ofx.cmake)
+endif()
+
 # ---- Metal backend compile + GPU-vs-CPU comparison (macOS, no Adobe SDK needed) ---------------
 option(FE_BUILD_GPU_TESTS "Build the Metal engine and the GPU-vs-CPU comparison tool" OFF)
 if(FE_BUILD_GPU_TESTS)
