@@ -1,7 +1,8 @@
 name: film-effects-plugins
 # Builds the native Film Effects plugins (Film Effects, Film Bloom, Film Halation, Film Grain) for
 # macOS and Windows. The Adobe SDKs are NOT in this repository: they are downloaded at build time
-# from the private repository d1anarene/vvp-sdk using the ADOBE_SDK_TOKEN secret, used only on the
+# from the private repository d1anarene/vvp-sdk using the ADOBE_SDK_TOKEN secret (ADBE_SDK_TOKEN
+# is accepted too), used only on the
 # temporary build machine, and never uploaded anywhere. Only the compiled plugins are kept.
 on:
   push:
@@ -10,6 +11,8 @@ on:
   workflow_call:
     secrets:
       ADOBE_SDK_TOKEN:
+        required: false
+      ADBE_SDK_TOKEN:
         required: false
 permissions:
   contents: read
@@ -32,7 +35,7 @@ jobs:
       - name: Check SDK access
         id: sdk
         env:
-          TOKEN: ${{ secrets.ADOBE_SDK_TOKEN }}
+          TOKEN: ${{ secrets.ADOBE_SDK_TOKEN || secrets.ADBE_SDK_TOKEN }}
         run: |
           if [ -z "$TOKEN" ]; then
             echo "::notice::ADOBE_SDK_TOKEN is not set - skipping the native plugin build."
@@ -45,7 +48,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: d1anarene/vvp-sdk
-          token: ${{ secrets.ADOBE_SDK_TOKEN }}
+          token: ${{ secrets.ADOBE_SDK_TOKEN || secrets.ADBE_SDK_TOKEN }}
           path: _sdk_zips
       - name: Unpack SDKs
         if: steps.sdk.outputs.available == 'true'
