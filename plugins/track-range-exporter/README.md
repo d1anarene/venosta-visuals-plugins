@@ -6,9 +6,9 @@ Pick a guide track (usually **V1**). Each clip on it becomes its own Media Encod
 the **full sequence** for exactly that clip's time range: every visible track, adjustment layers,
 Lumetri, titles, transitions and audio. The guide track only supplies the start and end times.
 
-> ⚠️ **Status: in development, not yet tested inside Premiere Pro.** The logic is unit-tested, but
-> the Adobe integration still needs the host test in [docs/HOST_TEST_PLAN.md](docs/HOST_TEST_PLAN.md).
-> Check your first exports carefully. Provided without any guarantee — see the
+> ⚠️ **Status: early version.** The basic workflow (scan → presets → queue to Media Encoder) works
+> in Premiere Pro 27 on macOS; detailed checks (frame-exact ranges, Windows) are still open — see
+> [docs/HOST_TEST_PLAN.md](docs/HOST_TEST_PLAN.md). Check your first exports carefully. Provided without any guarantee — see the
 > [root README](../../README.md#️-no-guarantee).
 
 Downloads will also be available at [venostavisuals.com](https://venostavisuals.com).

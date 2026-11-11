@@ -5,7 +5,8 @@ _Last update: 2026-11-11_
 ## Verification legend
 - **unit**: covered by `npm test` (vitest, no Adobe host)
 - **mock**: browser smoke test with a mocked Premiere API (`tests/browser-smoke.cjs`)
-- **host**: verified inside Premiere Pro / Media Encoder — **nothing yet**
+- **host**: verified inside Premiere Pro / Media Encoder — basic workflow confirmed by the user on
+  macOS (see below); detailed frame checks still open
 
 ## Done
 - [x] Phase 0 research against official sources (type package, Adobe docs sources, samples) → `TECHNICAL_DECISIONS.md`
@@ -49,6 +50,12 @@ _Last update: 2026-11-11_
   (to read Adobe's preset folders).
 - Unverified: exact preset folder locations on macOS/Windows, whether AME honours every patched
   parameter (check the job settings in AME).
+
+## Host confirmation (2026-11-11, macOS, Premiere Pro 27.0.0)
+- ✅ host (user report): installed v0.1.6 via .ccx, scanned the guide track, queued the clips to
+  Media Encoder with the built-in presets — "it works".
+- Still to confirm in detail: exported frame counts per file (out-point convention), first/last
+  frames at adjacent cuts, Windows, the Media Encoder companion route.
 
 ## Blocked
 - **Milestone 2 (verified two-job export)**: no Premiere/AME in the build environment (Linux container).
