@@ -46,9 +46,8 @@ The installer is unsigned, its bundles are ad hoc signed, and it is not Apple-no
 blocks it, use System Settings → Privacy & Security to review and allow this installer.
 
 Film Effects is a native effect; its installer is `.pkg`, rather than a UXP `.ccx`.
-**Film Effects is released for macOS only.** Windows CPU builds remain CI artifacts until
-verified inside Premiere on Windows. CUDA remains a source-build option; NVIDIA GPU execution
-is unverified.
+The experimental Windows ZIP contains a **CPU-only**, CI-built version, not yet tested in Premiere
+on Windows. CUDA remains a source-build option; NVIDIA GPU execution is unverified.
 Build, installation and removal details: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 After installing and restarting Premiere: **Effects → Video Effects → Venosta Visuals**.
 

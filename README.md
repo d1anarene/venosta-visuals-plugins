@@ -17,7 +17,7 @@ delivery. More plugins (and possibly other Adobe apps) will follow.
 | Plugin | What it does | Status |
 | --- | --- | --- |
 | [Track Range Exporter](plugins/track-range-exporter/README.md) | Pick a guide track (e.g. V1). Every clip on it becomes its own export job in Adobe Media Encoder, rendering the **full graded sequence** (all tracks, adjustment layers, Lumetri, audio) for exactly that clip's time range. | Early version — **works in Premiere Pro 27 on macOS** (user-tested); frame-exact checks and Windows still open |
-| [Film Effects](plugins/film-effects/README.md) | Native video effects with **Bloom**, **Halation** and **Film Grain** — combined in one effect or as three standalone effects — designed to sit after Lumetri or on an adjustment layer. | **Host-tested on macOS** — user-tested in Premiere Pro 27 on Apple Silicon; CPU tests and Metal comparison pass in CI. Mac installer available in releases (macOS 26+); Windows CI-built, unreleased until host-tested |
+| [Film Effects](plugins/film-effects/README.md) | Native video effects with **Bloom**, **Halation** and **Film Grain** — combined in one effect or as three standalone effects — designed to sit after Lumetri or on an adjustment layer. | **Host-tested on macOS** — user-tested in Premiere Pro 27 on Apple Silicon; CPU tests and Metal comparison pass in CI. Mac installer available in releases (macOS 26+); Windows CPU build experimental, host-unverified |
 
 Each plugin folder has its own README with installation steps, usage and known limitations.
 
@@ -38,7 +38,7 @@ See [LICENSE](LICENSE) for the full terms.
 - Adobe Premiere Pro (current version; see each plugin's README for tested versions)
 - Adobe Media Encoder for plugins that queue exports
 - Windows and macOS: Track Range Exporter is a UXP panel (both systems); Film Effects builds on
-  both; Film Effects is released for Mac with Metal acceleration. Windows builds remain unreleased until host-tested
+  both; the Mac release includes Metal acceleration, while the experimental Windows download is CPU-only
 
 ## For developers
 

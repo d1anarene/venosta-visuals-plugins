@@ -1,13 +1,13 @@
 # Building and installing
 
 > Mac: user-tested in Premiere Pro 27 on Apple Silicon; macOS 26+.
-> Windows: CI-built CPU-only artifact; unreleased until host-tested. Mac downloads are unsigned and
+> Windows: CI-built CPU-only download; host testing pending. Mac downloads are unsigned and
 > not Apple-notarized. Export matching, long timeline stability and HDR workflows are unverified.
 
 | | macOS | Windows |
 | --- | --- | --- |
 | Plugin files | `Film*.plugin` bundles (arm64 + x86_64) | `Film*.aex` (x64) |
-| Rendering | CPU + Metal GPU | CI artifact: CPU only; CUDA available for source builds |
+| Rendering | CPU + Metal GPU | Release ZIP: CPU only; CUDA available for source builds |
 | Status | User-tested in Premiere Pro 27 on Apple Silicon | CI-built; host testing pending |
 
 ## 1. Get the SDKs
