@@ -1,26 +1,37 @@
-body { margin: 0; padding: 8px; font-size: 12px; color: var(--uxp-host-text-color, #ddd); background: var(--uxp-host-background-color, #232323); }
-h1 { font-size: 13px; margin: 0 0 6px 0; font-weight: 600; }
-section, header, footer { margin-bottom: 10px; }
-.row { display: flex; flex-direction: row; align-items: center; margin: 4px 0; }
-.buttons > * { margin-right: 6px; }
-.label { opacity: 0.7; margin-right: 6px; }
-.value { flex: 1; font-weight: 600; overflow: hidden; }
-.path, .help { font-size: 11px; opacity: 0.75; word-break: break-all; margin: 2px 0 6px 0; }
-.summary { font-size: 11px; margin: 4px 0; }
-.job-list { max-height: 340px; overflow-y: auto; border-top: 1px solid rgba(128,128,128,0.3); }
-.job { padding: 4px 0; border-bottom: 1px solid rgba(128,128,128,0.3); }
+/* Plain block layout: UXP does not style <header>/<section>/<details> like a browser. */
+body { margin: 0; padding: 0; font-size: 12px; color: var(--uxp-host-text-color, #ddd);
+       background: var(--uxp-host-background-color, #232323); }
+.panel { display: flex; flex-direction: column; padding: 10px 12px; }
+.title { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+.field { display: flex; flex-direction: column; margin-bottom: 8px; }
+.field sp-label { margin-bottom: 2px; }
+.row { display: flex; flex-direction: row; align-items: center; }
+.actions { margin: 4px 0; }
+.actions > * { margin-right: 8px; }
+.grow { flex: 1; min-width: 0; }
+.full { width: 100%; }
+.hidden { display: none; }
+.divider { height: 1px; background: rgba(128,128,128,0.35); margin: 10px 0; }
+.path { font-size: 11px; opacity: 0.8; margin-right: 8px; overflow: hidden; white-space: nowrap; }
+.help { font-size: 11px; opacity: 0.7; margin-top: 3px; }
+.status { font-size: 11px; min-height: 15px; margin: 4px 0 2px 0; }
+.status-error { color: #ff7b7b; }
+.status-warn { color: #e6c35c; }
+.status-ok { color: #8fd18f; }
+.summary { font-size: 11px; opacity: 0.8; margin-bottom: 4px; }
+.job-list { max-height: 360px; overflow-y: auto; border-top: 1px solid rgba(128,128,128,0.3); }
+.job { padding: 6px 0; border-bottom: 1px solid rgba(128,128,128,0.3); }
 .job-head { display: flex; flex-direction: row; align-items: center; }
 .ord { opacity: 0.6; margin: 0 6px 0 2px; font-family: monospace; }
 .clip { flex: 1; overflow: hidden; white-space: nowrap; }
-.status { font-size: 10px; padding: 0 4px; border-radius: 3px; background: rgba(128,128,128,0.25); }
-.job-queued .status { background: #2d6a3e; color: #fff; }
-.job-failed .status { background: #8a2d2d; color: #fff; }
-.job-adding .status { background: #6a5a1e; color: #fff; }
-.times { font-family: monospace; font-size: 10px; opacity: 0.85; margin: 2px 0 2px 26px; }
-.outname { margin-left: 26px; width: calc(100% - 30px); font-size: 11px; }
-.note { font-size: 10px; opacity: 0.8; margin-left: 26px; }
+.status-chip { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: rgba(128,128,128,0.25); }
+.job-queued .status-chip { background: #2d6a3e; color: #fff; }
+.job-failed .status-chip { background: #8a2d2d; color: #fff; }
+.job-adding .status-chip { background: #6a5a1e; color: #fff; }
+.times { font-family: monospace; font-size: 10px; opacity: 0.85; margin: 3px 0 3px 26px; }
+.outname { margin-left: 26px; width: 90%; font-size: 11px; }
+.note { font-size: 10px; opacity: 0.8; margin: 2px 0 0 26px; }
 .note-error, .msg-error, .warn-text { color: #ff7b7b; }
 .msg { font-size: 11px; margin: 2px 0; }
 .msg-warn { color: #e6c35c; }
-.messages { max-height: 160px; overflow-y: auto; }
-details summary { cursor: pointer; font-size: 11px; margin: 4px 0; }
+.messages { max-height: 140px; overflow-y: auto; margin-top: 6px; opacity: 0.85; }

@@ -14,8 +14,23 @@ const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
 /** Leave room for an ordinal prefix, a collision suffix and an extension within 255 bytes. */
 export const MAX_BASENAME_BYTES = 180;
 
-function utf8Length(s: string): number {
-  return new TextEncoder().encode(s).length;
+/** UTF-8 byte length without TextEncoder (not available in Premiere's UXP runtime). */
+export function utf8Length(s: string): number {
+  let n = 0;
+  for (const ch of s) {
+    const cp = ch.codePointAt(0) ?? 0;
+    n += cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+  }
+  return n;
+}
+
+/** Unicode NFC normalisation when the runtime supports it; otherwise the string unchanged. */
+export function nfc(s: string): string {
+  try {
+    return typeof s.normalize === "function" ? s.normalize("NFC") : s;
+  } catch {
+    return s;
+  }
 }
 
 function truncateUtf8(s: string, maxBytes: number): string {
@@ -31,7 +46,7 @@ function truncateUtf8(s: string, maxBytes: number): string {
 
 /** Turn a clip display name into a safe base name (no extension). Never returns "". */
 export function cleanBaseName(raw: string): string {
-  let s = (raw ?? "").normalize("NFC").replace(ILLEGAL, "_");
+  let s = nfc(raw ?? "").replace(ILLEGAL, "_");
   // Strip a media extension that the clip name may carry ("A.mov" -> "A").
   s = s.replace(/\.(mov|mp4|mxf|r3d|braw|ari|arx|dng|mkv|avi|m4v|mts|crm|wav|png|jpe?g|tiff?|exr|dpx|prproj)$/i, "");
   s = s.replace(/\s+/g, " ").trim();
@@ -64,7 +79,7 @@ export function normaliseExtension(ext: string): string {
 
 /** Key used for collision checks on case-insensitive filesystems. */
 export function collisionKey(fileName: string): string {
-  return fileName.normalize("NFC").toLowerCase();
+  return nfc(fileName).toLowerCase();
 }
 
 export interface NamedJob {

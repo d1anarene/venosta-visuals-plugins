@@ -16,8 +16,9 @@ import {
 import { runPremiereDirectQueue } from "../export/premiereEncoderAdapter";
 import type { JobUpdate, QueueRequest } from "../export/queueAdapter";
 import {
-  getActiveContext,
+  getContext,
   getContextForSequence,
+  listSequences,
   getPresetExtension,
   isAmeInstalled,
   launchEncoder,
@@ -28,6 +29,9 @@ import {
   startBatchEncode,
 } from "../premiere/sequenceReader";
 import { folderFromToken, listFolderNames, pickFolder, pickPresetFile, writeTextFile, type PickedFolder } from "./fileSystem";
+import { EXPORT_TARGETS, FPS_STEPS, chooseTemplate, findTarget, fpsTicksForStep } from "../domain/exportTargets";
+import { findInstalledPresets, writeAdjustedPreset, type InstalledPreset } from "../premiere/presetLibrary";
+import { copyDiagnostics, diag } from "./diagnostics";
 import { loadPrefs, savePrefs, type Prefs } from "./settings";
 
 interface Row {
@@ -52,6 +56,12 @@ const STATUS_LABEL: Record<JobStatus, string> = {
   unsupported: "unsupported",
 };
 
+/** Index of the selected sp-menu-item in a change event, or -1. */
+function pickerIndex(e: Event): number {
+  const picker = e.target as HTMLElement & { selectedIndex?: number };
+  return typeof picker.selectedIndex === "number" ? picker.selectedIndex : -1;
+}
+
 /** Value of the selected sp-menu-item (UXP sp-picker reports selectedIndex reliably, not value). */
 function pickerValue(e: Event): string {
   const picker = e.target as HTMLElement & { selectedIndex?: number; value?: string };
@@ -59,6 +69,12 @@ function pickerValue(e: Event): string {
   const idx = picker.selectedIndex ?? -1;
   if (idx >= 0 && idx < items.length) return items[idx].getAttribute("value") ?? "";
   return String(picker.value ?? "");
+}
+
+/** Enable/disable an element (Element.toggleAttribute is not available in UXP). */
+function setDisabled(el: Element, disabled: boolean): void {
+  if (disabled) el.setAttribute("disabled", "");
+  else el.removeAttribute("disabled");
 }
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -71,17 +87,26 @@ class PanelController {
   private busy = false;
   private cancelRequested = false;
   private selectedTrack = 0;
+  /** GUID of the sequence the user picked; null = follow Premiere's active sequence. */
+  private pickedSequence: string | null = null;
+  private sequenceGuids: string[] = [];
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   async init(): Promise<void> {
     this.bind();
     if (this.prefs.folderToken) this.folder = await folderFromToken(this.prefs.folderToken);
     this.renderSettings();
     await this.refreshContext();
+    void this.loadPresetCatalog();
+    // Keep the sequence list current (new/renamed sequences, active sequence changes) while idle.
+    this.pollTimer = setInterval(() => {
+      if (!this.busy) void this.refreshSequences(false);
+    }, 3000);
   }
 
   // ---------- wiring ----------
   private bind(): void {
-    $("btn-refresh-context").addEventListener("click", () => void this.refreshContext());
+    $("btn-refresh-context").addEventListener("click", () => void this.refreshContext(true));
     $("btn-scan").addEventListener("click", () => void this.scan());
     $("btn-select-all").addEventListener("click", () => this.setAll(true));
     $("btn-select-none").addEventListener("click", () => this.setAll(false));
@@ -93,6 +118,65 @@ class PanelController {
       this.info("Cancelling after the current job…");
     });
     $("btn-start").addEventListener("click", () => void this.startQueue());
+    $("dest-picker").addEventListener("change", (e) => {
+      const v = this.destValues[pickerIndex(e)];
+      if (!v) return;
+      this.prefs.destination = v;
+      savePrefs(this.prefs);
+      this.renderExportSettings();
+    });
+    const fps = $("fps-slider") as HTMLElement & { value?: number | string };
+    fps.addEventListener("input", () => {
+      this.prefs.fpsStep = Math.round(Number(fps.value) || 0);
+      this.renderExportLabels();
+    });
+    fps.addEventListener("change", () => savePrefs(this.prefs));
+    const br = $("bitrate-slider") as HTMLElement & { value?: number | string };
+    br.addEventListener("input", () => {
+      this.prefs.bitrates[this.prefs.destination] = Number(br.value) || 0;
+      this.renderExportLabels();
+    });
+    br.addEventListener("change", () => savePrefs(this.prefs));
+    $("chk-autostart").addEventListener("change", (e) => {
+      this.prefs.autoStart = !!(e.target as HTMLInputElement).checked;
+      savePrefs(this.prefs);
+    });
+    $("chk-audio").addEventListener("change", (e) => {
+      this.prefs.audio = !!(e.target as HTMLInputElement).checked;
+      savePrefs(this.prefs);
+      this.renderExportSettings();
+    });
+    $("audio-bitrate-picker").addEventListener("change", (e) => {
+      const t = findTarget(this.prefs.destination);
+      const v = t?.audioBitrates?.[pickerIndex(e)];
+      if (v) this.prefs.audioKbps = v;
+      savePrefs(this.prefs);
+    });
+    $("audio-rate-picker").addEventListener("change", (e) => {
+      this.prefs.audioRate = pickerIndex(e) === 1 ? 44100 : 48000;
+      savePrefs(this.prefs);
+    });
+    $("btn-advanced").addEventListener("click", () => {
+      const adv = $("advanced");
+      const open = adv.classList.contains("hidden");
+      if (open) adv.classList.remove("hidden");
+      else adv.classList.add("hidden");
+      $("btn-advanced").textContent = open ? "Advanced ▾" : "Advanced ▸";
+    });
+    $("btn-copy-log").addEventListener("click", async () => {
+      const ok = await copyDiagnostics();
+      if (ok) this.info("Log copied to the clipboard — paste it into a message.");
+      else this.error("Could not copy the log. Please send a screenshot of the messages below instead.");
+    });
+    $("seq-picker").addEventListener("change", (e) => {
+      const idx = pickerIndex(e);
+      const guid = idx >= 0 ? this.sequenceGuids[idx] : null;
+      if (!guid) return;
+      this.pickedSequence = guid;
+      this.selectedTrack = 0;
+      this.clearPlan("");
+      void this.refreshTracks();
+    });
     $("track-picker").addEventListener("change", (e) => {
       const v = Number(pickerValue(e));
       if (Number.isInteger(v)) this.selectedTrack = v;
@@ -122,6 +206,10 @@ class PanelController {
     this.log(msg, "error");
   }
   private log(msg: string, kind: "info" | "error" | "warn"): void {
+    diag(kind, msg);
+    const status = $("status");
+    status.textContent = msg;
+    status.className = `status status-${kind === "info" ? "ok" : kind}`;
     const el = document.createElement("div");
     el.className = `msg msg-${kind}`;
     el.textContent = msg;
@@ -131,14 +219,75 @@ class PanelController {
   }
 
   // ---------- context ----------
-  async refreshContext(): Promise<void> {
+  /** Refresh the sequence list and the tracks of the chosen sequence. */
+  /** `loud` = report problems (↻ button); automatic refreshes stay quiet and only log them. */
+  async refreshContext(loud = false): Promise<void> {
+    await this.refreshSequences(loud);
+    await this.refreshTracks(loud);
+    $("ame-state").textContent = isAmeInstalled() ? "" : "Adobe Media Encoder was not found.";
+  }
+
+  /** The GUID scanning will use: the user's pick, else Premiere's active sequence. */
+  private currentSequenceGuid(): string | null {
+    return this.pickedSequence;
+  }
+
+  private async refreshSequences(reportErrors: boolean): Promise<void> {
     try {
-      const ctx = await getActiveContext();
-      $("seq-name").textContent = ctx.sequence.name;
+      const seqs = await listSequences();
+      if (this.pickedSequence && !seqs.some((q) => q.guid === this.pickedSequence)) this.pickedSequence = null;
+      const shown = this.pickedSequence ?? seqs.find((q) => q.active)?.guid ?? seqs[0]?.guid ?? null;
+      const key = seqs.map((q) => q.guid + q.name).join("|") + "#" + shown;
+      if (key === this.lastSeqKey) {
+        // Menu is current; still make sure the track list belongs to the shown sequence.
+        if (shown && shown !== this.tracksFor) await this.refreshTracks(reportErrors);
+        return;
+      }
+      this.lastSeqKey = key;
+      diag("debug", `Sequences: ${seqs.map((q) => q.name + (q.active ? " (active)" : "")).join(", ") || "none"}`);
+      const followedBefore = this.shownSequence;
+      this.sequenceGuids = seqs.map((q) => q.guid);
+      const picker = $("seq-picker");
+      const menu = picker.querySelector("sp-menu") ?? picker;
+      menu.innerHTML = "";
+      seqs.forEach((q, i) => {
+        const item = document.createElement("sp-menu-item");
+        item.setAttribute("value", q.guid);
+        item.textContent = q.name + (q.active ? "  (active)" : "");
+        if (q.guid === shown) item.setAttribute("selected", "");
+        menu.appendChild(item);
+        if (q.guid === shown) (picker as HTMLElement & { selectedIndex?: number }).selectedIndex = i;
+      });
+      this.shownSequence = shown;
+      if (seqs.length === 0 && reportErrors) this.error("This project has no sequences.");
+      // Following the active sequence and it changed: drop the old scan.
+      if (!this.pickedSequence && followedBefore !== null && followedBefore !== shown) {
+        this.selectedTrack = 0;
+        this.clearPlan("Active sequence changed — press Scan Track.");
+      }
+      if (shown && shown !== this.tracksFor) await this.refreshTracks(reportErrors);
+    } catch (e) {
+      diag("debug", "Refreshing sequences failed", e);
+      if (reportErrors) this.error(String(e instanceof Error ? e.message : e));
+    }
+  }
+
+  private installed: InstalledPreset[] | null = null;
+  private destValues: string[] = [];
+  private lastSeqKey = "";
+  private shownSequence: string | null = null;
+  /** Sequence whose tracks are currently in the Guide track list. */
+  private tracksFor: string | null = null;
+
+  private async refreshTracks(reportErrors = true): Promise<void> {
+    try {
+      const ctx = await getContext(this.pickedSequence ?? this.shownSequence);
       const tracks = await listVideoTracks(ctx.sequence);
+      this.tracksFor = ctx.sequence.guid.toString();
       const picker = $("track-picker");
       const menu = picker.querySelector("sp-menu") ?? picker;
       menu.innerHTML = "";
+      if (this.selectedTrack >= tracks.length) this.selectedTrack = 0;
       tracks.forEach((t) => {
         const item = document.createElement("sp-menu-item");
         item.setAttribute("value", String(t.index));
@@ -146,12 +295,11 @@ class PanelController {
         if (t.index === this.selectedTrack) item.setAttribute("selected", "");
         menu.appendChild(item);
       });
-      if (this.selectedTrack >= tracks.length) this.selectedTrack = 0;
-      if (tracks.length === 0) this.error("This sequence has no video tracks.");
-      $("ame-state").textContent = isAmeInstalled() ? "" : "Adobe Media Encoder was not found.";
+      (picker as HTMLElement & { selectedIndex?: number }).selectedIndex = this.selectedTrack;
+      if (tracks.length === 0 && reportErrors) this.error("This sequence has no video tracks.");
     } catch (e) {
-      $("seq-name").textContent = "—";
-      this.error(String(e instanceof Error ? e.message : e));
+      diag("debug", "Loading tracks failed", e);
+      if (reportErrors) this.error(String(e instanceof Error ? e.message : e));
     }
   }
 
@@ -166,8 +314,8 @@ class PanelController {
   async scan(): Promise<void> {
     if (this.busy) return;
     try {
-      const ctx = await getActiveContext();
-      $("seq-name").textContent = ctx.sequence.name;
+      this.info("Scanning…");
+      const ctx = await getContext(this.currentSequenceGuid() ?? this.shownSequence);
       const snap = await scanTrack(ctx, this.selectedTrack);
       const plan = buildPlan(snap, { includeDisabledClips: this.prefs.includeDisabledClips });
       this.plan = plan;
@@ -180,14 +328,22 @@ class PanelController {
       }));
       for (const w of plan.trackWarnings) this.log(w.message, "warn");
       this.info(
-        `${videoTrackLabel(snap.track.index)}: ${plan.jobs.length} clip(s) found` +
+        `${snap.sequenceName} / ${videoTrackLabel(snap.track.index)}: ${plan.jobs.length} clip(s) found` +
           (snap.transitionCount ? `, ${snap.transitionCount} transition(s) on the guide track.` : "."),
       );
       if (plan.jobs.length === 0) this.log("No clips on this track — nothing to export.", "warn");
       this.renderRows();
     } catch (e) {
-      this.clearPlan("");
-      this.error(String(e instanceof Error ? e.message : e));
+      diag("error", "Scan failed", e);
+      // Report first, then clean up: the message must appear even if cleanup fails.
+      this.error(`Scan failed: ${e instanceof Error ? e.message : String(e)}`);
+      try {
+        this.plan = null;
+        this.rows = [];
+        this.renderRows();
+      } catch (cleanupError) {
+        diag("error", "Cleanup after scan failure failed", cleanupError);
+      }
     }
   }
 
@@ -207,19 +363,25 @@ class PanelController {
         "'Track Range Exporter – AME' panel in Media Encoder (27.0+) and load it. AME renders the saved project."
       : "One click. Temporarily sets the sequence In/Out per job while queueing, then restores your " +
         "original In/Out. Not yet verified in a real Premiere host — run the spike test first.";
-    $("btn-start").toggleAttribute("disabled", isAme || this.busy);
+    setDisabled($("btn-start"), isAme || this.busy);
     ($("chk-disabled") as HTMLInputElement).checked = this.prefs.includeDisabledClips;
+    ($("chk-autostart") as HTMLInputElement).checked = this.prefs.autoStart;
+    if (this.prefs.autoStart) $("chk-autostart").setAttribute("checked", "");
+    else $("chk-autostart").removeAttribute("checked");
     this.selectPicker("mode-picker", this.prefs.mode);
     this.selectPicker("convention-picker", this.prefs.outPointConvention);
   }
 
   private selectPicker(id: string, value: string): void {
-    $(id)
-      .querySelectorAll("sp-menu-item")
-      .forEach((el) => {
-        if (el.getAttribute("value") === value) el.setAttribute("selected", "");
-        else el.removeAttribute("selected");
-      });
+    const picker = $(id) as HTMLElement & { selectedIndex?: number };
+    picker.querySelectorAll("sp-menu-item").forEach((el, i) => {
+      if (el.getAttribute("value") === value) {
+        el.setAttribute("selected", "");
+        if (picker.selectedIndex !== i) picker.selectedIndex = i;
+      } else {
+        el.removeAttribute("selected");
+      }
+    });
   }
 
   private async chooseFolder(): Promise<void> {
@@ -244,6 +406,155 @@ class PanelController {
     this.prefs.presetPath = p;
     savePrefs(this.prefs);
     this.renderSettings();
+  }
+
+  // ---------- export preset ----------
+  private async loadPresetCatalog(refresh = false): Promise<void> {
+    $("dest-info").textContent = "Looking for Media Encoder presets on this computer…";
+    try {
+      this.installed = await findInstalledPresets(refresh);
+    } catch (e) {
+      diag("error", "Searching presets failed", e);
+      this.installed = [];
+    }
+    this.buildDestMenu();
+    this.renderExportSettings();
+  }
+
+  private buildDestMenu(): void {
+    const picker = $("dest-picker") as HTMLElement & { selectedIndex?: number };
+    const menu = picker.querySelector("sp-menu") ?? picker;
+    menu.innerHTML = "";
+    this.destValues = [];
+    const add = (value: string, label: string, header = false) => {
+      const item = document.createElement("sp-menu-item");
+      item.textContent = label;
+      if (header) item.setAttribute("disabled", "");
+      menu.appendChild(item);
+      this.destValues.push(header ? "" : value);
+    };
+    let group = "";
+    for (const t of EXPORT_TARGETS) {
+      if (t.group !== group) {
+        group = t.group;
+        add("", `— ${group} —`, true);
+      }
+      add(t.id, t.label);
+    }
+    const user = (this.installed ?? []).filter((p) => p.source === "user");
+    if (user.length) {
+      add("", "— Your Media Encoder presets —", true);
+      for (const u of user) add(`user:${u.path}`, u.name);
+    }
+    add("", "— Other —", true);
+    add("custom", "Choose your own .epr file…");
+    if (!this.destValues.includes(this.prefs.destination)) this.prefs.destination = "youtube-1080";
+    const idx = this.destValues.indexOf(this.prefs.destination);
+    menu.querySelectorAll("sp-menu-item")[idx]?.setAttribute("selected", "");
+    picker.selectedIndex = idx;
+  }
+
+  /** Show/hide controls for the current destination and update their ranges. */
+  private renderExportSettings(): void {
+    const dest = this.prefs.destination;
+    const target = findTarget(dest);
+    const show = (id: string, visible: boolean) => {
+      const el = $(id);
+      if (visible) el.classList.remove("hidden");
+      else el.classList.add("hidden");
+    };
+    show("custom-preset", dest === "custom");
+    show("builtin-settings", !!target);
+    let info = "";
+    if (dest === "custom") info = "Uses your .epr file exactly as it is.";
+    else if (dest.startsWith("user:")) info = "Your saved Media Encoder preset, used exactly as it is.";
+    else if (target) {
+      if (this.installed === null) info = "Looking for Media Encoder presets on this computer…";
+      else {
+        const tpl = chooseTemplate(target, this.installed.filter((p) => p.source === "system"));
+        info = tpl
+          ? `Based on Media Encoder's "${tpl.name}" preset.${target.note ? " " + target.note : ""}`
+          : "Matching Media Encoder preset not found on this computer — choose another destination or your own .epr file.";
+      }
+    }
+    $("dest-info").textContent = info;
+    if (target) {
+      show("bitrate-field", !!target.bitrate);
+      if (target.bitrate) {
+        const sl = $("bitrate-slider");
+        sl.setAttribute("min", String(target.bitrate.min));
+        sl.setAttribute("max", String(target.bitrate.max));
+        sl.setAttribute("step", String(target.bitrate.step));
+        const v = this.prefs.bitrates[dest] ?? target.bitrate.default;
+        sl.setAttribute("value", String(v));
+        (sl as HTMLElement & { value?: number }).value = v;
+      }
+      const fps = $("fps-slider") as HTMLElement & { value?: number };
+      fps.setAttribute("value", String(this.prefs.fpsStep));
+      fps.value = this.prefs.fpsStep;
+      ($("chk-audio") as HTMLInputElement).checked = this.prefs.audio;
+      if (this.prefs.audio) $("chk-audio").setAttribute("checked", "");
+      else $("chk-audio").removeAttribute("checked");
+      show("audio-options", this.prefs.audio);
+      show("audio-bitrate-picker", this.prefs.audio && !!target.audioBitrates);
+      const ab = $("audio-bitrate-picker") as HTMLElement & { selectedIndex?: number };
+      const menu = ab.querySelector("sp-menu") ?? ab;
+      menu.innerHTML = "";
+      const rates = target.audioBitrates ?? [];
+      if (!rates.includes(this.prefs.audioKbps)) this.prefs.audioKbps = target.defaultAudioBitrate ?? rates[rates.length - 1] ?? 320;
+      rates.forEach((k, i) => {
+        const item = document.createElement("sp-menu-item");
+        item.textContent = `AAC ${k} kbps`;
+        if (k === this.prefs.audioKbps) {
+          item.setAttribute("selected", "");
+          ab.selectedIndex = i;
+        }
+        menu.appendChild(item);
+      });
+      this.selectPicker("audio-rate-picker", String(this.prefs.audioRate));
+    }
+    this.renderExportLabels();
+  }
+
+  private renderExportLabels(): void {
+    const step = FPS_STEPS[Math.max(0, Math.min(FPS_STEPS.length - 1, this.prefs.fpsStep))];
+    $("fps-value").textContent = step.key ? `${step.label} fps` : "same as sequence";
+    const t = findTarget(this.prefs.destination);
+    if (t?.bitrate) $("bitrate-value").textContent = `${this.prefs.bitrates[t.id] ?? t.bitrate.default} Mbps`;
+  }
+
+  /** Path of the preset to use for this export (generating an adjusted copy for built-ins). */
+  private async resolvePreset(sequenceTicksPerFrame: string): Promise<{ path: string; summary: string }> {
+    const dest = this.prefs.destination;
+    if (dest === "custom") {
+      if (!this.prefs.presetPath) throw new Error("Choose your .epr preset file.");
+      return { path: this.prefs.presetPath, summary: "your own preset" };
+    }
+    if (dest.startsWith("user:")) return { path: dest.slice(5), summary: "your saved Media Encoder preset" };
+    const target = findTarget(dest);
+    if (!target) throw new Error("Choose an export preset.");
+    const installed = this.installed ?? (await findInstalledPresets());
+    const tpl = chooseTemplate(target, installed.filter((p) => p.source === "system"));
+    if (!tpl) throw new Error(`No Media Encoder preset for "${target.label}" was found on this computer. Choose another destination or your own .epr file.`);
+    const bitrate = target.bitrate ? (this.prefs.bitrates[dest] ?? target.bitrate.default) : undefined;
+    const fpsTicks = fpsTicksForStep(this.prefs.fpsStep, sequenceTicksPerFrame);
+    const stamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+    const r = await writeAdjustedPreset(tpl.path, `TRE_${target.id}_${stamp}.epr`, {
+      name: `Track Range Exporter - ${target.label}`,
+      width: target.width,
+      height: target.height,
+      fpsTicks,
+      bitrateMbps: bitrate,
+      audio: this.prefs.audio,
+      audioBitrateKbps: this.prefs.audio && target.audioBitrates ? this.prefs.audioKbps : undefined,
+      audioSampleRate: this.prefs.audio ? this.prefs.audioRate : undefined,
+    });
+    if (r.skipped.length) this.log(`Preset note: not available in "${tpl.name}": ${r.skipped.join(", ")}.`, "warn");
+    const fpsLabel = FPS_STEPS[this.prefs.fpsStep]?.key ? `${FPS_STEPS[this.prefs.fpsStep].label} fps` : "sequence fps";
+    return {
+      path: r.path,
+      summary: `${target.label}, ${fpsLabel}${bitrate ? `, ${bitrate} Mbps` : ""}, audio ${this.prefs.audio ? "on" : "off"}`,
+    };
   }
 
   // ---------- table ----------
@@ -274,7 +585,7 @@ class PanelController {
       name.textContent = row.job.guideClipName;
       name.title = row.job.guideClipName;
       const status = document.createElement("span");
-      status.className = "status";
+      status.className = "status-chip";
       status.textContent = STATUS_LABEL[row.status];
       head.append(chk, ord, name, status);
 
@@ -334,14 +645,14 @@ class PanelController {
       dur = ` · ${ticksToTimecode(frames * rate.ticksPerFrame, rate)} total`;
     }
     $("summary").textContent = `${sel.length} selected / ${queued} queued${dur}`;
-    $("btn-queue").toggleAttribute("disabled", this.busy || sel.length === 0);
-    $("btn-cancel").toggleAttribute("disabled", !this.busy);
+    setDisabled($("btn-queue"), this.busy || sel.length === 0);
+    setDisabled($("btn-cancel"), !this.busy);
   }
 
   private setBusy(b: boolean): void {
     this.busy = b;
     for (const id of ["btn-scan", "btn-refresh-context", "btn-folder", "btn-preset", "btn-select-all", "btn-select-none"]) {
-      $(id).toggleAttribute("disabled", b);
+      setDisabled($(id), b);
     }
     this.renderSettings();
     this.renderRows();
@@ -370,11 +681,6 @@ class PanelController {
       this.error("Choose an output folder.");
       return null;
     }
-    const presetPath = this.prefs.presetPath;
-    if (!presetPath) {
-      this.error("Choose an AME export preset (.epr).");
-      return null;
-    }
     for (const r of selected) {
       const err = validateBaseName(r.baseName);
       if (err) {
@@ -396,14 +702,29 @@ class PanelController {
       return null;
     }
 
+    let presetPath: string;
+    let presetSummary: string;
+    try {
+      const r = await this.resolvePreset(this.plan.snapshot.ticksPerFrame);
+      presetPath = r.path;
+      presetSummary = r.summary;
+    } catch (e) {
+      diag("error", "Preparing the export preset failed", e);
+      this.error(e instanceof Error ? e.message : String(e));
+      return null;
+    }
+
+    // Premiere reads the preset here: a preset it cannot parse is rejected before anything is queued.
     let extension: string;
     try {
       extension = await getPresetExtension(ctx.sequence, presetPath);
       if (!extension) throw new Error("empty");
-    } catch {
-      this.error("Could not read the output format from the preset. Is the .epr file valid and present?");
+    } catch (e) {
+      diag("error", `Premiere could not read preset ${presetPath}`, e);
+      this.error("Premiere could not read the export preset. Try another preset (and send the log).");
       return null;
     }
+    this.info(`Preset: ${presetSummary} → .${extension}`);
 
     let existing: string[];
     try {
@@ -472,8 +793,9 @@ class PanelController {
         (result.failed ? `, ${result.failed} failed` : "") +
         (result.cancelled ? `, ${result.cancelled} not queued` : "") +
         ". Your original In/Out was restored." +
-        (result.queued ? " Check each job's range in AME before rendering." : ""),
+        (result.queued && !this.prefs.autoStart ? " Check each job's range in AME before rendering." : ""),
     );
+    if (result.queued > 0 && result.fatalErrors.length === 0 && this.prefs.autoStart) await this.startQueue();
   }
 
   private async writeJobFile(requests: QueueRequest[]): Promise<void> {
@@ -519,13 +841,24 @@ class PanelController {
     try {
       await launchEncoder();
       const ok = await startBatchEncode();
-      this.info(ok ? "Media Encoder queue started." : "Media Encoder did not confirm the start.");
+      diag("debug", `startBatchEncode returned ${ok}`);
+      if (ok) this.info("Rendering started in Media Encoder.");
+      else this.log("Media Encoder did not confirm the start — press Start in Media Encoder's queue.", "warn");
     } catch (e) {
       this.error(`Could not start Media Encoder: ${e}`);
     }
   }
 }
 
+let controller: PanelController | null = null;
+
 export function startPanel(): void {
-  void new PanelController().init();
+  if (controller) return;
+  controller = new PanelController();
+  void controller.init();
+}
+
+/** Called when the panel is shown again (UXP entrypoint "show"): re-read sequences and tracks. */
+export function onPanelShown(): void {
+  if (controller) void controller.refreshContext();
 }

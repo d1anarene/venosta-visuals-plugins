@@ -3,6 +3,12 @@ import { ManifestError, parseManifest, type JobManifest } from "../../src/export
 import { pickJobFile } from "../../src/ui/fileSystem";
 import { jobStatus, realAmeHost, startQueue } from "./ameHost";
 
+/** Enable/disable an element (Element.toggleAttribute is not available in UXP). */
+function setDisabled(el: Element, disabled: boolean): void {
+  if (disabled) el.setAttribute("disabled", "");
+  else el.removeAttribute("disabled");
+}
+
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
 let manifest: JobManifest | null = null;
 let cancel = false;
@@ -40,7 +46,7 @@ async function load() {
     const problems = await preflightManifest(realAmeHost, manifest);
     for (const p of problems) log(p, p.startsWith("WARNING") ? "warn" : "error");
     const blocking = problems.filter((p) => !p.startsWith("WARNING"));
-    $("btn-enqueue").toggleAttribute("disabled", blocking.length > 0);
+    setDisabled($("btn-enqueue"), blocking.length > 0);
     log(`Loaded ${manifest.jobs.length} job(s).`);
   } catch (e) {
     manifest = null;
