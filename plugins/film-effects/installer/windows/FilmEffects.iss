@@ -96,9 +96,20 @@ begin
     Result := ExpandConstant('{commonpf64}\Adobe\Common\Plug-ins\7.0\MediaCore');
 end;
 
+var
+  StrayFound: Boolean;
+
+function InitializeSetup(): Boolean;
+begin
+  { Decide once: [InstallDelete] deletes FilmEffects.aex first, so re-checking per entry
+    would skip the remaining stray files. }
+  StrayFound := FileExists(ExpandConstant(StrayDir + '\FilmEffects.aex'));
+  Result := True;
+end;
+
 function HasStrayInstall(): Boolean;
 begin
-  Result := FileExists(ExpandConstant(StrayDir + '\FilmEffects.aex'));
+  Result := StrayFound;
 end;
 
 function HasNvidiaDriver(): Boolean;
