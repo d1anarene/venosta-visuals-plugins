@@ -18,7 +18,7 @@ _Last update: 2026-11-11_
 | 0 Feasibility audit | ✅ `docs/FEASIBILITY.md` |
 | 1 Thin native plugin compiled + run in Premiere | ⛔ **Blocked**: no Mac, Adobe SDKs or Premiere in this environment. Plugin source is ready to build. |
 | 2 CPU cores + tests + CLI | ✅ tested — 37 test cases, ~19.8k checks pass |
-| 3 Native Metal effects | 🟡 Metal kernels + engine **ci-gpu verified** (matches CPU on 8 scenes × 6 presets, 32f and 16f); Premiere GPU entry point (`FilmEffectsGPU.mm`) **unbuilt** |
+| 3 Native GPU effects | 🟡 Metal kernels + engine **ci-gpu verified** (matches CPU on 8 scenes × 6 presets, 32f and 16f); Premiere GPU entry point (`FilmEffectsGPU.mm`) **unbuilt**; CUDA engine compiles (nvcc, CI) and its pass sequence matches the CPU exactly in emulation, not yet run on NVIDIA; CUDA GPU entry **unbuilt** |
 | 4 Usability (groups, presets, standalone effects, docs) | 🟡 params/groups/presets + 3 standalone effects written (**syntax** for CPU entry); docs done; host tests pending |
 | 5 Optional UXP companion | not started (only after Stage 4 works in host) |
 
@@ -36,6 +36,10 @@ _Last update: 2026-11-11_
 - Standalone effects Film Bloom / Film Halation / Film Grain: same sources built per variant,
   one parameter table (stable disk IDs), bit-identical to the combined effect — table and
   equivalence tested; host code **syntax** for all 4 variants
+- CUDA backend (Windows/NVIDIA): shared per-pixel pass functions + orchestration, CUDA kernels,
+  engine, Premiere CUDA GPU entry. Pass sequence verified exact vs CPU reference in emulation
+  (tested, every platform); kernels compile with nvcc in CI; **not yet run on an NVIDIA GPU**;
+  GPU entry **unbuilt**
 - Windows: CMake builds `.aex` plugins (PiPLtool step), PowerShell build/install scripts — **unbuilt**;
   core compiled with MSVC and tested in CI (`film-effects-core-windows`)
 - CPU memory cut by more than half and CPU path faster (docs/PERFORMANCE.md); output bit-identical — tested
@@ -48,7 +52,7 @@ _Last update: 2026-11-11_
    uses the GPU path (Metal renderer) — the engine underneath is already verified in CI.
 
 ## Next (after host proof)
-- Windows GPU: CUDA backend (port of the Metal kernels; shared maths header already C++-compatible)
+- Run the CUDA engine on an NVIDIA GPU (add a cuda_vs_cpu comparison tool like metal_vs_cpu)
 - Optional UXP preset panel (Stage 5)
 
 ## Commands run (this session)

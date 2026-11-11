@@ -20,9 +20,22 @@ Adobe applications later). Each plugin lives in its own folder under `plugins/` 
 5. Keep `PROGRESS.md` in each plugin folder current after every meaningful milestone.
 6. Plugins are free and provided without any warranty (see `LICENSE`).
 
+## Branches and releases
+
+- Develop on the **`dev`** branch (or short-lived branches merged into `dev`). Do not commit
+  directly to `main`.
+- Merge `dev` into `main` with a pull request when CI is green. Every push to `main` creates a
+  GitHub release automatically (`.github/workflows/release.yml`), tagged `v<VERSION>.<run number>`.
+- `VERSION` (repository root) holds the major.minor version. Versions starting with `0.` are
+  published as pre-releases. Bump it when a plugin reaches a new stage (e.g. `1.0` after host
+  testing).
+- Add new downloadable artifacts (e.g. built plugin files) to the release workflow when a plugin
+  can be built in CI.
+
 ## Adding a new plugin — checklist
 
 - [ ] Create `plugins/<plugin-name>/` with `AGENTS.md` (spec), `CLAUDE.md` (imports `AGENTS.md`),
       `README.md`, and `PROGRESS.md`.
 - [ ] Add the plugin to the **Plugins** table in the root `README.md`.
 - [ ] Add any CI/test command for the plugin to the root `README.md` "For developers" section.
+- [ ] Add the plugin's downloadable files to `.github/workflows/release.yml` (if any).

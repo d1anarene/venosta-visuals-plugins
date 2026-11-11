@@ -48,8 +48,9 @@ reference on a GPU in GitHub Actions' macOS runners (`tests/gpu/README.md`).
    → Effect Controls, keyframes, undo and project save are handled by the host.
 6. **Windows**: same AE-API effect built as `.aex`; PiPL converted with the SDK's `PiPLtool.exe`
    (the documented way: "PiPLs are compiled by processing a .r file through pipltool.exe").
-   No GPU entry yet, so Premiere renders it with the CPU path. A CUDA backend is a later step
-   (Premiere's GPU architecture is CUDA/Metal).
+   GPU: CUDA entry (`FilmEffectsGPU_CUDA.cpp`) with the CUDA runtime linked statically, as the
+   guide recommends ("Statically Link to CUDA Runtime"). Built only when the CUDA toolkit is found;
+   otherwise Premiere renders with the CPU path.
 
 ## Symbols used that are documented in the guides
 

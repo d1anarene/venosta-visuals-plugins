@@ -7,6 +7,8 @@ delivery. More plugins (and possibly other Adobe apps) will follow.
 
 > 🎬 **Check out my portfolio at [venostavisuals.com](https://venostavisuals.com)** — ready-to-install
 > downloads of these plugins will be provided there as well.
+>
+> 📦 Test builds are published on the [Releases page](../../releases) after every update.
 
 ---
 
@@ -15,7 +17,7 @@ delivery. More plugins (and possibly other Adobe apps) will follow.
 | Plugin | What it does | Status |
 | --- | --- | --- |
 | [Track Range Exporter](plugins/track-range-exporter/README.md) | Pick a guide track (e.g. V1). Every clip on it becomes its own export job in Adobe Media Encoder, rendering the **full graded sequence** (all tracks, adjustment layers, Lumetri, audio) for exactly that clip's time range. | In development — unit-tested, **not yet tested inside Premiere** |
-| [Film Effects](plugins/film-effects/README.md) | Native video effects with **Bloom**, **Halation** and **Film Grain** — combined in one effect or as three standalone effects — designed to sit after Lumetri or on an adjustment layer. | In development — image core unit-tested, Metal GPU code verified in CI, **native plugin not yet built/tested inside Premiere** |
+| [Film Effects](plugins/film-effects/README.md) | Native video effects with **Bloom**, **Halation** and **Film Grain** — combined in one effect or as three standalone effects — designed to sit after Lumetri or on an adjustment layer. | In development — image core unit-tested; Metal GPU code verified on a Mac GPU in CI; CUDA code compiled and verified in CPU emulation (not yet run on an NVIDIA GPU); **native plugin not yet built/tested inside Premiere** |
 
 Each plugin folder has its own README with installation steps, usage and known limitations.
 
@@ -35,8 +37,8 @@ See [LICENSE](LICENSE) for the full terms.
 
 - Adobe Premiere Pro (current version; see each plugin's README for tested versions)
 - Adobe Media Encoder for plugins that queue exports
-- macOS and Windows: Track Range Exporter is a UXP panel (both systems); Film Effects builds on
-  both, with GPU acceleration on macOS (Metal) and CPU rendering on Windows for now
+- Windows and macOS: Track Range Exporter is a UXP panel (both systems); Film Effects builds on
+  both, with GPU acceleration via CUDA (Windows, NVIDIA) and Metal (macOS)
 
 ## For developers
 
@@ -56,8 +58,12 @@ cd plugins/track-range-exporter && npm install && npm test
 cd plugins/film-effects && ./scripts/run-core-tests.sh
 ```
 
-GitHub Actions (`.github/workflows/tests.yml`) runs these on every push, plus a macOS job that
-compiles the Film Effects Metal GPU code and compares it with the CPU reference.
+GitHub Actions (`.github/workflows/tests.yml`) runs these on every push (Linux, macOS, Windows),
+plus jobs that compile and check the Film Effects GPU code: Metal (run on a Mac GPU and compared
+with the CPU reference) and CUDA (compiled with nvcc; pass sequence verified in CPU emulation).
+
+Development happens on the `dev` branch; every merge into `main` publishes a release
+(`.github/workflows/release.yml`, version from the `VERSION` file).
 
 Each plugin has an `AGENTS.md` (specification), `PROGRESS.md` (current state) and docs for
 its technical decisions. Repository-wide rules are in [AGENTS.md](AGENTS.md).

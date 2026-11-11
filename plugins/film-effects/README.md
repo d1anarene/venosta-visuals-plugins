@@ -12,8 +12,10 @@ They share the same processing code, so Film Grain looks exactly like Film Effec
 Grain switched on.
 
 > ⚠️ **Status: in development — not yet tested inside Premiere Pro.** The image processing core is
-> unit-tested and the Metal GPU code is verified against it on a Mac GPU in CI; the native plugin
-> itself still needs its first build with the Adobe SDK (see [PROGRESS.md](PROGRESS.md)). Provided without any guarantee —
+> unit-tested; the Metal GPU code is verified against it on a Mac GPU in CI; the CUDA GPU code
+> compiles in CI and its exact pass sequence is verified against the core in a CPU emulation, but
+> it has not yet run on an NVIDIA GPU. The plugins still need their first build with the Adobe
+> SDK (see [PROGRESS.md](PROGRESS.md)). Provided without any guarantee —
 > see the [root README](../../README.md#️-no-guarantee).
 
 Downloads will also be available at [venostavisuals.com](https://venostavisuals.com).
@@ -36,8 +38,8 @@ and keyframe.
 
 ## Install
 
-**Platforms:** macOS (CPU + Metal GPU acceleration) and Windows (CPU rendering for now; GPU
-acceleration via CUDA is planned). Build and install steps (need the free Adobe SDKs):
+**Platforms:** Windows with NVIDIA GPUs (CUDA acceleration) and macOS (Metal acceleration). Both
+fall back to CPU rendering automatically when no supported GPU is available. Build and install steps (need the free Adobe SDKs):
 [docs/INSTALLATION.md](docs/INSTALLATION.md).
 After installing and restarting Premiere: **Effects → Video Effects → Venosta Visuals**.
 
