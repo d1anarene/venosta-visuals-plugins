@@ -21,6 +21,7 @@ struct FrameInfo {
   uint32_t width, height, rowPixels;
   int32_t space;
   float bloomThreshold, bloomKnee, halThreshold, halKnee;
+  int32_t rgba;
 };
 struct PlaneInfo {
   uint32_t width, height;
@@ -39,6 +40,8 @@ struct CompositeInfo {
   float grainChroma;
   uint32_t grainKey;
   float mix;
+  int32_t rgba;
+  int32_t bottomUp;
 };
 
 PlaneInfo half(PlaneInfo p) { return {std::max(1u, (p.width + 1) / 2), std::max(1u, (p.height + 1) / 2)}; }
@@ -204,7 +207,7 @@ bool MetalFilmEngine::encode(id<MTLCommandBuffer> cb, const MetalFrame& src, con
 
   if (doBloom || doHal) {
     FrameInfo fi{w, h, src.rowPixels, int32_t(p.space), p.bloom.threshold, p.bloom.knee, p.halation.threshold,
-                 p.halation.knee};
+                 p.halation.knee, src.rgba ? 1 : 0};
     [enc setBuffer:src.buffer offset:0 atIndex:0];
     [enc setBuffer:I.lin offset:0 atIndex:1];
     [enc setBuffer:I.levels[0] offset:0 atIndex:2];
@@ -274,6 +277,8 @@ bool MetalFilmEngine::encode(id<MTLCommandBuffer> cb, const MetalFrame& src, con
   const uint64_t t = p.grain.animate ? uint64_t(frameKey) : 0u;
   ci.grainKey = fe_hash3(fe_uint(p.grain.seed), fe_uint(t & 0xffffffffu), fe_uint(t >> 32));
   ci.mix = p.mix;
+  ci.rgba = src.rgba ? 1 : 0;
+  ci.bottomUp = src.bottomUp ? 1 : 0;
 
   [enc setBuffer:src.buffer offset:0 atIndex:0];
   [enc setBuffer:dst.buffer offset:0 atIndex:1];

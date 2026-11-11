@@ -71,10 +71,11 @@ class Pipeline {
   using Buf = typename Backend::Buf;
   explicit Pipeline(Backend& b) : B(b) {}
 
-  /** Run the effect on one frame. `src` and `dst` may be the same buffer. Frames are BGRA,
-   *  F4 (32f) or H4 (16f) per pixel, `rowPixels` stride. Returns false for an empty frame. */
+  /** Run the effect on one frame. `src` and `dst` may be the same buffer. Frames are F4 (32f) or
+   *  H4 (16f) per pixel, `rowPixels` stride; BGRA top-down (Premiere) by default, or RGBA and/or
+   *  bottom-up rows (OpenFX). Returns false for an empty frame. */
   bool run(const void* src, void* dst, bool half, uint32_t w, uint32_t h, uint32_t rowPixels, const FilmParams& raw,
-           int64_t frameKey) {
+           int64_t frameKey, bool rgba = false, bool bottomUp = false) {
     if (w == 0 || h == 0) return false;
     const FilmParams p = sanitized(raw);
     ensure(w, h);
@@ -83,7 +84,7 @@ class Pipeline {
 
     if (doBloom || doHal) {
       FrameInfo fi{w, h, rowPixels, int32_t(p.space), p.bloom.threshold, p.bloom.knee, p.halation.threshold,
-                   p.halation.knee};
+                   p.halation.knee, rgba ? 1 : 0};
       B.prepare(src, half, lin, levels[0], halSrc, fi);
     }
 
@@ -108,7 +109,9 @@ class Pipeline {
       blurByPlan(halSrc, halFar, hplan.farStep);
     }
 
-    const CompositeInfo ci = makeCompositeInfo(p, w, h, rowPixels, hplan, frameKey);
+    CompositeInfo ci = makeCompositeInfo(p, w, h, rowPixels, hplan, frameKey);
+    ci.rgba = rgba ? 1 : 0;
+    ci.bottomUp = bottomUp ? 1 : 0;
     B.composite(src, dst, half, lin, accB[0], halNear, halFar, halSrc, ci);
     return true;
   }

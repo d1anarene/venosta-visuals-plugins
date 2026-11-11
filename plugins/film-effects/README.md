@@ -26,8 +26,10 @@ macOS, Linux), with the same parameters, presets and rendering code. Releases in
 `FilmEffects-Resolve-Windows-Setup-<version>.exe`, `FilmEffects-Resolve-mac-<version>.pkg` and
 `FilmEffects-Resolve-linux-<version>.tar.gz`. After installing, restart Resolve. The effects are in
 the **Effects** library under **OpenFX → Venosta Visuals**.
-Status: **renders on the CPU only for now** (CUDA/Metal in Resolve is the next step). Built and
-loaded like an OFX host in CI; **not yet tested inside DaVinci Resolve**. Install locations:
+GPU: **Metal** on macOS and **NVIDIA CUDA** on Windows (GTX 1080 and newer; needs the NVIDIA
+driver, not the CUDA Toolkit), CPU otherwise and on Linux. Status: built and loaded like an OFX
+host in CI; the GPU maths in Resolve's frame layout is checked against the CPU reference;
+**not yet tested inside DaVinci Resolve**. Install locations:
 `C:\Program Files\Common Files\OFX\Plugins`, `/Library/OFX/Plugins`, `/usr/OFX/Plugins`.
 
 ![before/after](docs/images/night_street_subtle_film.png)

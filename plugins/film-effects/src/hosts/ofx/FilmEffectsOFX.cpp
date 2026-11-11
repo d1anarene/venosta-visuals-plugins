@@ -4,18 +4,22 @@
 // same variants, parameters and core renderer as the Premiere plug-ins (src/core). Built on the
 // BSD-licensed OpenFX C++ Support library (fetched at configure time, see ofx.cmake).
 //
-// STATUS: CPU render path. Compiled and loaded by tests/ofx/ofx_load_test.cpp in CI; NOT yet run
-// inside DaVinci Resolve. GPU (CUDA / Metal) rendering through the OFX GPU extensions is a later
-// milestone; Resolve then renders this effect on the CPU.
+// Rendering: CPU through the tested core; GPU through the OFX GPU render extensions with the same
+// engines as Premiere — Metal on macOS, CUDA where the build has the CUDA toolkit (Windows). The
+// host chooses: if it enables GPU rendering for a frame, the images are GPU buffers.
+// STATUS: compiled and loaded by tests/ofx/ofx_load_test.cpp in CI; the GPU pass maths is checked
+// in OpenFX layout by tests/gpu. NOT yet run inside DaVinci Resolve.
 
 #include <cmath>
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
 #include "ofxsImageEffect.h"
 
+#include "FilmEffectsOFXGpu.h"
 #include "FilmEffectsParams.h"  // SDK-free parameter table shared with the Premiere plug-ins
 #include "pipeline/pipeline.h"
 
@@ -135,6 +139,13 @@ class FilmEffectsOFX : public OFX::ImageEffect {
     const OfxRectI sb = src->getBounds();
     const int w = sb.x2 - sb.x1, h = sb.y2 - sb.y1;
     const fe::FilmParams p = paramsAt(args.time);
+    // OFX time is in frames: exact frame index for whole frames, distinct key otherwise.
+    const int64_t frameKey = fe::frameKeyFromTime(static_cast<int64_t>(std::llround(args.time * 1000.0)), 1000);
+
+    if (args.isEnabledCudaRender || args.isEnabledMetalRender) {
+      renderGpu(args, *src, *dst, p, frameKey);
+      return;
+    }
 
     // Source rows into the core's top-row-first RGBA image (OFX rows go bottom to top).
     fe::Image img(std::max(w, 0), std::max(h, 0));
@@ -145,8 +156,7 @@ class FilmEffectsOFX : public OFX::ImageEffect {
 
     if (p.anyEffectActive() && !img.empty()) {
       fe::RenderContext ctx;
-      // OFX time is in frames: exact frame index for whole frames, distinct key otherwise.
-      ctx.frameKey = fe::frameKeyFromTime(static_cast<int64_t>(std::llround(args.time * 1000.0)), 1000);
+      ctx.frameKey = frameKey;
       fe::process(img, p, ctx);  // alpha is never modified
     }
 
@@ -171,6 +181,28 @@ class FilmEffectsOFX : public OFX::ImageEffect {
   }
 
  private:
+  // GPU frames: the whole image as one buffer (no tiles), RGBA float, bottom row first.
+  void renderGpu(const OFX::RenderArguments& args, OFX::Image& src, OFX::Image& dst, const fe::FilmParams& p,
+                 int64_t frameKey) {
+    const OfxRectI sb = src.getBounds(), db = dst.getBounds();
+    const int w = sb.x2 - sb.x1, h = sb.y2 - sb.y1;
+    const int rowBytes = src.getRowBytes();
+    if (w <= 0 || h <= 0 || sb.x1 != db.x1 || sb.y1 != db.y1 || sb.x2 != db.x2 || sb.y2 != db.y2 ||
+        rowBytes != dst.getRowBytes() || rowBytes <= 0 || rowBytes % 16 != 0) {
+      OFX::throwSuiteStatusException(kOfxStatErrUnsupported);
+    }
+    std::lock_guard<std::mutex> lock(gpuMutex_);  // engines keep per-size scratch buffers
+    std::unique_ptr<fe::ofx::GpuRenderer>& r = args.isEnabledMetalRender ? metal_ : cuda_;
+    if (!r) r = args.isEnabledMetalRender ? fe::ofx::makeMetalRenderer() : fe::ofx::makeCudaRenderer();
+    void* queue = args.isEnabledMetalRender ? args.pMetalCmdQ : args.pCudaStream;
+    if (!r || !r->render(queue, src.getPixelData(), dst.getPixelData(), uint32_t(w), uint32_t(h),
+                         uint32_t(rowBytes / 16), p, frameKey)) {
+      OFX::throwSuiteStatusException(kOfxStatFailed);
+    }
+  }
+
+  std::mutex gpuMutex_;
+  std::unique_ptr<fe::ofx::GpuRenderer> cuda_, metal_;
   fe::Variant variant_;
   std::vector<fe::ParamKey> keys_;
   std::vector<OFX::Param*> params_;
@@ -248,7 +280,13 @@ class FilmEffectsFactory : public OFX::PluginFactoryHelper<FilmEffectsFactory<V>
     desc.setTemporalClipAccess(false);
     desc.setRenderTwiceAlways(false);
     desc.setSupportsMultipleClipPARs(false);
-    desc.setRenderThreadSafety(OFX::eRenderFullySafe);  // no shared mutable state
+    desc.setRenderThreadSafety(OFX::eRenderFullySafe);  // GPU engines are guarded per instance
+#ifdef FE_OFX_CUDA
+    desc.setSupportsCudaRender(true);  // default stream, finished on return (no CUDA streams)
+#endif
+#ifdef __APPLE__
+    desc.setSupportsMetalRender(true);
+#endif
   }
 
   void describeInContext(OFX::ImageEffectDescriptor& desc, OFX::ContextEnum) override {

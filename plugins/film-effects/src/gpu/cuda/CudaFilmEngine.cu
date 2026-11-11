@@ -177,7 +177,7 @@ bool CudaFilmEngine::ok() const { return impl_ && impl_->error.empty() && impl_-
 const std::string& CudaFilmEngine::error() const { return impl_->error; }
 
 bool CudaFilmEngine::render(const void* src, void* dst, bool half, uint32_t w, uint32_t h, uint32_t rowPixels,
-                            const FilmParams& params, int64_t frameKey) {
+                            const FilmParams& params, int64_t frameKey, bool rgba, bool bottomUp) {
   if (!ok()) return false;
   CudaBackend& B = impl_->backend;
   B.err = cudaSuccess;
@@ -186,7 +186,7 @@ bool CudaFilmEngine::render(const void* src, void* dst, bool half, uint32_t w, u
       size_t bytes = size_t(rowPixels) * h * (half ? sizeof(H4) : sizeof(F4));
       B.note(cudaMemcpyAsync(dst, src, bytes, cudaMemcpyDeviceToDevice, B.stream));
     }
-  } else if (!impl_->pipeline->run(src, dst, half, w, h, rowPixels, params, frameKey)) {
+  } else if (!impl_->pipeline->run(src, dst, half, w, h, rowPixels, params, frameKey, rgba, bottomUp)) {
     return false;
   }
   B.note(cudaStreamSynchronize(B.stream));  // the host expects the frame finished when Render returns

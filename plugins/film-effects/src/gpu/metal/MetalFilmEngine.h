@@ -23,6 +23,8 @@ struct MetalFrame {
   uint32_t height = 0;
   uint32_t rowPixels = 0;     // row stride in pixels
   bool halfFloat = false;     // true for 16f GPU frames
+  bool rgba = false;          // RGBA channel order (OpenFX); false = BGRA (Premiere)
+  bool bottomUp = false;      // row 0 is the bottom row (OpenFX)
 };
 
 class MetalFilmEngine {

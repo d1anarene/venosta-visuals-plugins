@@ -16,6 +16,7 @@ ditto "$SOURCE" "$BUNDLE"
 BIN="$BUNDLE/Contents/MacOS/FilmEffects.ofx"
 [[ -f "$BIN" ]] || { echo "Missing $BIN" >&2; exit 1; }
 chmod 755 "$BIN"
+[[ -s "$BUNDLE/Contents/Resources/FilmEffects.metallib" ]] || { echo "Missing FilmEffects.metallib (Metal GPU path)" >&2; exit 1; }
 architectures=" $(lipo -archs "$BIN") "
 [[ "$architectures" == *" arm64 "* && "$architectures" == *" x86_64 "* ]] || { echo "Bundle must contain arm64 and x86_64" >&2; exit 1; }
 codesign --force --sign - --timestamp=none "$BUNDLE"
