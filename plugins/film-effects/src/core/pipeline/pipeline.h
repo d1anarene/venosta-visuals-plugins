@@ -22,7 +22,7 @@ struct RenderContext {
 /** Per-effect intermediate results, exposed for tests and diagnostics. */
 struct Layers {
   Plane bloomAdd;     // linear RGB energy added by bloom (empty when bloom is off)
-  Plane halationAdd;  // linear RGB energy added by halation (empty when off)
+  Plane halationAdd;  // linear RGB energy added by halation (empty when off), built on request
 };
 
 /** Process `img` in place. Alpha is never modified. Returns false (and leaves img untouched)
@@ -30,9 +30,12 @@ struct Layers {
 bool process(Image& img, const FilmParams& params, const RenderContext& ctx, Layers* debug = nullptr);
 
 // Individual stages (used by process() and by tests).
+// Memory: the stages read the working-space image directly and linearise per pixel, so no
+// full-frame linear copy is kept. Bloom returns linear RGB energy (intensity applied); halation
+// returns a single-channel spill amount (intensity and gain applied) that the final pass tints.
 Plane linearRGB(const Image& img, WorkingSpace space);
-Plane bloomEnergy(const Plane& lin, const BloomParams& p, Quality q);
-Plane halationEnergy(const Plane& lin, const HalationParams& p);
+Plane bloomEnergy(const Image& img, WorkingSpace space, const BloomParams& p, Quality q);
+Plane halationSpill(const Image& img, WorkingSpace space, const HalationParams& p);
 /** Grain field value (approx. unit variance) for pixel (x, y) of an image of given height. */
 float grainSample(int x, int y, int imageHeight, const GrainParams& g, int64_t frameKey, int channel);
 

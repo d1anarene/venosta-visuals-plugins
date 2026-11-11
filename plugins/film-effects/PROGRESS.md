@@ -1,6 +1,6 @@
 # PROGRESS — Film Effects
 
-_Last update: 2026-11-10_
+_Last update: 2026-11-11_
 
 ## Verification legend
 - **tested**: compiled and run here (`scripts/run-core-tests.sh`, Linux, g++ 13)
@@ -33,6 +33,7 @@ _Last update: 2026-11-10_
   ≤ 0.062/255 (16f frames), mean ≤ 0.019/255; tolerance 2/255 (see tests/gpu/README.md)
 - CLI renderer, synthetic fixtures, A/B images, CPU benchmarks (docs/PERFORMANCE.md)
 - Parameter mapping and host time → grain key — tested
+- CPU memory cut by more than half and CPU path faster (docs/PERFORMANCE.md); output bit-identical — tested
 
 ## Blocked / needs a person with a Mac
 1. `./scripts/build-macos.sh <AE SDK Examples> <Premiere SDK>` — fix any SDK naming differences
@@ -42,7 +43,6 @@ _Last update: 2026-11-10_
    uses the GPU path (Metal renderer) — the engine underneath is already verified in CI.
 
 ## Next (after host proof)
-- Reduce CPU memory (reuse planes, process bloom/halation at reduced precision where safe)
 - Standalone entries Film Bloom / Film Halation / Film Grain (same core, separate match names)
 - Windows: CUDA path (or software only first)
 - Optional UXP preset panel (Stage 5)

@@ -17,7 +17,10 @@ std::vector<float> gaussianKernel(float sigma);
 /** Exact separable Gaussian (reference used by tests and for small sigma). */
 Plane gaussianBlurDirect(const Plane& src, float sigma);
 
-/** 2x2 box downsample; odd edges are clamped. */
+/** acc += weight * gaussianBlurDirect(src, sigma), without allocating the blurred plane. */
+void gaussianBlurAccumulate(const Plane& src, float sigma, float weight, Plane& acc);
+
+/** [1 3 3 1] downsample by 2; odd edges are clamped. */
 Plane downsample2(const Plane& src);
 
 /** Bilinear upsample to an exact size (pixel-centre aligned). */

@@ -5,6 +5,7 @@
 #include "../blur/blur.h"
 #include "../blur/blur_plan.h"
 #include "../common/fe_kernels.h"
+#include "../common/parallel.h"
 #include "../pipeline/pipeline.h"
 
 namespace fe {
@@ -13,14 +14,19 @@ namespace fe {
 // double each step up to `radius` (% of frame height). Each scale is a normalised blur, so
 // total scattered energy is exactly intensity * highlight energy, distributed over a natural
 // heavy-tailed profile (narrow core + wide skirt) instead of one flat halo.
-Plane bloomEnergy(const Plane& lin, const BloomParams& p, Quality q) {
-  const int w = lin.width, h = lin.height;
+Plane bloomEnergy(const Image& img, WorkingSpace space, const BloomParams& p, Quality q) {
+  const int w = img.width, h = img.height;
+  const int sp = static_cast<int>(space);
   Plane bright(w, h, 3);
-  for (size_t i = 0; i < static_cast<size_t>(w) * h; ++i) {
-    const float* c = &lin.v[i * 3];
-    float wgt = fe_soft_knee_weight(fe_luma(fe_make3(c[0], c[1], c[2])), p.threshold, p.knee);
-    for (int ch = 0; ch < 3; ++ch) bright.v[i * 3 + ch] = std::fmax(c[ch], 0.0f) * wgt;
-  }
+  parallelRows(h, [&](int y) {
+    for (int x = 0; x < w; ++x) {
+      const float* e = img.at(x, y);
+      float c[3] = {fe_to_linear1(e[0], sp), fe_to_linear1(e[1], sp), fe_to_linear1(e[2], sp)};
+      float wgt = fe_soft_knee_weight(fe_luma(fe_make3(c[0], c[1], c[2])), p.threshold, p.knee);
+      float* b = bright.at(x, y);
+      for (int ch = 0; ch < 3; ++ch) b[ch] = std::fmax(c[ch], 0.0f) * wgt;
+    }
+  });
   const BloomPlan plan = planBloom(p, q, w, h);
   const int scales = static_cast<int>(plan.scales.size());
   const int maxLevel = plan.maxLevel;
@@ -34,10 +40,10 @@ Plane bloomEnergy(const Plane& lin, const BloomParams& p, Quality q) {
                                : upsampleTo(acc, levels[L].width, levels[L].height);
     for (int s = 0; s < scales; ++s) {
       if (plan.scales[s].level != L) continue;
-      Plane b = gaussianBlurDirect(levels[L], plan.scales[s].sigmaAtLevel);
-      for (size_t i = 0; i < here.v.size(); ++i) here.v[i] += plan.weights[s] * b.v[i];
+      gaussianBlurAccumulate(levels[L], plan.scales[s].sigmaAtLevel, plan.weights[s], here);
     }
     acc = std::move(here);
+    if (L > 0) levels.pop_back();  // finished with this level: release it early
   }
   for (float& v : acc.v) v *= p.intensity;
   return acc;
