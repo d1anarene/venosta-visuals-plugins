@@ -8,7 +8,7 @@ delivery. More plugins (and possibly other Adobe apps) will follow.
 > 🎬 **Check out my portfolio at [venostavisuals.com](https://venostavisuals.com)** — ready-to-install
 > downloads of these plugins will be provided there as well.
 >
-> 📦 Test builds are published on the [Releases page](../../releases) after every update.
+> 📦 Test builds are published on the [Releases page](https://github.com/d1anarene/venosta-visuals-plugins/releases) after every update.
 
 ---
 
