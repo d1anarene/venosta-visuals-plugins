@@ -16,8 +16,9 @@ import {
 import { runPremiereDirectQueue } from "../export/premiereEncoderAdapter";
 import type { JobUpdate, QueueRequest } from "../export/queueAdapter";
 import {
-  getActiveContext,
+  getContext,
   getContextForSequence,
+  listSequences,
   getPresetExtension,
   isAmeInstalled,
   launchEncoder,
@@ -28,6 +29,7 @@ import {
   startBatchEncode,
 } from "../premiere/sequenceReader";
 import { folderFromToken, listFolderNames, pickFolder, pickPresetFile, writeTextFile, type PickedFolder } from "./fileSystem";
+import { copyDiagnostics, diag } from "./diagnostics";
 import { loadPrefs, savePrefs, type Prefs } from "./settings";
 
 interface Row {
@@ -52,6 +54,12 @@ const STATUS_LABEL: Record<JobStatus, string> = {
   unsupported: "unsupported",
 };
 
+/** Index of the selected sp-menu-item in a change event, or -1. */
+function pickerIndex(e: Event): number {
+  const picker = e.target as HTMLElement & { selectedIndex?: number };
+  return typeof picker.selectedIndex === "number" ? picker.selectedIndex : -1;
+}
+
 /** Value of the selected sp-menu-item (UXP sp-picker reports selectedIndex reliably, not value). */
 function pickerValue(e: Event): string {
   const picker = e.target as HTMLElement & { selectedIndex?: number; value?: string };
@@ -71,12 +79,20 @@ class PanelController {
   private busy = false;
   private cancelRequested = false;
   private selectedTrack = 0;
+  /** GUID of the sequence the user picked; null = follow Premiere's active sequence. */
+  private pickedSequence: string | null = null;
+  private sequenceGuids: string[] = [];
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   async init(): Promise<void> {
     this.bind();
     if (this.prefs.folderToken) this.folder = await folderFromToken(this.prefs.folderToken);
     this.renderSettings();
     await this.refreshContext();
+    // Keep the sequence list current (new/renamed sequences, active sequence changes) while idle.
+    this.pollTimer = setInterval(() => {
+      if (!this.busy) void this.refreshSequences(false);
+    }, 3000);
   }
 
   // ---------- wiring ----------
@@ -93,6 +109,20 @@ class PanelController {
       this.info("Cancelling after the current job…");
     });
     $("btn-start").addEventListener("click", () => void this.startQueue());
+    $("btn-copy-log").addEventListener("click", async () => {
+      const ok = await copyDiagnostics();
+      if (ok) this.info("Log copied to the clipboard — paste it into a message.");
+      else this.error("Could not copy the log. Please send a screenshot of the messages below instead.");
+    });
+    $("seq-picker").addEventListener("change", (e) => {
+      const idx = pickerIndex(e);
+      const guid = idx >= 0 ? this.sequenceGuids[idx] : null;
+      if (!guid) return;
+      this.pickedSequence = guid;
+      this.selectedTrack = 0;
+      this.clearPlan("");
+      void this.refreshTracks();
+    });
     $("track-picker").addEventListener("change", (e) => {
       const v = Number(pickerValue(e));
       if (Number.isInteger(v)) this.selectedTrack = v;
@@ -122,6 +152,10 @@ class PanelController {
     this.log(msg, "error");
   }
   private log(msg: string, kind: "info" | "error" | "warn"): void {
+    diag(kind, msg);
+    const status = $("status");
+    status.textContent = msg;
+    status.className = `status status-${kind === "info" ? "ok" : kind}`;
     const el = document.createElement("div");
     el.className = `msg msg-${kind}`;
     el.textContent = msg;
@@ -131,14 +165,64 @@ class PanelController {
   }
 
   // ---------- context ----------
+  /** Refresh the sequence list and the tracks of the chosen sequence. */
   async refreshContext(): Promise<void> {
+    await this.refreshSequences(true);
+    await this.refreshTracks();
+    $("ame-state").textContent = isAmeInstalled() ? "" : "Adobe Media Encoder was not found.";
+  }
+
+  /** The GUID scanning will use: the user's pick, else Premiere's active sequence. */
+  private currentSequenceGuid(): string | null {
+    return this.pickedSequence;
+  }
+
+  private async refreshSequences(reportErrors: boolean): Promise<void> {
     try {
-      const ctx = await getActiveContext();
-      $("seq-name").textContent = ctx.sequence.name;
+      const seqs = await listSequences();
+      if (this.pickedSequence && !seqs.some((q) => q.guid === this.pickedSequence)) this.pickedSequence = null;
+      const shown = this.pickedSequence ?? seqs.find((q) => q.active)?.guid ?? seqs[0]?.guid ?? null;
+      const key = seqs.map((q) => q.guid + q.name).join("|") + "#" + shown;
+      if (key === this.lastSeqKey) return;  // nothing changed: do not rebuild the menu
+      this.lastSeqKey = key;
+      diag("debug", `Sequences: ${seqs.map((q) => q.name + (q.active ? " (active)" : "")).join(", ") || "none"}`);
+      const followedBefore = this.shownSequence;
+      this.sequenceGuids = seqs.map((q) => q.guid);
+      const picker = $("seq-picker");
+      const menu = picker.querySelector("sp-menu") ?? picker;
+      menu.innerHTML = "";
+      seqs.forEach((q, i) => {
+        const item = document.createElement("sp-menu-item");
+        item.setAttribute("value", q.guid);
+        item.textContent = q.name + (q.active ? "  (active)" : "");
+        if (q.guid === shown) item.setAttribute("selected", "");
+        menu.appendChild(item);
+        if (q.guid === shown) (picker as HTMLElement & { selectedIndex?: number }).selectedIndex = i;
+      });
+      this.shownSequence = shown;
+      if (seqs.length === 0 && reportErrors) this.error("This project has no sequences.");
+      // Following the active sequence and it changed: reload tracks and drop the old scan.
+      if (!this.pickedSequence && followedBefore !== null && followedBefore !== shown) {
+        this.selectedTrack = 0;
+        this.clearPlan("Active sequence changed — press Scan Track.");
+        await this.refreshTracks();
+      }
+    } catch (e) {
+      if (reportErrors) this.error(String(e instanceof Error ? e.message : e));
+    }
+  }
+
+  private lastSeqKey = "";
+  private shownSequence: string | null = null;
+
+  private async refreshTracks(): Promise<void> {
+    try {
+      const ctx = await getContext(this.pickedSequence ?? this.shownSequence);
       const tracks = await listVideoTracks(ctx.sequence);
       const picker = $("track-picker");
       const menu = picker.querySelector("sp-menu") ?? picker;
       menu.innerHTML = "";
+      if (this.selectedTrack >= tracks.length) this.selectedTrack = 0;
       tracks.forEach((t) => {
         const item = document.createElement("sp-menu-item");
         item.setAttribute("value", String(t.index));
@@ -146,11 +230,9 @@ class PanelController {
         if (t.index === this.selectedTrack) item.setAttribute("selected", "");
         menu.appendChild(item);
       });
-      if (this.selectedTrack >= tracks.length) this.selectedTrack = 0;
+      (picker as HTMLElement & { selectedIndex?: number }).selectedIndex = this.selectedTrack;
       if (tracks.length === 0) this.error("This sequence has no video tracks.");
-      $("ame-state").textContent = isAmeInstalled() ? "" : "Adobe Media Encoder was not found.";
     } catch (e) {
-      $("seq-name").textContent = "—";
       this.error(String(e instanceof Error ? e.message : e));
     }
   }
@@ -166,8 +248,8 @@ class PanelController {
   async scan(): Promise<void> {
     if (this.busy) return;
     try {
-      const ctx = await getActiveContext();
-      $("seq-name").textContent = ctx.sequence.name;
+      this.info("Scanning…");
+      const ctx = await getContext(this.currentSequenceGuid() ?? this.shownSequence);
       const snap = await scanTrack(ctx, this.selectedTrack);
       const plan = buildPlan(snap, { includeDisabledClips: this.prefs.includeDisabledClips });
       this.plan = plan;
@@ -180,12 +262,13 @@ class PanelController {
       }));
       for (const w of plan.trackWarnings) this.log(w.message, "warn");
       this.info(
-        `${videoTrackLabel(snap.track.index)}: ${plan.jobs.length} clip(s) found` +
+        `${snap.sequenceName} / ${videoTrackLabel(snap.track.index)}: ${plan.jobs.length} clip(s) found` +
           (snap.transitionCount ? `, ${snap.transitionCount} transition(s) on the guide track.` : "."),
       );
       if (plan.jobs.length === 0) this.log("No clips on this track — nothing to export.", "warn");
       this.renderRows();
     } catch (e) {
+      diag("error", "Scan failed", e);
       this.clearPlan("");
       this.error(String(e instanceof Error ? e.message : e));
     }
@@ -214,12 +297,15 @@ class PanelController {
   }
 
   private selectPicker(id: string, value: string): void {
-    $(id)
-      .querySelectorAll("sp-menu-item")
-      .forEach((el) => {
-        if (el.getAttribute("value") === value) el.setAttribute("selected", "");
-        else el.removeAttribute("selected");
-      });
+    const picker = $(id) as HTMLElement & { selectedIndex?: number };
+    picker.querySelectorAll("sp-menu-item").forEach((el, i) => {
+      if (el.getAttribute("value") === value) {
+        el.setAttribute("selected", "");
+        if (picker.selectedIndex !== i) picker.selectedIndex = i;
+      } else {
+        el.removeAttribute("selected");
+      }
+    });
   }
 
   private async chooseFolder(): Promise<void> {

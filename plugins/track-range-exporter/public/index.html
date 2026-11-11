@@ -9,10 +9,10 @@
 <body>
   <header>
     <h1>Track Range Exporter</h1>
+    <sp-label for="seq-picker">Sequence</sp-label>
     <div class="row">
-      <span class="label">Sequence</span>
-      <span id="seq-name" class="value">—</span>
-      <sp-action-button id="btn-refresh-context" quiet aria-label="Refresh active sequence">↻</sp-action-button>
+      <sp-picker id="seq-picker" size="s" label="Sequence" class="grow"><sp-menu slot="options"></sp-menu></sp-picker>
+      <sp-action-button id="btn-refresh-context" quiet aria-label="Refresh sequences and tracks">↻</sp-action-button>
     </div>
     <div id="ame-state" class="warn-text"></div>
   </header>
@@ -25,6 +25,7 @@
       <sp-button id="btn-select-all" variant="secondary" size="s" quiet>All</sp-button>
       <sp-button id="btn-select-none" variant="secondary" size="s" quiet>None</sp-button>
     </div>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
     <div id="summary" class="summary">0 selected / 0 queued</div>
     <div id="job-list" class="job-list" role="list" aria-label="Export jobs"></div>
   </section>
@@ -42,7 +43,7 @@
     <sp-label for="mode-picker">Queue method</sp-label>
     <sp-picker id="mode-picker" size="s" label="Queue method">
       <sp-menu slot="options">
-        <sp-menu-item value="direct">Premiere direct (one click)</sp-menu-item>
+        <sp-menu-item value="direct" selected>Premiere direct (one click)</sp-menu-item>
         <sp-menu-item value="ame">Media Encoder companion (no timeline change)</sp-menu-item>
       </sp-menu>
     </sp-picker>
@@ -54,7 +55,7 @@
       <sp-label for="convention-picker">Out point sent to Adobe</sp-label>
       <sp-picker id="convention-picker" size="s" label="Out point convention">
         <sp-menu slot="options">
-          <sp-menu-item value="exclusive">Clip end (exclusive) — default</sp-menu-item>
+          <sp-menu-item value="exclusive" selected>Clip end (exclusive) — default</sp-menu-item>
           <sp-menu-item value="inclusive">Last frame of clip (inclusive)</sp-menu-item>
         </sp-menu>
       </sp-picker>
@@ -69,6 +70,9 @@
     </div>
     <div class="row buttons">
       <sp-button id="btn-start" variant="secondary" size="s" quiet>Start AME Queue</sp-button>
+    </div>
+    <div class="row buttons">
+      <sp-button id="btn-copy-log" variant="secondary" size="s" quiet>Copy Log</sp-button>
     </div>
     <div id="messages" class="messages" aria-live="polite"></div>
   </footer>

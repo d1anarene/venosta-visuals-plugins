@@ -1,6 +1,6 @@
 # PROGRESS — Track Range Exporter
 
-_Last update: 2026-11-10_
+_Last update: 2026-11-11_
 
 ## Verification legend
 - **unit**: covered by `npm test` (vitest, no Adobe host)
@@ -18,6 +18,14 @@ _Last update: 2026-11-10_
 - [x] Premiere panel UI + AME companion panel, esbuild bundles, typecheck against `@adobe/premierepro` 27.0.0 types
 - [x] Panel end-to-end against mocked API: scan → 3 jobs → queue → In/Out restored (mock)
 - [x] Docs: README, TECHNICAL_DECISIONS, KNOWN_LIMITATIONS, HOST_TEST_PLAN
+
+## First host feedback (2026-11-11, macOS, Premiere Pro, installed via .ccx)
+- ✅ host: `.ccx` installs via Creative Cloud; panel opens; video tracks are listed (V1 / Video 1).
+- ❌ host: the sequence was not shown on first open (needed ↻), and **Scan Track found nothing**;
+  the error message was not visible (it was at the bottom of the panel).
+- Fixes in 0.1.2 (not yet host-tested): sequence picker (all sequences, follows the active one),
+  status line under Scan, robust frame-rate reading (timebase → ticksPerFrame → fps), labelled
+  scan steps, **Copy Log** button with host info and step details.
 
 ## Blocked
 - **Milestone 2 (verified two-job export)**: no Premiere/AME in the build environment (Linux container).

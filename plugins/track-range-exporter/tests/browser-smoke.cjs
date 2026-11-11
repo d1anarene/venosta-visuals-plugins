@@ -19,13 +19,13 @@ const dist = process.argv[2] || path.resolve(__dirname, "../dist/premiere-panel"
       name: 'Graded Sequence', guid: { toString: () => 'seq-1' },
       getVideoTrackCount: async () => 3, getVideoTrack: async (i) => [v1, { name: '', isMuted: async () => false, getTrackItems: () => [] }, v3][i],
       getSettings: async () => ({ getVideoFrameRate: () => ({ ticksPerFrame: TPF }), getVideoDisplayFormat: async () => ({ type: 0 }) }),
-      getZeroPoint: async () => T(0),
+      getZeroPoint: async () => T(0), getTimebase: async () => String(TPF),
       getInPoint: async () => ({ ticks: inT }), getOutPoint: async () => ({ ticks: outT }),
       createSetInPointAction: (t) => ({ run: () => (inT = t.ticks) }),
       createSetOutPointAction: (t) => ({ run: () => (outT = t.ticks) }),
     };
     const project = {
-      path: '/Projects/test.prproj', getActiveSequence: async () => seq, lockedAccess: (cb) => cb(), save: async () => true,
+      path: '/Projects/test.prproj', name: 'test', getActiveSequence: async () => seq, getSequences: async () => [seq], lockedAccess: (cb) => cb(), save: async () => true,
       executeTransaction: (cb) => { const acts = []; cb({ addAction: (a) => acts.push(a) }); acts.forEach(a => a.run()); return true; },
     };
     const ppro = {
@@ -59,6 +59,6 @@ const dist = process.argv[2] || path.resolve(__dirname, "../dist/premiere-panel"
   console.log('INOUT AFTER', await page.evaluate(() => window.__inout()));
   console.log('SUMMARY', await page.textContent('#summary'));
   console.log('MESSAGES', await page.$$eval('.msg', els => els.map(e => e.textContent)));
-  await page.screenshot({ path: 'process.env.SHOT || "panel-smoke.png"', fullPage: true });
+  await page.screenshot({ path: process.env.SHOT || 'panel-smoke.png', fullPage: true });
   await browser.close();
 })();

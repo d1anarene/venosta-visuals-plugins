@@ -9,23 +9,63 @@
     "minVersion": "25.6.0"
   },
   "requiredPermissions": {
-    "localFileSystem": "request"
+    "localFileSystem": "request",
+    "clipboard": "readAndWrite"
   },
   "entrypoints": [
     {
       "id": "trackRangeExporterPanel",
       "type": "panel",
-      "label": { "default": "Track Range Exporter" },
-      "minimumSize": { "width": 260, "height": 360 },
-      "maximumSize": { "width": 2000, "height": 3000 },
-      "preferredDockedSize": { "width": 320, "height": 600 },
-      "preferredFloatingSize": { "width": 360, "height": 640 },
+      "label": {
+        "default": "Track Range Exporter"
+      },
+      "minimumSize": {
+        "width": 260,
+        "height": 360
+      },
+      "maximumSize": {
+        "width": 2000,
+        "height": 3000
+      },
+      "preferredDockedSize": {
+        "width": 320,
+        "height": 600
+      },
+      "preferredFloatingSize": {
+        "width": 360,
+        "height": 640
+      },
       "icons": [
-        { "width": 23, "height": 23, "path": "icons/panel.svg", "scale": [1, 2], "theme": ["all"] }
+        {
+          "width": 23,
+          "height": 23,
+          "path": "icons/panel.svg",
+          "scale": [
+            1,
+            2
+          ],
+          "theme": [
+            "all"
+          ]
+        }
       ]
     }
   ],
   "icons": [
-    { "width": 48, "height": 48, "path": "icons/plugin.svg", "scale": [1, 2], "theme": ["all"], "species": ["pluginList"] }
+    {
+      "width": 48,
+      "height": 48,
+      "path": "icons/plugin.svg",
+      "scale": [
+        1,
+        2
+      ],
+      "theme": [
+        "all"
+      ],
+      "species": [
+        "pluginList"
+      ]
+    }
   ]
 }
