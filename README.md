@@ -35,7 +35,8 @@ See [LICENSE](LICENSE) for the full terms.
 
 - Adobe Premiere Pro (current version; see each plugin's README for tested versions)
 - Adobe Media Encoder for plugins that queue exports
-- macOS is the primary development target; Windows is planned where the Adobe APIs allow it
+- macOS and Windows: Track Range Exporter is a UXP panel (both systems); Film Effects builds on
+  both, with GPU acceleration on macOS (Metal) and CPU rendering on Windows for now
 
 ## For developers
 
