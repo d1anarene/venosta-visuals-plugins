@@ -2,6 +2,34 @@
 
 _Last update: 2026-11-11_
 
+## Windows CUDA package (in progress, 2026-11-11)
+
+- User requests a CUDA-enabled Windows download for home testing, alongside the CPU fallback.
+- Existing CUDA engine and Premiere entry point were present, but v1.0.3 explicitly built with
+  `FE_WITH_CUDA=OFF`. The Linux CUDA compile job did not build the Windows Premiere adapter.
+- Added a separate `windows-2022` / VS 2022 job installing CUDA 12.9.1 compiler, runtime and VS
+  integration (pinned cuda-toolkit action v0.2.36). CUDA is mandatory in this job; CPU download
+  remains separate. Inspect every `.aex` for `xGPUFilterEntry` and reject dynamic cudart imports.
+- CUDA Windows build/linking and runtime verification pending. User hardware: **GTX 1080**.
+  Explicit native `sm_61` target added; inspect CUDA ELF sections for Pascal code in each plugin. No NVIDIA hardware is available
+  here; successful compilation will not establish GPU execution or Premiere compatibility.
+- DaVinci Resolve audit: no OpenFX adapter, build target, tests or installer exists in this repo.
+  No Resolve port has been implemented or tested. Its integration remains separate future work.
+
+## Published release (2026-11-11)
+
+- [**v1.0.3**](https://github.com/d1anarene/venosta-visuals-plugins/releases/tag/v1.0.3)
+  published as a stable release from merge commit `49f5307` via PR #6.
+- Final release candidate `930fbcf`: push tests `43044044530`, PR tests `43044067346` and native
+  builds `43044044213` **all passed**. Includes CUDA compilation, CPU tests on three OSes,
+  Metal GPU comparison and Track Range Exporter checks.
+- Release workflow `43044645114` **passed**; verified both Film Effects assets are attached:
+  `FilmEffects-mac-v1.0.3.pkg` and `FilmEffects-Windows-CPU-experimental-v1.0.3.zip`.
+  Existing Track Range Exporter Premiere and Media Encoder CCX downloads are also included.
+- Windows CPU package is explicitly experimental and awaits the user's at-home Premiere test.
+  Mac host verification remains the limited user smoke test documented below. No claim of
+  export matching, long-run stability, HDR verification or NVIDIA GPU execution is made.
+
 ## First Mac release (2026-11-11)
 
 - **User host verification:** after the corrected installer, a Premiere screenshot shows
