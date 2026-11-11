@@ -11,6 +11,15 @@
 // mPPixSuite, DECLARE_GPUFILTER_ENTRY, PrGPUDeviceFramework_CUDA) must be checked against the SDK
 // you build with — this file and FilmEffectsGPU.mm are the only places they are used.
 
+// Same include order as the SDK_ProcAmp sample (SDK_ProcAmp.h): AE headers before the GPU module.
+#include "AEConfig.h"
+#include "PrSDKTypes.h"
+#include "AE_Effect.h"
+#include "A.h"
+#include "AE_Macros.h"
+#include "AEFX_SuiteHandlerTemplate.h"
+#include "Param_Utils.h"
+#include "PrSDKAESupport.h"
 #include "PrGPUFilterModule.h"
 #include "PrSDKVideoSegmentProperties.h"
 
@@ -19,7 +28,7 @@
 
 #include "CudaFilmEngine.h"
 #include "FilmEffects.h"
-#include "FilmEffectsParams.h"
+#include "FilmEffectsGPUParams.h"
 
 namespace {
 
@@ -39,16 +48,11 @@ class FilmEffectsGPU : public PrGPUFilterBase {
                       csSDK_size_t inFrameCount, PPixHand* outFrame) override {
     if (inFrameCount < 1 || !mEngine) return suiteError_Fail;
 
-    struct Reader : fe::ParamReader {
-      FilmEffectsGPU* self;
-      PrTime t;
-      double number(int i) const override { return self->GetParam(i, t).mFloat64; }
-      bool flag(int i) const override { return self->GetParam(i, t).mBool != 0; }
-      int popup(int i) const override { return self->GetParam(i, t).mInt32; }
-    } reader;
-    reader.self = this;
-    reader.t = inRenderParams->inClipTime;
-    const fe::FilmParams params = fe::readParams(reader, static_cast<fe::Variant>(FE_VARIANT));
+    const fe::Variant variant = static_cast<fe::Variant>(FE_VARIANT);
+    const PrTime t = inRenderParams->inClipTime;
+    auto get = [this, t](int index) { return GetParam(index, t); };
+    const fe::GpuParamReader<decltype(get)> reader(get, variant);
+    const fe::FilmParams params = fe::readParams(reader, variant);
 
     void* srcData = nullptr;
     void* dstData = nullptr;

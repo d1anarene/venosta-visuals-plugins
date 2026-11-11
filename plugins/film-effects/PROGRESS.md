@@ -44,6 +44,16 @@ _Last update: 2026-11-11_
   core compiled with MSVC and tested in CI (`film-effects-core-windows`)
 - CPU memory cut by more than half and CPU path faster (docs/PERFORMANCE.md); output bit-identical — tested
 
+## Checked against the real Adobe SDKs (2026-11-11, AE SDK 27.0 + Premiere Pro 27.0 C++ SDK)
+- CPU entry `FilmEffects.cpp`: compiles (syntax) against the real SDK headers for all 4 variants
+  (only stand-ins for 3 macOS system headers). Fixed: `PF_REGISTER_EFFECT_EXT2` needs a local
+  `result` (as in SDK_Noise).
+- CUDA GPU entry: compiles against the real `PrGPUFilterModule.h`. Fixed: AE headers must be
+  included before it (as in SDK_ProcAmp). Default CUDA stream like SDK_CrossDissolve's CUDA sample.
+- GPU params now read by `PrParam.mType` (samples use mFloat32/mFloat64/mBool); popup numbering in
+  the GPU path is undocumented, so 0-based numbering is detected (FilmEffectsGPUParams.h).
+- Not yet: Metal GPU entry (needs a Mac compiler), PiPL via Rez/PiPLtool, linking, running.
+
 ## Blocked / needs a person with a Mac
 1. `./scripts/build-macos.sh <AE SDK Examples> <Premiere SDK>` — fix any SDK naming differences
    (listed in docs/FEASIBILITY.md, "verify against your SDK").

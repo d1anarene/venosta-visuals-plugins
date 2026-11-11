@@ -21,6 +21,7 @@ set(AE_SDK_HEADERS "${AE_SDK_DIR}/Headers" CACHE PATH "")
 set(AE_SDK_UTIL "${AE_SDK_DIR}/Util" CACHE PATH "")
 set(AE_SDK_RESOURCES "${AE_SDK_DIR}/Resources" CACHE PATH "Folder with AE_General.r (and PiPLtool.exe on Windows)")
 set(PR_SDK_HEADERS "${PR_SDK_DIR}/Examples/Headers" CACHE PATH "")
+set(PR_SDK_UTILS "${PR_SDK_DIR}/Examples/Utils" CACHE PATH "")
 set(PR_GPU_UTILS "${PR_SDK_DIR}/Examples/Projects/GPUVideoFilter/Utils" CACHE PATH "Folder with PrGPUFilterModule.h")
 
 set(FE_GPU_DEFAULT OFF)
@@ -86,7 +87,7 @@ foreach(variant RANGE 3)
   target_include_directories(${bundle} PRIVATE
     src/hosts/premiere src/gpu/metal src/core
     ${AE_SDK_HEADERS} ${AE_SDK_HEADERS}/SP ${AE_SDK_HEADERS}/adobesdk ${AE_SDK_UTIL}
-    ${PR_SDK_HEADERS} ${PR_GPU_UTILS})
+    ${PR_SDK_HEADERS} ${PR_SDK_UTILS} ${PR_GPU_UTILS})
 
   if(APPLE)
     target_link_libraries(${bundle} PRIVATE "-framework Foundation")
