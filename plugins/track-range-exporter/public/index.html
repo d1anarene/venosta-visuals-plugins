@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Track Range Exporter</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="index.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Track Range Exporter</h1>
+    <div class="row">
+      <span class="label">Sequence</span>
+      <span id="seq-name" class="value">—</span>
+      <sp-action-button id="btn-refresh-context" quiet aria-label="Refresh active sequence">↻</sp-action-button>
+    </div>
+    <div id="ame-state" class="warn-text"></div>
+  </header>
+
+  <section>
+    <sp-label for="track-picker">Guide track</sp-label>
+    <sp-picker id="track-picker" size="s" label="Guide track"><sp-menu slot="options"></sp-menu></sp-picker>
+    <div class="row buttons">
+      <sp-button id="btn-scan" variant="cta" size="s">Scan Track</sp-button>
+      <sp-button id="btn-select-all" variant="secondary" size="s" quiet>All</sp-button>
+      <sp-button id="btn-select-none" variant="secondary" size="s" quiet>None</sp-button>
+    </div>
+    <div id="summary" class="summary">0 selected / 0 queued</div>
+    <div id="job-list" class="job-list" role="list" aria-label="Export jobs"></div>
+  </section>
+
+  <section>
+    <div class="row">
+      <sp-button id="btn-folder" variant="secondary" size="s">Choose Folder…</sp-button>
+    </div>
+    <div id="folder-path" class="path">No folder chosen</div>
+    <div class="row">
+      <sp-button id="btn-preset" variant="secondary" size="s">Choose AME Preset…</sp-button>
+    </div>
+    <div id="preset-path" class="path">No preset chosen</div>
+
+    <sp-label for="mode-picker">Queue method</sp-label>
+    <sp-picker id="mode-picker" size="s" label="Queue method">
+      <sp-menu slot="options">
+        <sp-menu-item value="direct">Premiere direct (one click)</sp-menu-item>
+        <sp-menu-item value="ame">Media Encoder companion (no timeline change)</sp-menu-item>
+      </sp-menu>
+    </sp-picker>
+    <div id="mode-help" class="help"></div>
+
+    <details>
+      <summary>Advanced</summary>
+      <sp-checkbox id="chk-disabled">Include disabled guide clips</sp-checkbox>
+      <sp-label for="convention-picker">Out point sent to Adobe</sp-label>
+      <sp-picker id="convention-picker" size="s" label="Out point convention">
+        <sp-menu slot="options">
+          <sp-menu-item value="exclusive">Clip end (exclusive) — default</sp-menu-item>
+          <sp-menu-item value="inclusive">Last frame of clip (inclusive)</sp-menu-item>
+        </sp-menu>
+      </sp-picker>
+      <div class="help">Change only if the spike test shows every export has one frame too many.</div>
+    </details>
+  </section>
+
+  <footer>
+    <div class="row buttons">
+      <sp-button id="btn-queue" variant="cta" size="s" disabled>Add Selected to AME Queue</sp-button>
+      <sp-button id="btn-cancel" variant="secondary" size="s" disabled>Cancel</sp-button>
+    </div>
+    <div class="row buttons">
+      <sp-button id="btn-start" variant="secondary" size="s" quiet>Start AME Queue</sp-button>
+    </div>
+    <div id="messages" class="messages" aria-live="polite"></div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "id": "com.venostavisuals.trackrangeexporter.ame",
+  "name": "Track Range Exporter – AME",
+  "version": "0.1.0",
+  "main": "index.html",
+  "manifestVersion": 5,
+  "host": { "app": "ame", "minVersion": "27.0.0" },
+  "requiredPermissions": { "localFileSystem": "fullAccess" },
+  "entrypoints": [
+    {
+      "id": "trackRangeExporterAme",
+      "type": "panel",
+      "label": { "default": "Track Range Exporter – AME" },
+      "minimumSize": { "width": 260, "height": 300 },
+      "maximumSize": { "width": 2000, "height": 3000 },
+      "preferredDockedSize": { "width": 320, "height": 480 },
+      "preferredFloatingSize": { "width": 360, "height": 520 },
+      "icons": [{ "width": 23, "height": 23, "path": "icons/panel.svg", "scale": [1, 2], "theme": ["all"] }]
+    }
+  ],
+  "icons": [{ "width": 48, "height": 48, "path": "icons/panel.svg", "scale": [1, 2], "theme": ["all"], "species": ["pluginList"] }]
+}

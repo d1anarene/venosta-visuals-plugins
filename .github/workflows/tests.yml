@@ -1,0 +1,43 @@
+name: tests
+on:
+  push:
+  pull_request:
+jobs:
+  track-range-exporter:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/track-range-exporter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci || npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+  film-effects-core:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: plugins/film-effects
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/run-core-tests.sh
+  film-effects-metal:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: plugins/film-effects
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Metal kernels, engine and comparison tool
+        run: |
+          cmake -S . -B build-gpu -DCMAKE_BUILD_TYPE=Release -DFE_BUILD_GPU_TESTS=ON
+          cmake --build build-gpu --parallel
+      - name: Compare GPU with CPU reference
+        run: ./build-gpu/fe_metal_vs_cpu build-gpu/FilmEffects.metallib
