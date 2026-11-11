@@ -33,15 +33,8 @@ jobs:
       - name: Test Film Effects core
         working-directory: plugins/film-effects
         run: ./scripts/run-core-tests.sh
-      - name: Package
-        run: |
-          tag=${{ steps.version.outputs.tag }}
-          mkdir -p out
-          cd plugins/track-range-exporter/dist
-          cp -r premiere-panel TrackRangeExporter-Premiere
-          zip -qr "../../../out/TrackRangeExporter-Premiere-panel-${tag}.zip" TrackRangeExporter-Premiere
-          cp -r ame-companion TrackRangeExporter-AME
-          zip -qr "../../../out/TrackRangeExporter-AME-companion-${tag}.zip" TrackRangeExporter-AME
+      - name: Package installers (.ccx)
+        run: plugins/track-range-exporter/scripts/package-ccx.sh "$PWD/out" "-${{ steps.version.outputs.tag }}"
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -52,13 +45,14 @@ jobs:
           Provided "as is", without any warranty. Keep backups of your projects.
 
           ### Track Range Exporter (Windows + macOS)
-          - \`TrackRangeExporter-Premiere-panel-${tag}.zip\`: unzip, open the UXP Developer Tool, *Add Plugin* → choose \`manifest.json\` in the folder → *Load*. Then in Premiere: Window → UXP Plugins → Track Range Exporter.
-          - \`TrackRangeExporter-AME-companion-${tag}.zip\`: optional panel for Adobe Media Encoder 27+ (same steps, target app Media Encoder).
+          - \`TrackRangeExporter-Premiere-${tag}.ccx\`: **double-click** to install with Creative Cloud Desktop, restart Premiere, then Window → UXP Plugins → Track Range Exporter.
+          - \`TrackRangeExporter-MediaEncoder-${tag}.ccx\`: optional companion panel for Adobe Media Encoder 27+ (only needed for the "no timeline change" queue method).
+          - Uninstall: Creative Cloud Desktop → Plugins → Manage Plugins.
 
           ### Film Effects
           Not included as a download yet: the plugin must be built with Adobe's SDKs, which cannot be redistributed. Build instructions: plugins/film-effects/docs/INSTALLATION.md.
 
           Status of each plugin: see the README and each plugin's PROGRESS.md.
           NOTES
-          gh release create "$tag" out/*.zip --target "$GITHUB_SHA" --title "$tag" \
+          gh release create "$tag" out/*.ccx --target "$GITHUB_SHA" --title "$tag" \
             --notes-file notes.md --generate-notes ${{ steps.version.outputs.pre }}

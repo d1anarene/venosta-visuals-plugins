@@ -13,23 +13,32 @@ Lumetri, titles, transitions and audio. The guide track only supplies the start 
 
 Downloads will also be available at [venostavisuals.com](https://venostavisuals.com).
 
-## Install (developer build, ~2 minutes)
+## Install (1 minute)
 
-Requirements: Premiere Pro 25.6 or newer, Adobe Media Encoder, Node.js 18+, and the free
-[UXP Developer Tool](https://developer.adobe.com/premiere-pro/uxp/) from Creative Cloud.
+Requirements: Premiere Pro 25.6 or newer, Adobe Media Encoder, Creative Cloud Desktop.
+
+1. Download `TrackRangeExporter-Premiere-<version>.ccx` from the
+   [Releases page](https://github.com/d1anarene/venosta-visuals-plugins/releases).
+2. **Double-click** it. Creative Cloud Desktop opens and asks to install it (and to allow file
+   access, which the panel needs to choose the output folder and preset).
+3. Restart Premiere → **Window → UXP Plugins → Track Range Exporter**.
+
+Optional: `TrackRangeExporter-MediaEncoder-<version>.ccx` installs the companion panel for Media
+Encoder 27+ (only needed for the "Media Encoder companion" queue method).
+
+Uninstall: Creative Cloud Desktop → Plugins → Manage Plugins → ••• → Uninstall.
+
+### Build it yourself
 
 ```bash
 cd plugins/track-range-exporter
 npm install
-npm run build
+npm run package        # builds and writes dist/installers/*.ccx
 ```
 
-1. Open **UXP Developer Tool** → *Add Plugin* → choose `dist/premiere-panel/manifest.json`.
-2. Start Premiere Pro, then click **Load** in UXP Developer Tool.
-3. In Premiere: **Window → UXP Plugins → Track Range Exporter** (dock it wherever you like).
-
-Optional, for the no-timeline-change method: load `dist/ame-companion/manifest.json` the same way
-with **Media Encoder 27.0+** as the target app.
+For development, load `dist/premiere-panel/manifest.json` in the
+[UXP Developer Tool](https://developer.adobe.com/premiere-pro/uxp/) instead (enable Developer Mode
+in Premiere's Plugins preferences first).
 
 ## Use
 
