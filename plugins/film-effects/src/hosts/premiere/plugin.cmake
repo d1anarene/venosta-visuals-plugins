@@ -5,7 +5,7 @@
 #   cmake -S . -B build-mac -G Xcode -DFE_BUILD_PLUGIN=ON \
 #         -DAE_SDK_DIR="/path/to/AfterEffectsSDK/Examples" -DPR_SDK_DIR="/path/to/Premiere Pro SDK"
 # Windows (CPU + CUDA GPU; needs the CUDA toolkit for the GPU part, otherwise CPU only):
-#   cmake -S . -B build-win -G "Visual Studio 17 2022" -A x64 -DFE_BUILD_PLUGIN=ON ^
+#   cmake -S . -B build-win -A x64 -DFE_BUILD_PLUGIN=ON ^
 #         -DAE_SDK_DIR="C:/AfterEffectsSDK/Examples" -DPR_SDK_DIR="C:/Premiere Pro SDK"
 #
 # The Adobe SDK file layout changes between releases; if a header or tool is not found, point the
@@ -55,7 +55,6 @@ endif()
 
 if(APPLE)
   enable_language(OBJCXX)
-  set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "" FORCE)
 endif()
 
 set(FE_PLUGIN_SOURCES

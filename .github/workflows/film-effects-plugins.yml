@@ -80,7 +80,7 @@ jobs:
         shell: pwsh
         working-directory: plugins/film-effects
         run: |
-          cmake -S . -B build-win -G "Visual Studio 17 2022" -A x64 -DFE_BUILD_PLUGIN=ON "-DAE_SDK_DIR=$env:AE_SDK" "-DPR_SDK_DIR=$env:PR_SDK"
+          cmake -S . -B build-win -A x64 -DFE_BUILD_PLUGIN=ON "-DAE_SDK_DIR=$env:AE_SDK" "-DPR_SDK_DIR=$env:PR_SDK"
           foreach ($t in "FilmEffects", "FilmBloom", "FilmHalation", "FilmGrain") {
             cmake --build build-win --config Release --target $t
             if ($LASTEXITCODE -ne 0) { throw "build of $t failed" }

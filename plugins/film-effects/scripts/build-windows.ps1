@@ -13,7 +13,7 @@ cmake --build build --config Release --target fe_core_tests | Out-Null
 & .\build\Release\fe_core_tests.exe | Select-Object -Last 1
 if ($LASTEXITCODE -ne 0) { throw "core tests failed" }
 
-cmake -S . -B build-win -G "Visual Studio 17 2022" -A x64 -DFE_BUILD_PLUGIN=ON "-DAE_SDK_DIR=$AeSdk" "-DPR_SDK_DIR=$PrSdk"
+cmake -S . -B build-win -A x64 -DFE_BUILD_PLUGIN=ON "-DAE_SDK_DIR=$AeSdk" "-DPR_SDK_DIR=$PrSdk"
 foreach ($t in "FilmEffects", "FilmBloom", "FilmHalation", "FilmGrain") {
   cmake --build build-win --config Release --target $t
   if ($LASTEXITCODE -ne 0) { throw "build of $t failed" }

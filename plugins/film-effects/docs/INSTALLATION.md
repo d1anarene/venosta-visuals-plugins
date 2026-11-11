@@ -31,11 +31,11 @@ the preprocessor define `FE_VARIANT=1` (Bloom), `2` (Halation) or `3` (Grain) to
 the Rez settings.
 
 ## 2b. Build (Windows)
-Requirements: Windows 10/11 x64, Visual Studio 2022 with "Desktop development with C++", CMake 3.20+,
+Requirements: Windows 10/11 x64, Visual Studio 2022 or newer with "Desktop development with C++", CMake 3.20+,
 and the **NVIDIA CUDA Toolkit 12.x** (free, developer.nvidia.com) for GPU acceleration. Without the
 toolkit the build still works and the plugins render on the CPU. The CUDA runtime is linked
 statically, so users only need a normal NVIDIA driver.
-In a **Developer PowerShell for VS 2022**:
+In a **Developer PowerShell for Visual Studio**:
 ```powershell
 cd plugins\film-effects
 .\scripts\build-windows.ps1 "C:\AfterEffectsSDK\Examples" "C:\Premiere Pro SDK"
