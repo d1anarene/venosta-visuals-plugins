@@ -29,8 +29,10 @@ _Last update: 2026-11-11_
 - Updated workflow YAML parses successfully; shell syntax and `git diff --check` pass.
 - Native CI run `43042607974`: Mac and Windows builds passed. Downloaded the generated Mac
   installer: receipt version `1.0.5`, all four bundle versions `1.0.0`, correct destination and
-  valid ad hoc signatures. CPU, Metal and Track Range Exporter CI passed; CUDA setup is being
-  corrected following another Ubuntu DNS failure.
+  valid ad hoc signatures. All six jobs passed on commit `bf00dfd` in CI runs `43043682334` (push) and
+  `43043692491` (PR), including CUDA compilation using NVIDIA-only dependency extraction.
+- User explicitly requests the experimental Windows CPU download for testing at home. Include
+  it in the release, labelled host-unverified; Windows CUDA acceleration is not in that download.
 
 ## Latest build and preview packaging (2026-11-11)
 
