@@ -2,7 +2,8 @@
 //
 // Order (documented in docs/ARCHITECTURE.md):
 //   input -> linearise -> bloom energy (from input) + halation spill (from input) -> back to
-//   working encoding -> grain (encoded domain) -> global mix -> alpha restored.
+//   working encoding -> grain (encoded domain) -> [Film Gate: dust/scratches on the film, weave,
+//   flicker, gate aperture — src/core/gate] -> global mix -> alpha restored.
 // Bloom and halation are both derived from the ORIGINAL input, never from each other, so neither
 // is applied twice and their order does not matter.
 #pragma once

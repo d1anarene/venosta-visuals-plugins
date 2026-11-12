@@ -11,7 +11,7 @@ STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 RELATIVE="Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore"
 mkdir -p "$STAGE/root/$RELATIVE" "$STAGE/scripts"
-for name in FilmEffects FilmBloom FilmHalation FilmGrain; do
+for name in FilmEffects; do
   bundle="$STAGE/root/$RELATIVE/$name.plugin"
   [[ -f "$SOURCE/$name.plugin/Contents/MacOS/$name" ]] || { echo "Missing $name executable" >&2; exit 1; }
   ditto "$SOURCE/$name.plugin" "$bundle"
@@ -45,6 +45,11 @@ for NAME in FilmEffects FilmBloom FilmHalation FilmGrain; do
     /bin/mkdir -p "$BACKUP"
     /usr/bin/ditto "$DEST/$NAME.plugin" "$BACKUP/$NAME.plugin"
   fi
+done
+# Film Bloom / Film Halation / Film Grain were standalone effects until v1.0.11; they are part of
+# Film Effects now. Remove them (backed up above).
+for NAME in FilmBloom FilmHalation FilmGrain; do
+  /bin/rm -rf "$DEST/$NAME.plugin"
 done
 SCRIPT
 chmod 755 "$STAGE/scripts/preinstall"

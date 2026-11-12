@@ -1,6 +1,6 @@
 #!/bin/bash
 # Film Effects installer for macOS. Double-click this file (it sits next to the .plugin bundles).
-# Copies FilmEffects, FilmBloom, FilmHalation and FilmGrain into Adobe's shared plug-in folder,
+# Copies FilmEffects.plugin into Adobe's shared plug-in folder,
 # backs up older copies, and clears the download quarantine flag (unsigned plugins that still
 # carry it are blocked by macOS). Needs your Mac password once.
 set -euo pipefail

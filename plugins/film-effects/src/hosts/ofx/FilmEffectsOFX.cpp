@@ -1,6 +1,7 @@
 // Film Effects — OpenFX plug-in (DaVinci Resolve and other OFX hosts).
 //
-// One bundle, four effects: Film Effects (combined), Film Bloom, Film Halation, Film Grain — the
+// One effect, Film Effects, with every tool in one panel (standalone Bloom/Halation/Grain effects
+// existed until v1.0.11) — the
 // same variants, parameters and core renderer as the Premiere plug-ins (src/core). Built on the
 // BSD-licensed OpenFX C++ Support library (fetched at configure time, see ofx.cmake).
 //
@@ -223,35 +224,20 @@ class FilmEffectsOFX : public OFX::ImageEffect {
     if (!menu) return;
     int choice = 0;
     menu->getValue(choice);  // 0 = "(choose to apply)"
-    const std::vector<std::string> names = splitItems(FE_PRESET_ITEMS);
-    if (choice < 1 || choice >= static_cast<int>(names.size())) return;
-    const fe::Preset* preset = fe::findPreset(names[size_t(choice)]);
+    const char* name = fe::presetMenuName(choice + 1);
+    if (!name || choice < 1) return;
+    const fe::Preset* preset = fe::findPreset(name);
     if (!preset) return;
-    const fe::FilmParams& p = preset->params;
-
-    auto setF = [&](K k, double v) { if (auto* d = typed<OFX::DoubleParam>(k)) d->setValue(v); };
-    auto setB = [&](K k, bool v) { if (auto* b = typed<OFX::BooleanParam>(k)) b->setValue(v); };
-    auto setC = [&](K k, int v) { if (auto* c = typed<OFX::ChoiceParam>(k)) c->setValue(v); };
     beginEditBlock("Apply Film Effects preset");
-    setB(K::BloomEnable, p.bloom.enabled);
-    setF(K::BloomIntensity, p.bloom.intensity);
-    setF(K::BloomThreshold, p.bloom.threshold);
-    setF(K::BloomKnee, p.bloom.knee);
-    setF(K::BloomRadius, p.bloom.radius);
-    setB(K::HalEnable, p.halation.enabled);
-    setF(K::HalIntensity, p.halation.intensity);
-    setF(K::HalThreshold, p.halation.threshold);
-    setF(K::HalRadius, p.halation.radius);
-    setF(K::HalWarmth, p.halation.warmth);
-    setB(K::GrainEnable, p.grain.enabled);
-    setF(K::GrainAmount, p.grain.amount);
-    setF(K::GrainSize, p.grain.size);
-    setF(K::GrainRoughness, p.grain.roughness);
-    setF(K::GrainShadows, p.grain.shadows);
-    setF(K::GrainMidtones, p.grain.midtones);
-    setF(K::GrainHighlights, p.grain.highlights);
-    setC(K::GrainColor, p.grain.color == fe::GrainColor::Color ? 1 : 0);
-    setF(K::GrainChroma, p.grain.chroma);
+    fe::forEachPresetValue(preset->params, [&](K k, double v) {
+      switch (fe::specFor(k).kind) {
+        case fe::ParamKind::Checkbox: if (auto* b = typed<OFX::BooleanParam>(k)) b->setValue(v != 0.0); break;
+        case fe::ParamKind::Popup: if (auto* c = typed<OFX::ChoiceParam>(k)) c->setValue(static_cast<int>(v) - 1); break;
+        case fe::ParamKind::IntSlider: if (auto* n = typed<OFX::IntParam>(k)) n->setValue(static_cast<int>(v)); break;
+        case fe::ParamKind::Float: if (auto* d = typed<OFX::DoubleParam>(k)) d->setValue(v); break;
+        default: break;
+      }
+    });
     menu->setValue(0);
     endEditBlock();
   }
@@ -366,14 +352,9 @@ class FilmEffectsFactory : public OFX::PluginFactoryHelper<FilmEffectsFactory<V>
 namespace OFX {
 namespace Plugin {
 void getPluginIDs(OFX::PluginFactoryArray& ids) {
+  // One effect with every tool. (Standalone Film Bloom / Halation / Grain existed until v1.0.11.)
   static FilmEffectsFactory<0> combined;
-  static FilmEffectsFactory<1> bloom;
-  static FilmEffectsFactory<2> halation;
-  static FilmEffectsFactory<3> grain;
   ids.push_back(&combined);
-  ids.push_back(&bloom);
-  ids.push_back(&halation);
-  ids.push_back(&grain);
 }
 }  // namespace Plugin
 }  // namespace OFX

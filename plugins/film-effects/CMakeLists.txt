@@ -21,6 +21,7 @@ add_library(fe_core STATIC
   src/core/bloom/bloom.cpp
   src/core/halation/halation.cpp
   src/core/grain/grain.cpp
+  src/core/gate/gate.cpp
   src/core/pipeline/pipeline.cpp)
 target_include_directories(fe_core PUBLIC src/core)
 if(NOT MSVC)

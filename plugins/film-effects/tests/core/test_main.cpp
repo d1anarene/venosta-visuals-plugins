@@ -12,6 +12,7 @@
 #include "blur/blur.h"
 #include "color/pixel_io.h"
 #include "common/fe_kernels.h"
+#include "gate/gate.h"
 #include "pipeline/pipeline.h"
 #include "FilmEffectsParams.h"
 
@@ -633,6 +634,173 @@ TEST(hd_and_uhd_frames_process) {
     std::printf("  [info] %dx%d all effects, CPU reference, 1 run: %.0f ms\n", w, h, ms);
     CHECK(allFinite(im));
   }
+}
+
+
+// ---------- Film Gate ----------
+static FilmParams gateOnly() {
+  FilmParams p;
+  p.gate.enabled = true;
+  p.gate.weave = 0.f; p.gate.flicker = 0.f; p.gate.edge = 0.f; p.gate.dust = 0.f; p.gate.scratches = 0.f;
+  return p;
+}
+TEST(gate_enabled_with_all_amounts_zero_is_bit_exact) {
+  Image im = solid(64, 48, 0.4f, 0.5f, 0.6f), ref = im;
+  CHECK(!gateOnly().anyEffectActive());
+  CHECK(process(im, gateOnly(), {}));
+  CHECK(sameImage(im, ref));
+}
+TEST(gate_weave_by_whole_pixels_is_an_exact_shift) {
+  Image film(40, 30);
+  for (int y = 0; y < 30; ++y)
+    for (int x = 0; x < 40; ++x) {
+      float* p = film.at(x, y);
+      p[0] = x * 0.01f; p[1] = y * 0.02f; p[2] = (x * 7 + y * 3) % 11 * 0.05f; p[3] = 1.f;
+    }
+  GateFrame f;
+  f.active = f.doWeave = true;
+  f.dx = 2.f; f.dy = 1.f;
+  Image out = film;
+  applyGate(film, film, out, f, 0, 1.f);
+  bool exact = true;
+  for (int y = 2; y < 28; ++y)
+    for (int x = 3; x < 37; ++x)
+      for (int c = 0; c < 3; ++c) exact = exact && out.at(x, y)[c] == film.at(x - 2, y - 1)[c];
+  CHECK(exact);
+}
+TEST(gate_weave_is_deterministic_bounded_and_mostly_smooth) {
+  GateParams g; g.enabled = true; g.weave = 2.f; g.flicker = 0.f; g.dust = 0.f;
+  const float amp = 2.f * 2160.f / 1080.f;
+  double sumX = 0, sumY = 0, maxStep = 0, meanStep = 0;
+  float prevY = 0;
+  int distinct = 0;
+  for (int t = 0; t < 600; ++t) {
+    GateFrame a = gateFrame(g, 3840, 2160, t), b = gateFrame(g, 3840, 2160, t);
+    CHECK(a.dx == b.dx && a.dy == b.dy);
+    CHECK(std::fabs(a.dx) <= 0.6f * amp + 1e-4f && std::fabs(a.dy) <= amp + 1e-4f);
+    sumX += a.dx; sumY += a.dy;
+    if (t > 0) {
+      double step = std::fabs(a.dy - prevY);
+      maxStep = std::max(maxStep, step);
+      meanStep += step;
+      distinct += a.dy != prevY;
+    }
+    prevY = a.dy;
+  }
+  meanStep /= 599;
+  CHECK(distinct > 590);                  // moves every frame
+  CHECK(std::fabs(sumX / 600) < 0.25 * amp && std::fabs(sumY / 600) < 0.25 * amp);  // centred
+  CHECK(meanStep < 0.45 * amp);            // drift dominates over jitter
+  CHECK(maxStep < 1.2 * amp);
+  // same weave relative to frame height at another resolution
+  GateFrame hd = gateFrame(g, 1920, 1080, 77), uhd = gateFrame(g, 3840, 2160, 77);
+  CHECK_NEAR(uhd.dy, 2.f * hd.dy, 1e-4f);
+}
+TEST(gate_flicker_averages_to_one_and_stays_in_range) {
+  GateParams g; g.enabled = true; g.weave = 0.f; g.dust = 0.f; g.flicker = 1.f;
+  double sum = 0; float lo = 9, hi = 0;
+  for (int t = 0; t < 2000; ++t) {
+    float gain = gateFrame(g, 1920, 1080, t).gain;
+    sum += gain; lo = std::min(lo, gain); hi = std::max(hi, gain);
+  }
+  CHECK(std::fabs(sum / 2000 - 1.0) < 0.02);
+  CHECK(lo >= 0.79f && hi <= 1.21f);
+  CHECK(hi - lo > 0.15f);
+}
+TEST(gate_edge_masks_border_not_centre) {
+  CHECK(fe_gate_mask(960, 540, 1920, 1080, 30, 5, 40) == 1.f);
+  CHECK(fe_gate_mask(0, 0, 1920, 1080, 30, 5, 40) == 0.f);
+  CHECK(fe_gate_mask(10, 540, 1920, 1080, 30, 5, 40) == 0.f);
+  float a = fe_gate_mask(24, 540, 1920, 1080, 30, 5, 40), b = fe_gate_mask(30, 540, 1920, 1080, 30, 5, 40),
+        c = fe_gate_mask(36, 540, 1920, 1080, 30, 5, 40);
+  CHECK(a < b && b < c);  // soft, monotonic ramp
+  FilmParams p = gateOnly(); p.gate.edge = 3.f;
+  Image im = solid(320, 180, 0.5f, 0.5f, 0.5f);
+  CHECK(process(im, p, {}));
+  CHECK(im.at(0, 0)[0] == 0.f && im.at(160, 90)[0] == 0.5f);
+  CHECK(im.at(0, 0)[3] == 1.f);  // alpha untouched
+}
+static void dustStats(DefectLook look, int& darker, int& brighter, int n) {
+  FilmParams p = gateOnly(); p.gate.dust = 1.f; p.gate.look = look;
+  darker = brighter = 0;
+  for (int t = 0; t < n; ++t) {
+    Image im = solid(480, 270, 0.4f, 0.4f, 0.4f);
+    CHECK(process(im, p, RenderContext{t}));
+    for (int i = 0; i < 480 * 270; ++i) {
+      darker += im.px[i * 4] < 0.4f - 1e-4f;
+      brighter += im.px[i * 4] > 0.4f + 1e-4f;
+    }
+  }
+}
+TEST(gate_dust_dark_light_and_mixed) {
+  int d, b;
+  dustStats(DefectLook::Dark, d, b, 4);
+  CHECK(d > 0 && b == 0);
+  const double frac = d / (4.0 * 480 * 270);
+  CHECK(frac > 0.0005 && frac < 0.05);  // specks, not a veil
+  dustStats(DefectLook::Light, d, b, 4);
+  CHECK(b > 0 && d == 0);
+  dustStats(DefectLook::Mixed, d, b, 4);
+  CHECK(b > 0 && d > 0);
+}
+TEST(gate_dust_changes_every_frame_and_is_reproducible) {
+  FilmParams p = gateOnly(); p.gate.dust = 0.6f;
+  Image a = solid(320, 180, 0.5f, 0.5f, 0.5f), b = a, c = a;
+  process(a, p, RenderContext{10}); process(b, p, RenderContext{10}); process(c, p, RenderContext{11});
+  CHECK(sameImage(a, b));
+  CHECK(!sameImage(a, c));
+}
+TEST(gate_scratches_are_vertical_lines_that_persist) {
+  GateParams g; g.enabled = true; g.weave = 0.f; g.flicker = 0.f; g.dust = 0.f; g.scratches = 1.f;
+  int framesWith = 0, persisted = 0;
+  for (int t = 0; t < 200; ++t) {
+    GateFrame f = gateFrame(g, 1920, 1080, t), n = gateFrame(g, 1920, 1080, t + 1);
+    if (f.scratchCount > 0) ++framesWith;
+    if (f.scratchCount > 0 && n.scratchCount > 0 && std::fabs(f.scratches[0].x0 - n.scratches[0].x0) < 5.f) ++persisted;
+  }
+  CHECK(framesWith > 100);
+  CHECK(persisted > framesWith / 2);
+  // Darkening concentrated in a few columns.
+  FilmParams p = gateOnly(); p.gate.scratches = 1.f;
+  int t = 0;
+  while (gateFrame(p.gate, 400, 300, t).scratchCount == 0) ++t;
+  Image im = solid(400, 300, 0.5f, 0.5f, 0.5f);
+  process(im, p, RenderContext{t});
+  int columns = 0;
+  for (int x = 0; x < 400; ++x) {
+    int hit = 0;
+    for (int y = 0; y < 300; ++y) hit += im.at(x, y)[0] < 0.499f;
+    columns += hit > 60;
+  }
+  CHECK(columns >= 1 && columns < 40);
+}
+TEST(gate_respects_mix_alpha_and_transparency) {
+  FilmParams p = gateOnly(); p.gate.edge = 5.f; p.mix = 0.5f;
+  Image im = solid(200, 100, 0.5f, 0.5f, 0.5f, 0.7f);
+  for (int x = 0; x < 200; ++x) im.at(x, 50)[3] = 0.f;
+  Image ref = im;
+  process(im, p, {});
+  CHECK_NEAR(im.at(0, 0)[0], 0.25f, 1e-6f);  // half way to black
+  CHECK(im.at(0, 0)[3] == 0.7f);
+  CHECK(std::memcmp(im.at(0, 50), ref.at(0, 50), 16) == 0);
+}
+TEST(gate_old_projector_preset_is_finite_everywhere) {
+  const Preset* pr = findPreset("Old Projector");
+  CHECK(pr && pr->params.gate.anyActive());
+  for (int t = 0; t < 5; ++t) {
+    Image im = solid(257, 131, 0.6f, 0.5f, 0.4f);
+    rect(im, 100, 40, 140, 80, 4.f, 4.f, 4.f);
+    CHECK(process(im, pr->params, RenderContext{t}));
+    CHECK(allFinite(im));
+  }
+  CHECK(std::string(presetMenuName(FE_PRESET_COUNT)) == "Old Projector");
+}
+TEST(gate_preset_values_cover_every_gate_control) {
+  int gateKeys = 0;
+  forEachPresetValue(FilmParams{}, [&](ParamKey k, double) {
+    gateKeys += static_cast<int>(k) >= static_cast<int>(ParamKey::GateEnable) && static_cast<int>(k) <= static_cast<int>(ParamKey::GateLook);
+  });
+  CHECK(gateKeys == 9);
 }
 
 int main(int argc, char** argv) {

@@ -72,10 +72,11 @@ endif()
 
 set(FE_PIPL_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/hosts/premiere/FilmEffectsPiPL.r)
 
-# Premiere loads one effect (PiPL) per binary, so each variant is its own plugin built from the
-# same sources: 0 = Film Effects (combined), 1 = Film Bloom, 2 = Film Halation, 3 = Film Grain.
-set(FE_VARIANT_NAMES FilmEffects FilmBloom FilmHalation FilmGrain)
-foreach(variant RANGE 3)
+# One effect: Film Effects (all tools in one panel). The standalone Film Bloom / Film Halation /
+# Film Grain effects (FE_VARIANT 1..3) were dropped in 2026-11 at the owner's request; the
+# variant switch is kept in the sources so their parameter tables stay testable.
+set(FE_VARIANT_NAMES FilmEffects)
+foreach(variant RANGE 0)
   list(GET FE_VARIANT_NAMES ${variant} bundle)
   set(gen ${CMAKE_CURRENT_BINARY_DIR}/${bundle})
   file(MAKE_DIRECTORY ${gen})

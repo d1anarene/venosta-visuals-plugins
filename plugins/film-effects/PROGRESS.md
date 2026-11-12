@@ -2,6 +2,21 @@
 
 _Last update: 2026-11-11_
 
+## Film Gate + one effect (2026-11-12)
+
+- Owner: one Film Effects panel instead of separate effects; standalone Film Bloom / Halation /
+  Grain retired (Premiere + Resolve); installers remove the old files (Windows CI tests it).
+- **Film Gate** section added (`src/core/gate`, shared per-pixel maths in `fe_kernels.h`): gate
+  weave (Catmull-Rom, exact for whole-pixel offsets), flicker, rounded soft gate aperture, dust
+  (hashed grid, 3x3 cells) and persistent vertical scratches; dark/light/mixed look; own seed.
+  New preset "Old Projector" (appended; menu values stay stable). Presets are applied through one
+  shared list (`forEachPresetValue`) in Premiere and Resolve.
+- Tests: 11 new core tests (21,228 checks pass locally); GPU emulation compares the gate path
+  with the CPU reference in Premiere and OpenFX layouts (exact; breaking the bottom-up row mapping
+  fails 8 cases). CUDA kernels and the Metal shader/engine got the same two passes; they are
+  compiled and compared on CI (Metal vs CPU runs every preset, including Old Projector).
+- Not yet seen in Premiere/Resolve.
+
 ## Windows on Arm (2026-11-12)
 
 - User: Premiere supports Windows on Arm since 26.0. Premiere: new CI build `win-arm64` on a

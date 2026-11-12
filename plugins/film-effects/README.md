@@ -4,15 +4,14 @@ Native Premiere Pro video effects with three film-finishing tools — **Bloom**,
 **Film Grain** — made to sit after Lumetri Color on a clip, or on an adjustment layer above your
 graded timeline.
 
-Four effects are installed under **Venosta Visuals**:
-- **Film Effects** — all three tools in one effect, each with its own on/off switch, plus presets
-- **Film Bloom**, **Film Halation**, **Film Grain** — each tool on its own, when you only need one
-
-They share the same processing code, so Film Grain looks exactly like Film Effects with only
-Grain switched on.
+One effect is installed under **Venosta Visuals**: **Film Effects** — every tool in one panel,
+each with its own on/off switch, plus presets. (Until v1.0.11 there were also standalone Film
+Bloom / Film Halation / Film Grain effects; they are now part of Film Effects, and the installers
+remove the old files. Projects that used the standalone effects show them as missing — replace
+them with Film Effects.)
 
 > **Status: first Mac release — user-tested in Premiere Pro 27 on Apple Silicon.**
-> All four effects appear in Premiere and the user reports satisfactory operation. CPU tests on
+> The effects appeared in Premiere and the user reports satisfactory operation. CPU tests on
 > Linux/macOS/Windows and the Metal GPU comparison pass in CI. Export matching, long timeline
 > stability, HDR workflows, performance measurements and Windows host operation remain unverified.
 > Free and provided without warranty — see the [root README](../../README.md#️-no-guarantee).
@@ -21,7 +20,7 @@ Downloads will also be available at [venostavisuals.com](https://venostavisuals.
 
 ### DaVinci Resolve (OpenFX) — experimental
 
-The same four effects are also built as an **OpenFX plug-in for DaVinci Resolve** (Windows,
+The same effect is also built as an **OpenFX plug-in for DaVinci Resolve** (Windows,
 macOS, Linux), with the same parameters, presets and rendering code. Releases include
 `FilmEffects-Resolve-Windows-Setup-<version>.exe`, `FilmEffects-Resolve-mac-<version>.pkg` and
 `FilmEffects-Resolve-linux-<version>.tar.gz`. After installing, restart Resolve. The effects are in
@@ -49,18 +48,19 @@ certificates; the full source is public): allow them in System Settings → Priv
 | **Bloom** | Soft, multi-scale glow from highlights that keeps each light's colour | Intensity, Threshold, Soft Knee, Radius (% of frame height) |
 | **Halation** | Warm red/orange fringe just outside bright edges (windows, lamps, neon) — not a red wash | Intensity, Threshold, Radius, Warmth |
 | **Film Grain** | Organic, clumped grain that follows the image's tones, changes every frame and is identical every time you render the same frame | Amount, Size, Roughness, Shadow/Midtone/Highlight response, Luma/Color, Seed, Animate |
+| **Film Gate** | The film in a projector gate: gate weave (the image wobbles slightly), lamp flicker, dust specks and vertical scratches that move with the film, and a soft rounded gate edge | Gate Weave, Flicker, Gate Edge, Edge Softness, Corner Roundness, Dust, Scratches, Dust & Scratch Look (dark print / light negative / mixed), Gate Seed |
 
 Global: Master Enable, Global Mix, Working Space (Rec.709 gamma 2.4 / sRGB / Linear), Processing
 Quality. Presets: *Subtle Film, Soft Highlight Glow, Night Lights, Fine 35mm Grain, Coarse 16mm
-Grain, Halation Only, Off* — choosing one fills in the normal parameters, which you can then tweak
+Grain, Halation Only, Off, Old Projector* — choosing one fills in the normal parameters, which you can then tweak
 and keyframe.
 
 ## Install
 
 Download `FilmEffects-Premiere-mac-v*.pkg` from the repository's
 [Releases page](https://github.com/d1anarene/venosta-visuals-plugins/releases).
-Quit Premiere, double-click the `.pkg`, then restart Premiere. It installs Film Effects,
-Film Bloom, Film Halation and Film Grain for Apple Silicon and Intel. Requires **macOS 26+**.
+Quit Premiere, double-click the `.pkg`, then restart Premiere. It installs Film Effects for
+Apple Silicon and Intel. Requires **macOS 26+**.
 Existing bundles are backed up under `/Library/Application Support/Venosta Visuals/Backups/`.
 The installer is unsigned, its bundles are ad hoc signed, and it is not Apple-notarized. If macOS
 blocks it, use System Settings → Privacy & Security to review and allow this installer.
@@ -83,8 +83,7 @@ After installing and restarting Premiere: **Effects → Video Effects → Venost
 
 1. Grade your clips with Lumetri as usual.
 2. Add an **Adjustment Layer** above the graded clips (or apply the effect after Lumetri on a clip).
-3. Drag **Film Effects** onto it, pick a preset, then adjust Bloom / Halation / Grain
-   (or use Film Bloom / Film Halation / Film Grain on their own).
+3. Drag **Film Effects** onto it, pick a preset, then adjust Bloom / Halation / Grain.
 4. Effects above it in the stack see the result; effects below it feed into it. On an adjustment
    layer it processes everything visible beneath it.
 

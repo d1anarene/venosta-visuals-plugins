@@ -62,6 +62,21 @@ struct EmuBackend {
       else pxComposite(static_cast<const F4*>(src), static_cast<F4*>(dst), lin, bloom, hn, hf, hs, ci, x, y);
     });
   }
+  void compositeFilm(const void* src, bool half, Buf film, Buf lin, Buf bloom, Buf hn, Buf hf, Buf hs,
+                     const CompositeInfo& ci) {
+    grid(ci.width, ci.height, [&](uint32_t x, uint32_t y) {
+      if (half) pxCompositeFilm(static_cast<const H4*>(src), film, lin, bloom, hn, hf, hs, ci, x, y);
+      else pxCompositeFilm(static_cast<const F4*>(src), film, lin, bloom, hn, hf, hs, ci, x, y);
+    });
+  }
+  void gate(const void* src, void* dst, bool half, Buf film, const GateInfo& g) {
+    // Write to a separate buffer first: src and dst may be the same (in place), and the gate reads
+    // only `film` and its own source pixel, exactly like the GPU kernel.
+    grid(g.width, g.height, [&](uint32_t x, uint32_t y) {
+      if (half) pxGate(static_cast<const H4*>(src), static_cast<H4*>(dst), film, g, x, y);
+      else pxGate(static_cast<const F4*>(src), static_cast<F4*>(dst), film, g, x, y);
+    });
+  }
 };
 
 int failures = 0;

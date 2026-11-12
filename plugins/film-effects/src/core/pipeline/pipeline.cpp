@@ -4,6 +4,7 @@
 
 #include "../common/fe_kernels.h"
 #include "../common/parallel.h"
+#include "../gate/gate.h"
 
 namespace fe {
 
@@ -38,13 +39,18 @@ bool process(Image& img, const FilmParams& raw, const RenderContext& ctx, Layers
   // variance of area-averaged grain drops; approximate that instead of aliasing to white noise.
   const float sizePx = g.size * img.height / 1080.0f;
   const float footprint = sizePx < 1.0f ? sizePx : 1.0f;
-  const float mix = p.mix;
+  // Film Gate needs the finished film image as a separate buffer (the weave samples neighbours);
+  // the gate pass then mixes against the untouched source. Without it: one in-place pass.
+  const GateFrame gate = gateFrame(p.gate, img.width, img.height, ctx.frameKey);
+  Image filmCopy;
+  if (gate.active) filmCopy = img;
+  Image& film = gate.active ? filmCopy : img;
+  const float mix = gate.active ? 1.0f : p.mix;
 
-  // Single per-pixel pass, in place: each pixel's original value is read before it is written,
-  // so no copy of the frame is needed.
+  // Per-pixel pass, in place on `film`: each pixel's original value is read before it is written.
   parallelRows(img.height, [&](int y) {
     for (int x = 0; x < img.width; ++x) {
-      float* px = img.at(x, y);
+      float* px = film.at(x, y);
       const size_t i = static_cast<size_t>(y) * img.width + x;
       const float orig[4] = {px[0], px[1], px[2], px[3]};
       if (orig[3] <= 0.0f) continue;  // never invent colour where the layer is fully transparent
@@ -74,6 +80,8 @@ bool process(Image& img, const FilmParams& raw, const RenderContext& ctx, Layers
       }
     }
   });
+
+  if (gate.active) applyGate(film, img, img, gate, sp, p.mix);
 
   if (debug) {
     debug->bloomAdd = std::move(bloom);

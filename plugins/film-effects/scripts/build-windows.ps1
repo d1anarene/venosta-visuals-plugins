@@ -14,7 +14,7 @@ cmake --build build --config Release --target fe_core_tests | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "core tests failed" }
 
 cmake -S . -B build-win -A x64 -DFE_BUILD_PLUGIN=ON "-DAE_SDK_DIR=$AeSdk" "-DPR_SDK_DIR=$PrSdk"
-foreach ($t in "FilmEffects", "FilmBloom", "FilmHalation", "FilmGrain") {
+foreach ($t in "FilmEffects") {
   cmake --build build-win --config Release --target $t
   if ($LASTEXITCODE -ne 0) { throw "build of $t failed" }
 }

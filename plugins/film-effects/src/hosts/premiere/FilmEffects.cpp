@@ -117,44 +117,27 @@ PF_Err UserChangedParam(PF_InData* in_data, PF_OutData* out_data, PF_ParamDef* p
   using K = fe::ParamKey;
   if (kVariant != fe::Variant::Combined || extra->param_index != idx(K::Preset)) return PF_Err_NONE;
   const int choice = params[idx(K::Preset)]->u.pd.value;  // 1 = "(choose to apply)"
-  static const char* kNames[] = {nullptr, "Subtle Film", "Soft Highlight Glow", "Night Lights", "Fine 35mm Grain",
-                                 "Coarse 16mm Grain", "Halation Only", "Off"};
-  if (choice < 2 || choice > FE_PRESET_COUNT) return PF_Err_NONE;
-  const fe::Preset* preset = fe::findPreset(kNames[choice - 1]);
+  const char* name = fe::presetMenuName(choice);
+  if (!name || choice < 2) return PF_Err_NONE;
+  const fe::Preset* preset = fe::findPreset(name);
   if (!preset) return PF_Err_NONE;
-  const fe::FilmParams& p = preset->params;
 
-  auto setF = [&](K k, double v) {
-    params[idx(k)]->u.fs_d.value = v;
-    params[idx(k)]->uu.change_flags = PF_ChangeFlag_CHANGED_VALUE;
-  };
-  auto setB = [&](K k, bool v) {
-    params[idx(k)]->u.bd.value = v ? 1 : 0;
-    params[idx(k)]->uu.change_flags = PF_ChangeFlag_CHANGED_VALUE;
-  };
   auto setP = [&](K k, int v) {
     params[idx(k)]->u.pd.value = v;
     params[idx(k)]->uu.change_flags = PF_ChangeFlag_CHANGED_VALUE;
   };
-  setB(K::BloomEnable, p.bloom.enabled);
-  setF(K::BloomIntensity, p.bloom.intensity);
-  setF(K::BloomThreshold, p.bloom.threshold);
-  setF(K::BloomKnee, p.bloom.knee);
-  setF(K::BloomRadius, p.bloom.radius);
-  setB(K::HalEnable, p.halation.enabled);
-  setF(K::HalIntensity, p.halation.intensity);
-  setF(K::HalThreshold, p.halation.threshold);
-  setF(K::HalRadius, p.halation.radius);
-  setF(K::HalWarmth, p.halation.warmth);
-  setB(K::GrainEnable, p.grain.enabled);
-  setF(K::GrainAmount, p.grain.amount);
-  setF(K::GrainSize, p.grain.size);
-  setF(K::GrainRoughness, p.grain.roughness);
-  setF(K::GrainShadows, p.grain.shadows);
-  setF(K::GrainMidtones, p.grain.midtones);
-  setF(K::GrainHighlights, p.grain.highlights);
-  setP(K::GrainColor, p.grain.color == fe::GrainColor::Color ? 2 : 1);
-  setF(K::GrainChroma, p.grain.chroma);
+  fe::forEachPresetValue(preset->params, [&](K k, double v) {
+    const int i = idx(k);
+    if (i < 0) return;
+    switch (fe::specFor(k).kind) {
+      case fe::ParamKind::Checkbox: params[i]->u.bd.value = v != 0.0 ? 1 : 0; break;
+      case fe::ParamKind::Popup: params[i]->u.pd.value = static_cast<A_long>(v); break;
+      case fe::ParamKind::IntSlider: params[i]->u.sd.value = static_cast<A_long>(v); break;
+      case fe::ParamKind::Float: params[i]->u.fs_d.value = v; break;
+      default: return;
+    }
+    params[i]->uu.change_flags = PF_ChangeFlag_CHANGED_VALUE;
+  });
   setP(K::Preset, 1);
   out_data->out_flags |= PF_OutFlag_FORCE_RERENDER | PF_OutFlag_REFRESH_UI;
   return PF_Err_NONE;

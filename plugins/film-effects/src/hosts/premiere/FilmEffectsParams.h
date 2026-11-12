@@ -47,6 +47,18 @@ enum class ParamKey : int {
   GrainSeed,
   GrainAnimate,
   GrainGroupEnd,
+  GateGroup,
+  GateEnable,
+  GateWeave,
+  GateFlicker,
+  GateEdge,
+  GateEdgeSoftness,
+  GateEdgeRoundness,
+  GateDust,
+  GateScratches,
+  GateLook,
+  GateSeed,
+  GateGroupEnd,
   Count
 };
 
@@ -67,9 +79,10 @@ struct ParamSpec {
   bool startCollapsed = false;  // groups
 };
 
+// Append only: the chosen index is saved in projects.
 #define FE_PRESET_ITEMS \
-  "(choose to apply)|Subtle Film|Soft Highlight Glow|Night Lights|Fine 35mm Grain|Coarse 16mm Grain|Halation Only|Off"
-#define FE_PRESET_COUNT 8
+  "(choose to apply)|Subtle Film|Soft Highlight Glow|Night Lights|Fine 35mm Grain|Coarse 16mm Grain|Halation Only|Off|Old Projector"
+#define FE_PRESET_COUNT 9
 
 /** Every control, with defaults taken from the core's FilmParams. */
 inline const std::vector<ParamSpec>& allParams() {
@@ -119,6 +132,20 @@ inline const std::vector<ParamSpec>& allParams() {
     add({K::GrainSeed, T::IntSlider, "Seed", 30, 0, 99999, 0, 999, double(d.grain.seed), 0});
     s = {K::GrainAnimate, T::Checkbox, "Animate", 31}; s.dflt = d.grain.animate; add(s);
     add({K::GrainGroupEnd, T::GroupEnd, "", 32});
+
+    s = {K::GateGroup, T::GroupStart, "Film Gate", 33}; s.startCollapsed = true; add(s);
+    s = {K::GateEnable, T::Checkbox, "Gate Enable", 34}; s.dflt = d.gate.enabled; add(s);
+    add({K::GateWeave, T::Float, "Gate Weave (px @1080)", 35, 0, 10, 0, 4, d.gate.weave});
+    add({K::GateFlicker, T::Float, "Flicker", 36, 0, 1, 0, 1, d.gate.flicker});
+    add({K::GateEdge, T::Float, "Gate Edge (% of height)", 37, 0, 15, 0, 8, d.gate.edge, 1});
+    add({K::GateEdgeSoftness, T::Float, "Edge Softness", 38, 0, 1, 0, 1, d.gate.edgeSoftness});
+    add({K::GateEdgeRoundness, T::Float, "Corner Roundness", 39, 0, 1, 0, 1, d.gate.edgeRoundness});
+    add({K::GateDust, T::Float, "Dust", 40, 0, 1, 0, 1, d.gate.dust});
+    add({K::GateScratches, T::Float, "Scratches", 41, 0, 1, 0, 1, d.gate.scratches});
+    s = {K::GateLook, T::Popup, "Dust & Scratch Look", 42};
+    s.items = "Dark (print)|Light (negative)|Mixed"; s.itemCount = 3; s.dflt = 1; add(s);
+    add({K::GateSeed, T::IntSlider, "Gate Seed", 43, 0, 99999, 0, 999, double(d.gate.seed), 0});
+    add({K::GateGroupEnd, T::GroupEnd, "", 44});
     return v;
   }();
   return specs;
@@ -208,7 +235,61 @@ inline FilmParams readParams(const ParamReader& r, Variant v = Variant::Combined
   p.grain.chroma = static_cast<float>(num(K::GrainChroma));
   p.grain.seed = static_cast<int32_t>(num(K::GrainSeed));
   p.grain.animate = flag(K::GrainAnimate, true);
+  p.gate.enabled = flag(K::GateEnable, false);
+  p.gate.weave = static_cast<float>(num(K::GateWeave));
+  p.gate.flicker = static_cast<float>(num(K::GateFlicker));
+  p.gate.edge = static_cast<float>(num(K::GateEdge));
+  p.gate.edgeSoftness = static_cast<float>(num(K::GateEdgeSoftness));
+  p.gate.edgeRoundness = static_cast<float>(num(K::GateEdgeRoundness));
+  p.gate.dust = static_cast<float>(num(K::GateDust));
+  p.gate.scratches = static_cast<float>(num(K::GateScratches));
+  p.gate.look = static_cast<DefectLook>(pop(K::GateLook) - 1);
+  p.gate.seed = static_cast<int32_t>(num(K::GateSeed));
   return sanitized(p);
+}
+
+/** Preset name for a 1-based "Preset" menu value; nullptr for "(choose to apply)" or out of range. */
+inline const char* presetMenuName(int value1Based) {
+  static const char* kNames[] = {nullptr,           "Subtle Film",       "Soft Highlight Glow", "Night Lights",
+                                 "Fine 35mm Grain", "Coarse 16mm Grain", "Halation Only",       "Off",
+                                 "Old Projector"};
+  static_assert(sizeof(kNames) / sizeof(kNames[0]) == FE_PRESET_COUNT, "preset menu and names out of sync");
+  return value1Based >= 1 && value1Based <= FE_PRESET_COUNT ? kNames[value1Based - 1] : nullptr;
+}
+
+/** Every control a preset sets, as (key, value): numbers as is, checkboxes 0/1, popups 1-based.
+ *  Host adapters write these into their parameters, so presets behave the same everywhere. */
+template <typename F>
+inline void forEachPresetValue(const FilmParams& p, F&& set) {
+  using K = ParamKey;
+  set(K::BloomEnable, p.bloom.enabled ? 1.0 : 0.0);
+  set(K::BloomIntensity, p.bloom.intensity);
+  set(K::BloomThreshold, p.bloom.threshold);
+  set(K::BloomKnee, p.bloom.knee);
+  set(K::BloomRadius, p.bloom.radius);
+  set(K::HalEnable, p.halation.enabled ? 1.0 : 0.0);
+  set(K::HalIntensity, p.halation.intensity);
+  set(K::HalThreshold, p.halation.threshold);
+  set(K::HalRadius, p.halation.radius);
+  set(K::HalWarmth, p.halation.warmth);
+  set(K::GrainEnable, p.grain.enabled ? 1.0 : 0.0);
+  set(K::GrainAmount, p.grain.amount);
+  set(K::GrainSize, p.grain.size);
+  set(K::GrainRoughness, p.grain.roughness);
+  set(K::GrainShadows, p.grain.shadows);
+  set(K::GrainMidtones, p.grain.midtones);
+  set(K::GrainHighlights, p.grain.highlights);
+  set(K::GrainColor, p.grain.color == GrainColor::Color ? 2.0 : 1.0);
+  set(K::GrainChroma, p.grain.chroma);
+  set(K::GateEnable, p.gate.enabled ? 1.0 : 0.0);
+  set(K::GateWeave, p.gate.weave);
+  set(K::GateFlicker, p.gate.flicker);
+  set(K::GateEdge, p.gate.edge);
+  set(K::GateEdgeSoftness, p.gate.edgeSoftness);
+  set(K::GateEdgeRoundness, p.gate.edgeRoundness);
+  set(K::GateDust, p.gate.dust);
+  set(K::GateScratches, p.gate.scratches);
+  set(K::GateLook, static_cast<double>(static_cast<int>(p.gate.look) + 1));
 }
 
 /** Stable per-frame grain key from a host time and frame duration (same units). Exact frame index

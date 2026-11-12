@@ -1,5 +1,5 @@
 // Loads FilmEffects.ofx the way an OFX host does (dlopen / LoadLibrary), then checks the two
-// OpenFX entry points and that the four effects are exported with the expected identifiers.
+// OpenFX entry points and that Film Effects is exported with the expected identifier.
 // Does not render: rendering is covered by the core tests; host behaviour needs DaVinci Resolve.
 #include <cstdio>
 #include <cstring>
@@ -34,10 +34,9 @@ int main(int argc, char** argv) {
   auto count = reinterpret_cast<CountFn>(sym(lib, "OfxGetNumberOfPlugins"));
   auto get = reinterpret_cast<GetFn>(sym(lib, "OfxGetPlugin"));
   if (!count || !get) { std::fprintf(stderr, "OFX entry points missing\n"); return 1; }
-  const char* expected[] = {"com.venostavisuals.FilmEffects", "com.venostavisuals.FilmBloom",
-                            "com.venostavisuals.FilmHalation", "com.venostavisuals.FilmGrain"};
+  const char* expected[] = {"com.venostavisuals.FilmEffects"};
   const int n = count();
-  if (n != 4) { std::fprintf(stderr, "expected 4 plug-ins, got %d\n", n); return 1; }
+  if (n != 1) { std::fprintf(stderr, "expected 1 plug-in, got %d\n", n); return 1; }
   int failures = 0;
   for (int i = 0; i < n; ++i) {
     OfxPlugin* p = get(i);
