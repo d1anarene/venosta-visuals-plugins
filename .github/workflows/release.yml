@@ -20,8 +20,11 @@ jobs:
   exposure-false-color:
     uses: ./.github/workflows/exposure-false-color.yml
     secrets: inherit
+  retro:
+    uses: ./.github/workflows/retro.yml
+    secrets: inherit
   release:
-    needs: [film-effects, lens-diffusion, exposure-false-color]
+    needs: [film-effects, lens-diffusion, exposure-false-color, retro]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,6 +88,10 @@ jobs:
 
           ### Exposure & False Color — new, experimental (viewing aid)
           - \`ExposureFalseColor-Premiere-…\` and \`ExposureFalseColor-Resolve-…\` downloads: false color in stops from middle grey (with legend), zebras, clipping, split view. **Turn it off before exporting** — an effect cannot know it is being exported.
+          - Metal / CUDA / CPU. Built, loaded and installer-tested in CI, GPU checked against the CPU reference; **not yet tested inside Premiere or Resolve**.
+
+          ### Retro — new, experimental
+          - \`Retro-Premiere-…\` and \`Retro-Resolve-…\` downloads: analog video look in one effect — color bleed (soft luma with ringing, smeared and shifted chroma), tape (line jitter, rolling tracking band, dropouts, head switching), noise, CRT (scanlines, aperture grille / shadow mask, screen curvature). Presets: Home Video Tape, Worn Tape, Broadcast 80s, CRT Monitor, Subtle Analog.
           - Metal / CUDA / CPU. Built, loaded and installer-tested in CI, GPU checked against the CPU reference; **not yet tested inside Premiere or Resolve**.
 
           ### Film Effects for DaVinci Resolve (OpenFX) — experimental

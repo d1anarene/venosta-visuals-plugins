@@ -20,6 +20,8 @@ delivery. More plugins (and possibly other Adobe apps) will follow.
 | [Film Effects](plugins/film-effects/README.md) | Native video effect with **Bloom**, **Halation**, **Film Grain** and **Film Gate** (weave, flicker, dust, scratches, gate edge) in one panel — designed to sit after Lumetri or on an adjustment layer. | **Host-tested on macOS** — user-tested in Premiere Pro 27 on Apple Silicon; CPU tests and Metal comparison pass in CI. Mac installer available in releases (macOS 26+); Windows Setup.exe (CUDA + CPU fallback) experimental. **DaVinci Resolve (OpenFX) version** — user-tested in Resolve on macOS; Windows (CUDA) and Linux not yet tested in Resolve |
 | [Lens & Diffusion](plugins/lens-diffusion/README.md) | Optical finishing in one effect: **diffusion filter** (mist to black-mist look), **vignette**, **chromatic aberration** and **anamorphic streaks**, for Premiere Pro and DaVinci Resolve. | **New, experimental** — CPU + Metal / CUDA rendering; built and installer-tested in CI; not yet tested in Premiere or Resolve |
 | [Exposure & False Color](plugins/exposure-false-color/README.md) | Exposure **viewing aid**: false color in stops from middle grey (with legend), zebras, clipping and a split view — switch it off before export. Premiere Pro and DaVinci Resolve. | **New, experimental** — CPU + Metal / CUDA; built and installer-tested in CI; not yet tested in Premiere or Resolve |
+| [Retro](plugins/retro/README.md) | Analog video look in one effect: **color bleed** (soft luma, ringing, smeared and shifted chroma), **tape** (line jitter, tracking band, dropouts, head switching), **noise** and **CRT** (scanlines, RGB mask, screen curvature). Premiere Pro and DaVinci Resolve. | **New, experimental** — CPU + Metal / CUDA; GPU checked against the CPU reference; not yet tested in Premiere or Resolve |
+| [Denoise](plugins/denoise/README.md) | Detail-preserving video noise reduction: measured noise profile, motion-compensated temporal + spatial filtering, fast Preview mode for editing and full Final mode for rendering. | **Planning / research** — no build yet |
 
 Each plugin folder has its own README with installation steps, usage and known limitations.
 Planned next: Retro, Denoise and Retime — see
@@ -62,6 +64,12 @@ cd plugins/track-range-exporter && npm install && npm test
 
 ```bash
 cd plugins/film-effects && ./scripts/run-core-tests.sh
+```
+
+The plugins on the shared engine (Lens & Diffusion, Exposure & False Color, Retro) use CMake/CTest:
+
+```bash
+cd plugins/retro && cmake -S . -B build && cmake --build build && ctest --test-dir build
 ```
 
 Build the DaVinci Resolve (OpenFX) plug-in (any OS, no Adobe SDK needed):

@@ -1,0 +1,37 @@
+name: retro
+# Retro for Premiere Pro and DaVinci Resolve, via the shared workflows.
+on:
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      ADOBE_SDK_TOKEN: { required: false }
+      ADBE_SDK_TOKEN: { required: false }
+permissions:
+  contents: read
+jobs:
+  premiere:
+    uses: ./.github/workflows/vv-premiere.yml
+    secrets: inherit
+    with:
+      plugin: retro
+      binary: Retro
+      name: Retro
+      cmake_flags: -DRT_BUILD_PLUGIN=ON
+      cuda: true
+      metal: true
+      mac_pkg_id: com.venostavisuals.retro
+      iss: plugins/retro/installer/windows/Retro.iss
+  resolve:
+    uses: ./.github/workflows/vv-ofx.yml
+    with:
+      plugin: retro
+      bundle: Retro
+      name: Retro
+      ofx_id: com.venostavisuals.Retro
+      cmake_flags: -DRT_BUILD_OFX=ON
+      cuda: true
+      metal: true
+      mac_pkg_id: com.venostavisuals.retro.resolve
+      iss: plugins/retro/installer/windows/RetroResolve.iss
