@@ -1,0 +1,37 @@
+name: exposure-false-color
+# Exposure & False Color for Premiere Pro and DaVinci Resolve, via the shared workflows.
+on:
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      ADOBE_SDK_TOKEN: { required: false }
+      ADBE_SDK_TOKEN: { required: false }
+permissions:
+  contents: read
+jobs:
+  premiere:
+    uses: ./.github/workflows/vv-premiere.yml
+    secrets: inherit
+    with:
+      plugin: exposure-false-color
+      binary: ExposureFalseColor
+      name: Exposure & False Color
+      cmake_flags: -DEF_BUILD_PLUGIN=ON
+      cuda: true
+      metal: true
+      mac_pkg_id: com.venostavisuals.exposurefalsecolor
+      iss: plugins/exposure-false-color/installer/windows/ExposureFalseColor.iss
+  resolve:
+    uses: ./.github/workflows/vv-ofx.yml
+    with:
+      plugin: exposure-false-color
+      bundle: ExposureFalseColor
+      name: Exposure & False Color
+      ofx_id: com.venostavisuals.ExposureFalseColor
+      cmake_flags: -DEF_BUILD_OFX=ON
+      cuda: true
+      metal: true
+      mac_pkg_id: com.venostavisuals.exposurefalsecolor.resolve
+      iss: plugins/exposure-false-color/installer/windows/ExposureFalseColorResolve.iss

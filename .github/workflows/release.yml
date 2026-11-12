@@ -17,8 +17,11 @@ jobs:
   lens-diffusion:
     uses: ./.github/workflows/lens-diffusion.yml
     secrets: inherit
+  exposure-false-color:
+    uses: ./.github/workflows/exposure-false-color.yml
+    secrets: inherit
   release:
-    needs: [film-effects, lens-diffusion]
+    needs: [film-effects, lens-diffusion, exposure-false-color]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -79,6 +82,10 @@ jobs:
           ### Lens & Diffusion — new, experimental
           - \`LensDiffusion-Premiere-mac-${tag}.pkg\`, \`LensDiffusion-Premiere-Windows-Setup-${tag}.exe\` (Premiere Pro) and \`LensDiffusion-Resolve-…\` (DaVinci Resolve: Windows, macOS, Linux). One effect, **Lens & Diffusion**, under Venosta Visuals: diffusion filter (mist to black-mist look), vignette, chromatic aberration, anamorphic streaks, presets.
           - GPU rendering with Metal (macOS) and NVIDIA CUDA (Windows), CPU otherwise. Built, loaded and installer-tested in CI, GPU maths checked against the CPU reference; **not yet tested inside Premiere or Resolve**.
+
+          ### Exposure & False Color — new, experimental (viewing aid)
+          - \`ExposureFalseColor-Premiere-…\` and \`ExposureFalseColor-Resolve-…\` downloads: false color in stops from middle grey (with legend), zebras, clipping, split view. **Turn it off before exporting** — an effect cannot know it is being exported.
+          - Metal / CUDA / CPU. Built, loaded and installer-tested in CI, GPU checked against the CPU reference; **not yet tested inside Premiere or Resolve**.
 
           ### Film Effects for DaVinci Resolve (OpenFX) — experimental
           - \`FilmEffects-Resolve-Windows-Setup-${tag}.exe\`, \`FilmEffects-Resolve-mac-${tag}.pkg\` (macOS 12+, Apple Silicon + Intel), \`FilmEffects-Resolve-linux-${tag}.tar.gz\` (extract the bundle into /usr/OFX/Plugins). The Windows Setup covers x64 PCs and Windows on Arm (native Arm64EC build, CPU only, untested in Resolve). Film Effects appears in Resolve's Effects library under OpenFX → Venosta Visuals.
