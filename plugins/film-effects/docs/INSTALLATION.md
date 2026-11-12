@@ -73,8 +73,9 @@ shared plug-in folder (registry value `Plug-InsDir`, normally
 (CUDA with automatic CPU fallback), and registers an
 uninstaller in Settings → Apps. Running a newer Setup upgrades in place. It is not code-signed:
 SmartScreen may show "Windows protected your PC" → "More info" → "Run anyway". Source:
-`installer/windows/FilmEffects.iss`, built in CI. The installer itself has not yet been run on a
-Windows machine.
+`installer/windows/FilmEffects.iss`, built in CI and test-installed silently on a Windows CI
+machine. The user ran v1.0.6 on Windows (it used the wrong folder, fixed in v1.0.7); loading
+and rendering in Premiere on Windows are not yet confirmed.
 
 The build uses CUDA Toolkit 12.9.1, includes native `sm_61` code (GTX 1080 / Pascal) and links
 the CUDA runtime statically: users need an NVIDIA display driver for the GPU path, not the
