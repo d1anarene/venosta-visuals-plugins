@@ -5,19 +5,19 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleExecutable</key>
-	<string>FilmEffects.ofx</string>
+	<string>@VV_BUNDLE_NAME@.ofx</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.venostavisuals.FilmEffects.ofx</string>
+	<string>@VV_BUNDLE_ID@</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Film Effects</string>
+	<string>@VV_DISPLAY_NAME@</string>
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>@FE_OFX_VERSION@</string>
+	<string>@VV_VERSION@</string>
 	<key>CFBundleVersion</key>
-	<string>@FE_OFX_VERSION@</string>
+	<string>@VV_VERSION@</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 </dict>

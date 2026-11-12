@@ -1,18 +1,23 @@
-// Parameter table shared by every host entry point (CPU and GPU) and every effect variant.
-// Header-only, no Adobe SDK types, unit-tested in tests/core.
+// Film Effects parameter table, used by the shared host adapters (Premiere Pro, OpenFX) through
+// vv::Effect. Header-only, no host SDK types, unit-tested in tests/core.
 //
 // Each control has a stable ParamKey and a stable on-disk ID (saved in projects; append only,
-// never renumber). A variant lists which controls it shows, in order; the host parameter index is
-// the position in that list + 1 (index 0 is the input layer).
+// never renumber). The panel shows every control in table order; the host parameter index is the
+// position + 1 (index 0 is the input layer). (Standalone Bloom/Halation/Grain variants with
+// subsets of these controls existed until v1.0.11.)
 #pragma once
 #include <cstdint>
 #include <vector>
 
 #include "params/params.h"
+#include "vv/params.h"
 
 namespace fe {
 
-enum class Variant : int { Combined = 0, Bloom = 1, Halation = 2, Grain = 3 };
+using vv::ParamKind;
+using vv::ParamReader;
+using vv::ParamSpec;
+using vv::frameKeyFromTime;
 
 enum class ParamKey : int {
   Preset,
@@ -62,23 +67,6 @@ enum class ParamKey : int {
   Count
 };
 
-enum class ParamKind { GroupStart, GroupEnd, Checkbox, Float, Popup, IntSlider };
-
-struct ParamSpec {
-  ParamKey key;
-  ParamKind kind;
-  const char* name;
-  int diskId;  // stable, saved in projects
-  double validMin = 0, validMax = 0, sliderMin = 0, sliderMax = 0, dflt = 0;
-  int precision = 2;      // decimal places shown
-  bool percent = false;   // display as percent
-  const char* items = nullptr;  // popup items, '|' separated
-  int itemCount = 0;
-  bool supervise = false;       // host calls us when the user changes it (presets)
-  bool cannotTimeVary = false;  // not keyframeable
-  bool startCollapsed = false;  // groups
-};
-
 // Append only: the chosen index is saved in projects.
 #define FE_PRESET_ITEMS \
   "(choose to apply)|Subtle Film|Soft Highlight Glow|Night Lights|Fine 35mm Grain|Coarse 16mm Grain|Halation Only|Off|Old Projector"
@@ -89,10 +77,29 @@ inline const std::vector<ParamSpec>& allParams() {
   static const std::vector<ParamSpec> specs = [] {
     const FilmParams d;
     std::vector<ParamSpec> v;
-    auto add = [&](ParamSpec s) { v.push_back(s); };
+    // Same fields as vv::ParamSpec, but keyed by the typed ParamKey for readability.
+    struct S {
+      ParamKey key;
+      ParamKind kind;
+      const char* name;
+      int diskId;
+      double validMin = 0, validMax = 0, sliderMin = 0, sliderMax = 0, dflt = 0;
+      int precision = 2;
+      bool percent = false;
+      const char* items = nullptr;
+      int itemCount = 0;
+      bool supervise = false, cannotTimeVary = false, startCollapsed = false;
+    };
+    auto add = [&](const S& s) {
+      ParamSpec o{static_cast<int>(s.key), s.kind, s.name, s.diskId};
+      o.validMin = s.validMin; o.validMax = s.validMax; o.sliderMin = s.sliderMin; o.sliderMax = s.sliderMax;
+      o.dflt = s.dflt; o.precision = s.precision; o.percent = s.percent; o.items = s.items; o.itemCount = s.itemCount;
+      o.supervise = s.supervise; o.cannotTimeVary = s.cannotTimeVary; o.startCollapsed = s.startCollapsed;
+      v.push_back(o);
+    };
     using K = ParamKey;
     using T = ParamKind;
-    ParamSpec s{};
+    S s{};
     s = {K::Preset, T::Popup, "Preset", 1};
     s.items = FE_PRESET_ITEMS; s.itemCount = FE_PRESET_COUNT; s.dflt = 1; s.supervise = true; s.cannotTimeVary = true; add(s);
     s = {K::MasterEnable, T::Checkbox, "Master Enable", 2}; s.dflt = d.masterEnable; add(s);
@@ -153,78 +160,35 @@ inline const std::vector<ParamSpec>& allParams() {
 
 inline const ParamSpec& specFor(ParamKey k) {
   for (const auto& s : allParams())
-    if (s.key == k) return s;
+    if (s.key == static_cast<int>(k)) return s;
   return allParams().front();  // unreachable: every key is in the table (tested)
 }
 
-/** Controls shown by a variant, in Effect Controls order. */
-inline std::vector<ParamKey> variantKeys(Variant v) {
-  using K = ParamKey;
-  switch (v) {
-    case Variant::Combined: {
-      std::vector<K> all;
-      for (int i = 0; i < static_cast<int>(K::Count); ++i) all.push_back(static_cast<K>(i));
-      return all;
-    }
-    case Variant::Bloom:  // no groups/enable: the effect itself is the switch
-      return {K::Mix, K::WorkingSpace, K::Quality, K::BloomIntensity, K::BloomThreshold, K::BloomKnee, K::BloomRadius};
-    case Variant::Halation:
-      return {K::Mix, K::WorkingSpace, K::HalIntensity, K::HalThreshold, K::HalRadius, K::HalWarmth};
-    case Variant::Grain:  // grain works in the working encoding and needs no working-space choice
-      return {K::Mix, K::GrainAmount, K::GrainSize, K::GrainRoughness, K::GrainShadows, K::GrainMidtones,
-              K::GrainHighlights, K::GrainColor, K::GrainChroma, K::GrainSeed, K::GrainAnimate};
-  }
-  return {};
-}
+/** Host parameter index of `key` (input layer is 0). */
+inline int paramIndex(ParamKey key) { return vv::hostIndex(allParams(), static_cast<int>(key)); }
 
-/** Host parameter index of `key` in variant `v` (input layer is 0), or -1 if not shown. */
-inline int paramIndex(Variant v, ParamKey key) {
-  const auto keys = variantKeys(v);
-  for (size_t i = 0; i < keys.size(); ++i)
-    if (keys[i] == key) return static_cast<int>(i) + 1;
-  return -1;
-}
-
-/** Host-neutral parameter accessor by host index: float, bool or 1-based popup value. */
-struct ParamReader {
-  virtual ~ParamReader() = default;
-  virtual double number(int index) const = 0;
-  virtual bool flag(int index) const = 0;
-  virtual int popup(int index) const = 0;  // 1-based
-};
-
-/** Read a variant's parameters into core FilmParams. Controls the variant does not show take the
- *  table default; a standalone variant enables only its own effect. */
-inline FilmParams readParams(const ParamReader& r, Variant v = Variant::Combined) {
-  auto num = [&](ParamKey k) {
-    int i = paramIndex(v, k);
-    return i < 0 ? specFor(k).dflt : r.number(i);
-  };
-  auto flag = [&](ParamKey k, bool standaloneValue) {
-    int i = paramIndex(v, k);
-    return i < 0 ? standaloneValue : r.flag(i);
-  };
-  auto pop = [&](ParamKey k) {
-    int i = paramIndex(v, k);
-    return i < 0 ? static_cast<int>(specFor(k).dflt) : r.popup(i);
-  };
+/** Read the parameters into core FilmParams. */
+inline FilmParams readParams(const ParamReader& r) {
+  auto num = [&](ParamKey k) { return r.number(paramIndex(k)); };
+  auto flag = [&](ParamKey k) { return r.flag(paramIndex(k)); };
+  auto pop = [&](ParamKey k) { return r.popup(paramIndex(k)); };
   using K = ParamKey;
   FilmParams p;
-  p.masterEnable = flag(K::MasterEnable, true);
+  p.masterEnable = flag(K::MasterEnable);
   p.mix = static_cast<float>(num(K::Mix) / 100.0);
   p.space = static_cast<WorkingSpace>(pop(K::WorkingSpace) - 1);
   p.quality = pop(K::Quality) == 2 ? Quality::High : Quality::Normal;
-  p.bloom.enabled = flag(K::BloomEnable, v == Variant::Bloom);
+  p.bloom.enabled = flag(K::BloomEnable);
   p.bloom.intensity = static_cast<float>(num(K::BloomIntensity));
   p.bloom.threshold = static_cast<float>(num(K::BloomThreshold));
   p.bloom.knee = static_cast<float>(num(K::BloomKnee));
   p.bloom.radius = static_cast<float>(num(K::BloomRadius));
-  p.halation.enabled = flag(K::HalEnable, v == Variant::Halation);
+  p.halation.enabled = flag(K::HalEnable);
   p.halation.intensity = static_cast<float>(num(K::HalIntensity));
   p.halation.threshold = static_cast<float>(num(K::HalThreshold));
   p.halation.radius = static_cast<float>(num(K::HalRadius));
   p.halation.warmth = static_cast<float>(num(K::HalWarmth));
-  p.grain.enabled = flag(K::GrainEnable, v == Variant::Grain);
+  p.grain.enabled = flag(K::GrainEnable);
   p.grain.amount = static_cast<float>(num(K::GrainAmount));
   p.grain.size = static_cast<float>(num(K::GrainSize));
   p.grain.roughness = static_cast<float>(num(K::GrainRoughness));
@@ -234,8 +198,8 @@ inline FilmParams readParams(const ParamReader& r, Variant v = Variant::Combined
   p.grain.color = pop(K::GrainColor) == 2 ? GrainColor::Color : GrainColor::Luma;
   p.grain.chroma = static_cast<float>(num(K::GrainChroma));
   p.grain.seed = static_cast<int32_t>(num(K::GrainSeed));
-  p.grain.animate = flag(K::GrainAnimate, true);
-  p.gate.enabled = flag(K::GateEnable, false);
+  p.grain.animate = flag(K::GrainAnimate);
+  p.gate.enabled = flag(K::GateEnable);
   p.gate.weave = static_cast<float>(num(K::GateWeave));
   p.gate.flicker = static_cast<float>(num(K::GateFlicker));
   p.gate.edge = static_cast<float>(num(K::GateEdge));
@@ -290,15 +254,6 @@ inline void forEachPresetValue(const FilmParams& p, F&& set) {
   set(K::GateDust, p.gate.dust);
   set(K::GateScratches, p.gate.scratches);
   set(K::GateLook, static_cast<double>(static_cast<int>(p.gate.look) + 1));
-}
-
-/** Stable per-frame grain key from a host time and frame duration (same units). Exact frame index
- *  when the time is frame-aligned; otherwise a distinct key derived from both values, so
- *  fractional/remapped times never collide with neighbouring frames. */
-inline int64_t frameKeyFromTime(int64_t time, int64_t frameDuration) {
-  if (frameDuration > 0 && time % frameDuration == 0) return time / frameDuration;
-  uint64_t h = static_cast<uint64_t>(time) * 0x9E3779B97F4A7C15ull ^ static_cast<uint64_t>(frameDuration);
-  return static_cast<int64_t>(h | (1ull << 62));  // tagged so it never equals a small frame index
 }
 
 }  // namespace fe

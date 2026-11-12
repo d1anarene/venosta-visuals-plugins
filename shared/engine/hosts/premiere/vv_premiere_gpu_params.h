@@ -1,16 +1,16 @@
-// Reads effect parameters in the GPU entry points (Metal and CUDA) via PrGPUFilterBase::GetParam.
-// PrParam is a tagged union (PrSDKTypes.h): the value lives in the member that matches mType.
-// SDK samples read float sliders as mFloat64 (Vignette), fixed sliders as mFloat32 (ProcAmp) and
-// checkboxes as mBool (CrossDissolve); reading by mType covers all of them.
+// Reads effect parameters in the Premiere GPU entry points (Metal and CUDA) via
+// PrGPUFilterBase::GetParam. PrParam is a tagged union (PrSDKTypes.h): the value lives in the
+// member that matches mType. SDK samples read float sliders as mFloat64 (Vignette), fixed sliders
+// as mFloat32 (ProcAmp) and checkboxes as mBool (CrossDissolve); reading by mType covers all.
 //
 // Popup numbering in the GPU path is not documented. The CPU path gets 1-based values (AE
-// convention). The combined effect's "Preset" popup always rests on its first item, so a 0 there
-// reveals 0-based numbering; for the standalone effects a value of 0 in any popup reveals it.
+// convention); a popup reading 0 therefore reveals 0-based numbering. Plugins should have a popup
+// that normally rests on its first item (e.g. a preset menu) so the detection is reliable.
 #pragma once
-#include "FilmEffectsParams.h"
 #include "PrSDKTypes.h"
+#include "vv/params.h"
 
-namespace fe {
+namespace vv {
 
 inline double prParamNumber(const PrParam& p) {
   switch (p.mType) {
@@ -25,16 +25,15 @@ inline double prParamNumber(const PrParam& p) {
   }
 }
 
-/** ParamReader over a GetParam-like callable: `PrParam get(int index)`. */
+/** ParamReader over a GetParam-like callable: `PrParam get(int hostIndex)`. */
 template <typename Getter>
-struct GpuParamReader : ParamReader {
+struct PrGpuParamReader : ParamReader {
   Getter get;
   bool zeroBasedPopups = false;
-  GpuParamReader(Getter g, Variant v) : get(g) {
-    // Detect 0-based popup numbering (see header comment).
-    for (ParamKey k : variantKeys(v)) {
-      if (specFor(k).kind != ParamKind::Popup) continue;
-      if (static_cast<int>(prParamNumber(get(paramIndex(v, k)))) == 0) {
+  PrGpuParamReader(Getter g, const std::vector<ParamSpec>& specs) : get(g) {
+    for (size_t i = 0; i < specs.size(); ++i) {
+      if (specs[i].kind != ParamKind::Popup) continue;
+      if (static_cast<int>(prParamNumber(get(static_cast<int>(i) + 1))) == 0) {
         zeroBasedPopups = true;
         break;
       }
@@ -48,4 +47,4 @@ struct GpuParamReader : ParamReader {
   }
 };
 
-}  // namespace fe
+}  // namespace vv

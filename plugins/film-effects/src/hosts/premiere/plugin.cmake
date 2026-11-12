@@ -1,28 +1,14 @@
-# Native Premiere plugins: Film Effects, Film Bloom, Film Halation, Film Grain.
-# STATUS: not yet run — needs the Adobe SDKs (and Xcode on macOS / Visual Studio on Windows).
+# Film Effects for Premiere Pro, built with the shared engine adapter (shared/engine/hosts/premiere,
+# shared/engine/cmake/vv_premiere.cmake). Needs the Adobe SDKs (never in this repository).
 #
 # macOS (CPU + Metal GPU):
-#   cmake -S . -B build-mac -G Xcode -DFE_BUILD_PLUGIN=ON \
+#   cmake -S . -B build-mac -DFE_BUILD_PLUGIN=ON \
 #         -DAE_SDK_DIR="/path/to/AfterEffectsSDK/Examples" -DPR_SDK_DIR="/path/to/Premiere Pro SDK"
 # Windows (CPU + CUDA GPU; needs the CUDA toolkit for the GPU part, otherwise CPU only):
 #   cmake -S . -B build-win -A x64 -DFE_BUILD_PLUGIN=ON ^
 #         -DAE_SDK_DIR="C:/AfterEffectsSDK/Examples" -DPR_SDK_DIR="C:/Premiere Pro SDK"
-#
-# The Adobe SDK file layout changes between releases; if a header or tool is not found, point the
-# cache variables below at the right folders (or start from the SDK_ProcAmp sample project and add
-# our sources to it — see docs/INSTALLATION.md, "Build from the SDK sample").
-if(NOT APPLE AND NOT WIN32)
-  message(FATAL_ERROR "FE_BUILD_PLUGIN supports macOS and Windows only")
-endif()
-
-set(AE_SDK_DIR "" CACHE PATH "After Effects SDK 'Examples' folder")
-set(PR_SDK_DIR "" CACHE PATH "Premiere Pro SDK root folder")
-set(AE_SDK_HEADERS "${AE_SDK_DIR}/Headers" CACHE PATH "")
-set(AE_SDK_UTIL "${AE_SDK_DIR}/Util" CACHE PATH "")
-set(AE_SDK_RESOURCES "${AE_SDK_DIR}/Resources" CACHE PATH "Folder with AE_General.r (and PiPLtool.exe on Windows)")
-set(PR_SDK_HEADERS "${PR_SDK_DIR}/Examples/Headers" CACHE PATH "")
-set(PR_SDK_UTILS "${PR_SDK_DIR}/Examples/Utils" CACHE PATH "")
-set(PR_GPU_UTILS "${PR_SDK_DIR}/Examples/Projects/GPUVideoFilter/Utils" CACHE PATH "Folder with PrGPUFilterModule.h")
+include(${VV_ENGINE_DIR}/cmake/vv_premiere.cmake)
+include(${VV_ENGINE_DIR}/cmake/vv_metal.cmake)
 
 set(FE_GPU_DEFAULT OFF)
 if(APPLE)
@@ -43,103 +29,32 @@ if(WIN32)
   endif()
 endif()
 option(FE_WITH_CUDA "Build the CUDA GPU entry point (Windows, needs the CUDA toolkit)" ${FE_CUDA_DEFAULT})
+
+set(FE_PR_SOURCES src/effect/FilmEffectsEffect.cpp src/effect/FilmEffectsCuda.cpp)
+set(FE_PR_ARGS)
+if(FE_WITH_GPU)
+  set(FE_PR_METALLIB ${CMAKE_CURRENT_BINARY_DIR}/premiere/FilmEffects.metallib)
+  vv_add_metallib(fe_pr_metallib SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/metal/FilmEffects.metal
+                  OUTPUT ${FE_PR_METALLIB} INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+                  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/core/common/fe_kernels.h)
+  list(APPEND FE_PR_SOURCES src/effect/FilmEffectsMetal.mm src/gpu/metal/MetalFilmEngine.mm)
+  list(APPEND FE_PR_ARGS GPU_METAL METALLIB ${FE_PR_METALLIB} METALLIB_TARGET fe_pr_metallib)
+endif()
 if(FE_WITH_CUDA)
   if(NOT WIN32)
     message(FATAL_ERROR "FE_WITH_CUDA targets Windows")
   endif()
   include(${CMAKE_CURRENT_LIST_DIR}/../../../cmake/fe_cuda_engine.cmake)
+  list(APPEND FE_PR_ARGS GPU_CUDA)
   message(STATUS "Film Effects: CUDA GPU path enabled")
 elseif(WIN32)
   message(STATUS "Film Effects: no CUDA toolkit found - Windows plugins will render on the CPU only")
 endif()
 
-if(APPLE)
-  enable_language(OBJCXX)
-endif()
-
-set(FE_PLUGIN_SOURCES
-  src/hosts/premiere/FilmEffects.cpp
-  ${AE_SDK_UTIL}/AEFX_SuiteHelper.c)
-if(FE_WITH_GPU)
-  list(APPEND FE_PLUGIN_SOURCES src/hosts/premiere/FilmEffectsGPU.mm src/gpu/metal/MetalFilmEngine.mm)
-  set(FE_METALLIB ${CMAKE_CURRENT_BINARY_DIR}/FilmEffects.metallib)
-  add_custom_command(OUTPUT ${FE_METALLIB}
-    COMMAND xcrun -sdk macosx metal -fno-fast-math -I ${CMAKE_CURRENT_SOURCE_DIR}/src/core -I ${VV_ENGINE_DIR}/core
-            -c ${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/metal/FilmEffects.metal -o FilmEffects.air
-    COMMAND xcrun -sdk macosx metallib FilmEffects.air -o ${FE_METALLIB}
-    DEPENDS src/gpu/metal/FilmEffects.metal src/core/common/fe_kernels.h ${VV_ENGINE_DIR}/core/vv/kernels.h)
-endif()
-
-set(FE_PIPL_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/hosts/premiere/FilmEffectsPiPL.r)
-
-# One effect: Film Effects (all tools in one panel). The standalone Film Bloom / Film Halation /
-# Film Grain effects (FE_VARIANT 1..3) were dropped in 2026-11 at the owner's request; the
-# variant switch is kept in the sources so their parameter tables stay testable.
-set(FE_VARIANT_NAMES FilmEffects)
-foreach(variant RANGE 0)
-  list(GET FE_VARIANT_NAMES ${variant} bundle)
-  set(gen ${CMAKE_CURRENT_BINARY_DIR}/${bundle})
-  file(MAKE_DIRECTORY ${gen})
-
-  add_library(${bundle} MODULE ${FE_PLUGIN_SOURCES})
-  target_compile_definitions(${bundle} PRIVATE FE_VARIANT=${variant})
-  target_link_libraries(${bundle} PRIVATE fe_core)
-  target_include_directories(${bundle} PRIVATE
-    src/hosts/premiere src/gpu/metal src/core
-    ${AE_SDK_HEADERS} ${AE_SDK_HEADERS}/SP ${AE_SDK_HEADERS}/adobesdk ${AE_SDK_UTIL}
-    ${PR_SDK_HEADERS} ${PR_SDK_UTILS} ${PR_GPU_UTILS})
-
-  if(APPLE)
-    target_link_libraries(${bundle} PRIVATE "-framework Foundation")
-    if(FE_WITH_GPU)
-      target_link_libraries(${bundle} PRIVATE "-framework Metal")
-      target_compile_options(${bundle} PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
-      target_sources(${bundle} PRIVATE ${FE_METALLIB})
-      set_source_files_properties(${FE_METALLIB} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
-    endif()
-    set_target_properties(${bundle} PROPERTIES
-      BUNDLE TRUE
-      BUNDLE_EXTENSION plugin
-      MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/src/hosts/premiere/Info.plist.in
-      MACOSX_BUNDLE_GUI_IDENTIFIER com.venostavisuals.${bundle}
-      MACOSX_BUNDLE_BUNDLE_NAME ${bundle})
-    # PiPL: compile the .r for this variant into the bundle's resource file with Rez.
-    set(rsrc ${gen}/${bundle}.rsrc)
-    add_custom_command(OUTPUT ${rsrc}
-      COMMAND xcrun Rez -o ${rsrc} -define __MACH__ -define AE_OS_MAC -define FE_VARIANT=${variant} -useDF
-              -arch arm64 -arch x86_64
-              -i ${AE_SDK_HEADERS} -i ${AE_SDK_HEADERS}/SP -i ${AE_SDK_RESOURCES}
-              ${FE_PIPL_SRC}
-      DEPENDS ${FE_PIPL_SRC})
-    target_sources(${bundle} PRIVATE ${rsrc})
-    set_source_files_properties(${rsrc} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
-  else()
-    # Windows: an AE-API effect is a DLL with the .aex extension. The PiPL is converted to a .rc
-    # file the way the SDK samples do it: preprocess the .r, run the SDK's PiPLtool, preprocess
-    # the result again with MSWindows defined, then compile the .rc into the DLL.
-    set_target_properties(${bundle} PROPERTIES SUFFIX ".aex" PREFIX "")
-    if(FE_WITH_CUDA)
-      target_sources(${bundle} PRIVATE src/hosts/premiere/FilmEffectsGPU_CUDA.cpp)
-      target_include_directories(${bundle} PRIVATE src/gpu/cuda)
-      target_link_libraries(${bundle} PRIVATE fe_cuda_engine)
-    endif()
-    target_compile_definitions(${bundle} PRIVATE MSWindows WIN32 _WINDOWS NOMINMAX)
-    set(rr ${gen}/${bundle}.rr)
-    set(rrc ${gen}/${bundle}.rrc)
-    set(rc ${gen}/${bundle}_PiPL.rc)
-    add_custom_command(OUTPUT ${rc}
-      COMMAND cl /nologo /EP /P /Fi${rr} /TC /DFE_VARIANT=${variant}
-              /I${AE_SDK_HEADERS} /I${AE_SDK_HEADERS}/SP /I${AE_SDK_RESOURCES} ${FE_PIPL_SRC}
-      COMMAND ${AE_SDK_RESOURCES}/PiPLtool.exe ${rr} ${rrc}
-      COMMAND cl /nologo /EP /P /Fi${rc} /DMSWindows /TC ${rrc}
-      DEPENDS ${FE_PIPL_SRC}
-      WORKING_DIRECTORY ${gen}
-      VERBATIM)
-    target_sources(${bundle} PRIVATE ${rc})
-  endif()
-endforeach()
-
-if(WIN32)
-  # Load test (no Adobe SDK needed at run time): LoadLibrary each .aex and check the entry points.
-  add_executable(fe_aex_load_test tests/premiere/aex_load_test.cpp)
+vv_add_premiere_effect(FilmEffects PIPL src/effect/FilmEffectsPiPL.r BUNDLE_ID com.venostavisuals.FilmEffects
+                       SOURCES ${FE_PR_SOURCES} LINK fe_core INCLUDES src/effect src/core src/gpu/metal
+                       ${FE_PR_ARGS})
+if(FE_WITH_CUDA)
+  target_compile_definitions(FilmEffects PRIVATE FE_WITH_CUDA_RENDERER)
+  target_link_libraries(FilmEffects PRIVATE fe_cuda_engine)
 endif()

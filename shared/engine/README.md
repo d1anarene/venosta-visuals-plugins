@@ -7,9 +7,18 @@ Owner decision (2026-11-12): shared engine instead of copying code between plugi
 | --- | --- | --- |
 | Core: image types, deterministic row threading, Gaussian blur + 2x pyramid, blur planning, host pixel-format conversion | `core/vv/` (`vv_core` library, namespace `vv`) | in use (Film Effects) |
 | Per-pixel maths valid in C++, CUDA and Metal: transfer functions, luma, hashing, value noise, Catmull-Rom | `core/vv/kernels.h` (`vv_` prefix) | in use (Film Effects) |
+| Plugin interface: `vv::Effect` (info, parameter table, CPU render, presets via `paramChanged`, GPU renderers) | `core/vv/effect.h`, `core/vv/params.h` | in use (Film Effects) |
+| Premiere Pro adapter: AE effect API (registration, parameters, pixel formats, bypass), GPU entry for Metal and CUDA, PiPL template | `hosts/premiere/`, `cmake/vv_premiere.cmake` | in use (Film Effects) |
+| OpenFX adapter (DaVinci Resolve): parameters, presets, CPU + CUDA/Metal render, bundle layout incl. Win-arm64ec | `hosts/ofx/`, `cmake/vv_ofx.cmake` | in use (Film Effects) |
+| Metal shader compile helper | `cmake/vv_metal.cmake` | in use |
+| Load tests (`.aex` LoadLibrary, `.ofx` dlopen + identifier check) | `tests/` | in use |
 | GPU framework (CUDA/Metal helpers, pyramid passes) | — | planned |
-| Premiere Pro (AE API + GPU entry) and OpenFX (DaVinci Resolve) adapters driven by a parameter table | — | planned |
 | Installer and CI templates | — | planned |
+
+A new plugin implements `vv::Effect` once (and `vv::effect()`), writes a two-line PiPL file
+that defines `VV_PIPL_NAME`, `VV_PIPL_MATCH`, `VV_PIPL_CATEGORY` and includes `vv_pipl.r`, and
+calls `vv_add_premiere_effect(...)` / `vv_add_ofx_bundle(...)`. Saved-project identifiers
+(Premiere match name, parameter disk IDs, OpenFX id and parameter prefix) must never change.
 
 Use from a plugin's `CMakeLists.txt`:
 

@@ -92,7 +92,7 @@ jobs:
         run: |
           mkdir -p ../../bundle
           cp -R build-ofx/FilmEffects.ofx.bundle ../../bundle/
-          cp build-ofx/Release/fe_ofx_load_test.exe ../../bundle/
+          cp build-ofx/Release/vv_ofx_load_test.exe ../../bundle/
           if [ -f build-ofx/NVIDIA-CUDA-EULA.html ]; then cp build-ofx/NVIDIA-CUDA-EULA.html ../../bundle/; fi
       - name: Upload Windows bundle
         if: startsWith(matrix.platform, 'windows')
@@ -144,7 +144,7 @@ jobs:
           $p = Start-Process (Resolve-Path out\FilmEffects-Resolve-Windows-Setup.exe) -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=$env:RUNNER_TEMP\setup.log" -Wait -PassThru
           if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\setup.log"; throw "Setup exit code $($p.ExitCode)" }
           foreach ($a in 'Win64', 'Win-arm64ec') { if (-not (Test-Path "$root\$a\FilmEffects.ofx")) { throw "Missing $a\FilmEffects.ofx" } }
-          & _x64\fe_ofx_load_test.exe "$root\Win64\FilmEffects.ofx"
+          & _x64\vv_ofx_load_test.exe "$root\Win64\FilmEffects.ofx" com.venostavisuals.FilmEffects
           if ($LASTEXITCODE -ne 0) { throw 'Installed x64 bundle failed the load test' }
           Start-Process "$env:ProgramFiles\Venosta Visuals\Film Effects for Resolve\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
           for ($i = 0; $i -lt 60 -and (Test-Path "$root\Win64\FilmEffects.ofx"); $i++) { Start-Sleep 1 }
@@ -174,7 +174,7 @@ jobs:
           $bin = "${env:CommonProgramFiles}\OFX\Plugins\FilmEffects.ofx.bundle\Contents\Win-arm64ec\FilmEffects.ofx"
           $p = Start-Process (Resolve-Path _setup\FilmEffects-Resolve-Windows-Setup.exe) -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=$env:RUNNER_TEMP\setup.log" -Wait -PassThru
           if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\setup.log"; throw "Setup exit code $($p.ExitCode)" }
-          & _arm\fe_ofx_load_test.exe $bin
+          & _arm\vv_ofx_load_test.exe $bin com.venostavisuals.FilmEffects
           if ($LASTEXITCODE -ne 0) { throw 'Installed Arm64EC bundle failed the load test' }
           Start-Process "$env:ProgramFiles\Venosta Visuals\Film Effects for Resolve\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
           for ($i = 0; $i -lt 60 -and (Test-Path $bin); $i++) { Start-Sleep 1 }

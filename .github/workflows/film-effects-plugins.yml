@@ -118,7 +118,7 @@ jobs:
           }
           cmake @configureArgs
           if ($LASTEXITCODE -ne 0) { throw 'Windows plugin configuration failed' }
-          foreach ($t in "FilmEffects", "fe_aex_load_test") {
+          foreach ($t in "FilmEffects", "vv_aex_load_test") {
             cmake --build build-win --config Release --target $t
             if ($LASTEXITCODE -ne 0) { throw "build of $t failed" }
           }
@@ -128,7 +128,7 @@ jobs:
           Copy-Item scripts/install-windows.ps1 $output
           # Load every plug-in like Premiere does, on this machine's architecture (no NVIDIA driver
           # on the build machines: proves the CUDA build also loads on PCs without one).
-          & build-win/Release/fe_aex_load_test.exe (Get-ChildItem $output -Filter '*.aex' | ForEach-Object FullName)
+          & build-win/Release/vv_aex_load_test.exe (Get-ChildItem $output -Filter '*.aex' | ForEach-Object FullName)
           if ($LASTEXITCODE -ne 0) { throw 'Plug-in load test failed' }
           if ($cuda -eq 'ON') {
             $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -version '[17.0,18.0)' -latest -property installationPath

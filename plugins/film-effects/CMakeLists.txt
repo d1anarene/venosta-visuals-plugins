@@ -28,13 +28,15 @@ add_library(fe_core STATIC
   src/core/pipeline/pipeline.cpp)
 target_include_directories(fe_core PUBLIC src/core)
 target_link_libraries(fe_core PUBLIC vv_core)
+set_target_properties(fe_core PROPERTIES POSITION_INDEPENDENT_CODE ON)  # linked into plug-in modules
 if(NOT MSVC)
   target_compile_options(fe_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-add_executable(fe_core_tests tests/core/test_main.cpp)
+add_executable(fe_core_tests tests/core/test_main.cpp src/effect/FilmEffectsEffect.cpp src/effect/FilmEffectsCuda.cpp)
 target_link_libraries(fe_core_tests PRIVATE fe_core)
-target_include_directories(fe_core_tests PRIVATE src/hosts/premiere)
+target_include_directories(fe_core_tests PRIVATE src/effect)
+target_compile_definitions(fe_core_tests PRIVATE FE_NO_GPU_RENDERERS)
 
 add_executable(fe_render tools/fe_render.cpp)
 target_link_libraries(fe_render PRIVATE fe_core)
