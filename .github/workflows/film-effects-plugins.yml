@@ -31,6 +31,11 @@ jobs:
           - os: windows-2022
             platform: win-cuda
             cuda: true
+          # Premiere 26+ runs natively on Windows on Arm: native ARM64 build, CPU only (no CUDA).
+          - os: windows-11-arm
+            platform: win-arm64
+            cuda: false
+            arch: ARM64
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -89,13 +94,23 @@ jobs:
           method: network
           sub-packages: '["nvcc", "cudart", "cuobjdump", "visual_studio_integration"]'
           log-file-suffix: win-cuda
+      - name: Show Windows-on-Arm hints in the Adobe SDKs
+        if: steps.sdk.outputs.available == 'true' && matrix.platform == 'win-arm64'
+        run: |
+          for d in "$AE_SDK" "$PR_SDK"; do
+            echo "== $d"
+            echo "project files mentioning ARM64EC: $(grep -rlis 'ARM64EC' "$d" --include='*.vcxproj' --include='*.sln' --include='*.props' | wc -l)"
+            echo "project files mentioning ARM64:   $(grep -rlis 'ARM64' "$d" --include='*.vcxproj' --include='*.sln' --include='*.props' | wc -l)"
+            grep -rhois 'Release|ARM64[A-Za-z]*' "$d" --include='*.sln' | sort | uniq -c | head -5 || true
+          done
       - name: Build (Windows, CPU or CPU + CUDA)
         if: steps.sdk.outputs.available == 'true' && runner.os == 'Windows'
         shell: pwsh
         working-directory: plugins/film-effects
         run: |
           $cuda = if ('${{ matrix.cuda }}' -eq 'true') { 'ON' } else { 'OFF' }
-          $configureArgs = @('-S', '.', '-B', 'build-win', '-A', 'x64', '-DFE_BUILD_PLUGIN=ON', "-DFE_WITH_CUDA=$cuda", "-DAE_SDK_DIR=$env:AE_SDK", "-DPR_SDK_DIR=$env:PR_SDK")
+          $arch = if ('${{ matrix.arch }}') { '${{ matrix.arch }}' } else { 'x64' }
+          $configureArgs = @('-S', '.', '-B', 'build-win', '-A', $arch, '-DFE_BUILD_PLUGIN=ON', "-DFE_WITH_CUDA=$cuda", "-DAE_SDK_DIR=$env:AE_SDK", "-DPR_SDK_DIR=$env:PR_SDK")
           if ($cuda -eq 'ON') {
             # Keep the single architecture-list argument inside an array: splatting a
             # scalar string passes its characters individually in PowerShell.
@@ -103,7 +118,7 @@ jobs:
           }
           cmake @configureArgs
           if ($LASTEXITCODE -ne 0) { throw 'Windows plugin configuration failed' }
-          foreach ($t in "FilmEffects", "FilmBloom", "FilmHalation", "FilmGrain") {
+          foreach ($t in "FilmEffects", "FilmBloom", "FilmHalation", "FilmGrain", "fe_aex_load_test") {
             cmake --build build-win --config Release --target $t
             if ($LASTEXITCODE -ne 0) { throw "build of $t failed" }
           }
@@ -111,6 +126,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path $output | Out-Null
           Get-ChildItem -Recurse build-win -Filter "Film*.aex" | Copy-Item -Destination $output
           Copy-Item scripts/install-windows.ps1 $output
+          # Load every plug-in like Premiere does, on this machine's architecture (no NVIDIA driver
+          # on the build machines: proves the CUDA build also loads on PCs without one).
+          & build-win/Release/fe_aex_load_test.exe (Get-ChildItem $output -Filter '*.aex' | ForEach-Object FullName)
+          if ($LASTEXITCODE -ne 0) { throw 'Plug-in load test failed' }
           if ($cuda -eq 'ON') {
             $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -version '[17.0,18.0)' -latest -property installationPath
             $dumpbin = Get-ChildItem "$vs/VC/Tools/MSVC/*/bin/Hostx64/x64/dumpbin.exe" | Sort-Object FullName -Descending | Select-Object -First 1
@@ -120,6 +139,8 @@ jobs:
               $imports = & $dumpbin.FullName /dependents $plugin.FullName
               if ($LASTEXITCODE -ne 0) { throw "Cannot inspect $($plugin.Name)" }
               if ($imports -match 'cudart64.*\.dll') { throw 'CUDA runtime must be linked statically' }
+              # Must load on PCs without an NVIDIA driver (then Premiere renders on the CPU).
+              if ($imports -match 'nvcuda\.dll') { throw 'Must not import the NVIDIA driver library' }
               $deviceCode = & "$env:CUDA_PATH/bin/cuobjdump.exe" --list-elf $plugin.FullName
               if ($LASTEXITCODE -ne 0 -or -not ($deviceCode -match 'sm_61')) { throw "GTX 1080 device code missing: $($plugin.Name)" }
             }
@@ -141,7 +162,7 @@ jobs:
           path: out/FilmEffects-mac.pkg
           if-no-files-found: error
   windows-installer:
-    # One Setup.exe with both Windows builds (CUDA pre-selected when an NVIDIA driver is present).
+    # One Setup.exe for every Windows PC (CUDA build = CUDA + CPU fallback).
     needs: build
     runs-on: windows-latest
     steps:
@@ -153,18 +174,18 @@ jobs:
           TOKEN: ${{ secrets.ADOBE_SDK_TOKEN || secrets.ADBE_SDK_TOKEN }}
         run: |
           if [ -z "$TOKEN" ]; then echo "available=false" >> "$GITHUB_OUTPUT"; else echo "available=true" >> "$GITHUB_OUTPUT"; fi
-      - name: Download CPU build
-        if: steps.sdk.outputs.available == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: FilmEffects-win
-          path: _win/cpu
       - name: Download CUDA build
         if: steps.sdk.outputs.available == 'true'
         uses: actions/download-artifact@v4
         with:
           name: FilmEffects-win-cuda
           path: _win/cuda
+      - name: Download ARM64 build
+        if: steps.sdk.outputs.available == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: FilmEffects-win-arm64
+          path: _win/arm64
       - name: Build installer (Inno Setup)
         if: steps.sdk.outputs.available == 'true'
         shell: pwsh
@@ -176,7 +197,7 @@ jobs:
           }
           $version = "$((Get-Content VERSION -Raw).Trim()).$env:GITHUB_RUN_NUMBER"
           $root = (Get-Location).Path
-          & $iscc "/DAppVersion=$version" "/DCpuDir=$root\_win\cpu" "/DCudaDir=$root\_win\cuda" "/DRepoRoot=$root" "/DOutputDir=$root\out" "plugins\film-effects\installer\windows\FilmEffects.iss"
+          & $iscc "/DAppVersion=$version" "/DCudaDir=$root\_win\cuda" "/DArm64Dir=$root\_win\arm64" "/DRepoRoot=$root" "/DOutputDir=$root\out" "plugins\film-effects\installer\windows\FilmEffects.iss"
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compile failed' }
           Get-ChildItem out
       - name: Test installer (silent install, upgrade cleanup, registry folder, uninstall)
@@ -191,7 +212,7 @@ jobs:
           $uninst = "$env:ProgramFiles\Venosta Visuals\Film Effects\unins000.exe"
           $key = 'HKLM:\SOFTWARE\Adobe\Premiere Pro\CurrentVersion'
           function Install($log) {
-            $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TYPE=cpu', '/COMPONENTS=cpu', "/LOG=$log" -Wait -PassThru
+            $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=$log" -Wait -PassThru
             if ($p.ExitCode -ne 0) { Get-Content $log; throw "Setup exit code $($p.ExitCode)" }
           }
           function Uninstall($dir) {
@@ -205,6 +226,7 @@ jobs:
           foreach ($n in $names + 'unins000.exe', 'unins000.dat') { Set-Content "$stray\$n" 'old' }
           Install "$env:RUNNER_TEMP\setup1.log"
           foreach ($n in $names) { if (-not (Test-Path "$fallback\$n")) { throw "Missing $fallback\$n" } }
+          foreach ($n in $names) { if ((Get-FileHash "$fallback\$n").Hash -ne (Get-FileHash "_win\cuda\$n").Hash) { throw "$n is not the x64 CUDA build" } }
           if (Test-Path "$env:ProgramFiles\Adobe\Common\Plugins") { Get-ChildItem -Recurse "$env:ProgramFiles\Adobe\Common\Plugins"; throw 'Stray Common\Plugins folder not removed' }
           Uninstall $fallback
           # 2) Folder taken from Premiere's Plug-InsDir registry value.
@@ -224,3 +246,45 @@ jobs:
           name: FilmEffects-windows-installer
           path: out/FilmEffects-Windows-Setup.exe
           if-no-files-found: error
+  windows-installer-arm:
+    # The same Setup on a Windows-on-Arm machine must install the ARM64 plug-ins.
+    needs: [build, windows-installer]
+    runs-on: windows-11-arm
+    steps:
+      - name: Check SDK access
+        id: sdk
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.ADOBE_SDK_TOKEN || secrets.ADBE_SDK_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then echo "available=false" >> "$GITHUB_OUTPUT"; else echo "available=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Download installer
+        if: steps.sdk.outputs.available == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: FilmEffects-windows-installer
+          path: _setup
+      - name: Download ARM64 build
+        if: steps.sdk.outputs.available == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: FilmEffects-win-arm64
+          path: _arm64
+      - name: Install silently and compare with the ARM64 build
+        if: steps.sdk.outputs.available == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = (Resolve-Path _setup\FilmEffects-Windows-Setup.exe).Path
+          $dir = "$env:ProgramFiles\Adobe\Common\Plug-ins\7.0\MediaCore"
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=$env:RUNNER_TEMP\setup.log" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\setup.log"; throw "Setup exit code $($p.ExitCode)" }
+          foreach ($f in Get-ChildItem _arm64 -Filter '*.aex') {
+            $installed = Join-Path $dir $f.Name
+            if (-not (Test-Path $installed)) { throw "Missing $installed" }
+            if ((Get-FileHash $installed).Hash -ne (Get-FileHash $f.FullName).Hash) { throw "$($f.Name) is not the ARM64 build" }
+          }
+          Start-Process "$env:ProgramFiles\Venosta Visuals\Film Effects\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+          for ($i = 0; $i -lt 60 -and (Test-Path "$dir\FilmEffects.aex"); $i++) { Start-Sleep 1 }
+          if (Test-Path "$dir\FilmEffects.aex") { throw 'Uninstall left the plug-ins' }
+          Write-Host 'ARM64 installer test passed'

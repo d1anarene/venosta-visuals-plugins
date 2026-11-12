@@ -48,16 +48,6 @@ jobs:
         with:
           name: FilmEffects-mac-installer
           path: out
-      - name: Download Film Effects Windows build
-        uses: actions/download-artifact@v4
-        with:
-          name: FilmEffects-win
-          path: native-win
-      - name: Download Film Effects Windows CUDA build
-        uses: actions/download-artifact@v4
-        with:
-          name: FilmEffects-win-cuda
-          path: native-win-cuda
       - name: Download Film Effects Windows installer
         uses: actions/download-artifact@v4
         with:
@@ -72,15 +62,11 @@ jobs:
       - name: Name native release downloads
         run: |
           tag=${{ steps.version.outputs.tag }}
-          mv out/FilmEffects-mac.pkg "out/FilmEffects-mac-${tag}.pkg"
-          mv out/FilmEffects-Windows-Setup.exe "out/FilmEffects-Windows-Setup-${tag}.exe"
+          mv out/FilmEffects-mac.pkg "out/FilmEffects-Premiere-mac-${tag}.pkg"
+          mv out/FilmEffects-Windows-Setup.exe "out/FilmEffects-Premiere-Windows-Setup-${tag}.exe"
           mv out/FilmEffects-Resolve-mac.pkg "out/FilmEffects-Resolve-mac-${tag}.pkg"
           mv out/FilmEffects-Resolve-Windows-Setup.exe "out/FilmEffects-Resolve-Windows-Setup-${tag}.exe"
           mv out/FilmEffects-Resolve-linux.tar.gz "out/FilmEffects-Resolve-linux-${tag}.tar.gz"
-          cp LICENSE native-win/LICENSE.txt
-          (cd native-win && zip -r "../out/FilmEffects-Windows-CPU-experimental-${tag}.zip" .)
-          cp LICENSE native-win-cuda/LICENSE.txt
-          (cd native-win-cuda && zip -r "../out/FilmEffects-Windows-CUDA-experimental-${tag}.zip" .)
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -95,16 +81,13 @@ jobs:
           - \`TrackRangeExporter-MediaEncoder-${tag}.ccx\`: optional companion panel for Adobe Media Encoder 27+ (only needed for the "no timeline change" queue method).
           - Uninstall: Creative Cloud Desktop → Plugins → Manage Plugins.
 
-          ### Film Effects
-          - \`FilmEffects-mac-${tag}.pkg\`: quit Premiere, double-click to install, then restart Premiere. Includes Film Effects, Film Bloom, Film Halation and Film Grain under Video Effects → Venosta Visuals.
+          ### Film Effects for Premiere Pro
+          - \`FilmEffects-Premiere-mac-${tag}.pkg\`: quit Premiere, double-click to install, then restart Premiere. Includes Film Effects, Film Bloom, Film Halation and Film Grain under Video Effects → Venosta Visuals.
           - Mac: macOS 26+, Apple Silicon + Intel. User-tested in Premiere Pro 27 on an Apple Silicon Mac. Installer is unsigned, bundles are ad hoc signed, and this release is not Apple-notarized.
-          - \`FilmEffects-Windows-Setup-${tag}.exe\`: **recommended for Windows.** Double-click, confirm the admin prompt, finish the wizard, restart Premiere. Picks the NVIDIA CUDA build automatically when an NVIDIA driver is installed (CPU-only otherwise; you can change it). Uninstall via Settings → Apps. The installer is not code-signed, so Windows SmartScreen may warn: click "More info" → "Run anyway". Windows host behavior is unverified.
-          - The two zips below contain the same plugins for manual installation:
-          - \`FilmEffects-Windows-CPU-experimental-${tag}.zip\`: CPU-only build (manual); extract and run install-windows.ps1. Windows host behavior is unverified.
-          - \`FilmEffects-Windows-CUDA-experimental-${tag}.zip\`: CPU + NVIDIA CUDA build; install this OR the CPU build. Includes a statically linked CUDA runtime; needs a compatible NVIDIA GPU and driver, not the CUDA Toolkit. CUDA execution and Premiere behavior on Windows await hardware testing.
+          - \`FilmEffects-Premiere-Windows-Setup-${tag}.exe\`: double-click, confirm the admin prompt, finish the wizard, restart Premiere. One build for every PC: renders with NVIDIA CUDA when the project uses Mercury Playback Engine GPU (CUDA), otherwise on the CPU (needs an NVIDIA driver for CUDA, not the CUDA Toolkit; includes GTX 1080 / Pascal code). On Windows on Arm (Premiere 26+) it installs a native ARM64 build instead (CPU only, untested in Premiere). Uninstall via Settings → Apps. Not code-signed: Windows may warn — "More info" → "Run anyway". Windows host behavior is unverified.
           ### Film Effects for DaVinci Resolve (OpenFX) — experimental
-          - \`FilmEffects-Resolve-Windows-Setup-${tag}.exe\`, \`FilmEffects-Resolve-mac-${tag}.pkg\` (macOS 12+, Apple Silicon + Intel), \`FilmEffects-Resolve-linux-${tag}.tar.gz\` (extract the bundle into /usr/OFX/Plugins). Same four effects, in Resolve's Effects library under OpenFX → Venosta Visuals.
-          - GPU rendering: **Metal** on macOS, **NVIDIA CUDA** on Windows (includes GTX 1080 / Pascal code; needs an NVIDIA driver, not the CUDA Toolkit), CPU fallback otherwise and on Linux. Resolve chooses GPU or CPU per its own settings. Built and load-tested in CI, GPU maths checked against the CPU reference in CI; **not yet tested inside DaVinci Resolve**.
+          - \`FilmEffects-Resolve-Windows-Setup-${tag}.exe\`, \`FilmEffects-Resolve-mac-${tag}.pkg\` (macOS 12+, Apple Silicon + Intel), \`FilmEffects-Resolve-linux-${tag}.tar.gz\` (extract the bundle into /usr/OFX/Plugins). The Windows Setup covers x64 PCs and Windows on Arm (native Arm64EC build, CPU only, untested in Resolve). Same four effects, in Resolve's Effects library under OpenFX → Venosta Visuals.
+          - GPU rendering: **Metal** on macOS, **NVIDIA CUDA** on Windows (includes GTX 1080 / Pascal code; needs an NVIDIA driver, not the CUDA Toolkit), CPU fallback otherwise and on Linux — one download per system, no separate CUDA/CPU versions. Resolve chooses: CUDA when Preferences → Memory and GPU is set to CUDA, otherwise CPU. Built and load-tested in CI, GPU maths checked against the CPU reference in CI; user-tested in DaVinci Resolve on macOS; Windows and Linux not yet tested in Resolve. Installers are unsigned: allow them in System Settings → Privacy & Security (Mac) / confirm the Windows warning.
 
           ### Film Effects (all hosts)
           - CPU tests and Metal GPU comparisons are automated. Export matching, long timeline stability, HDR workflows and measured playback performance remain unverified. No Adobe SDK files are included.

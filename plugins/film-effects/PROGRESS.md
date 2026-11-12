@@ -2,6 +2,44 @@
 
 _Last update: 2026-11-11_
 
+## Windows on Arm (2026-11-12)
+
+- User: Premiere supports Windows on Arm since 26.0. Premiere: new CI build `win-arm64` on a
+  `windows-11-arm` runner (native ARM64, CPU only); the Premiere Setup installs it when
+  `IsArm64`, the x64 CUDA build otherwise. `fe_aex_load_test` loads every `.aex` with LoadLibrary
+  on its own architecture; an extra CI job installs the Setup on an Arm machine and checks that
+  the ARM64 files were installed. The CI step "Show Windows-on-Arm hints in the Adobe SDKs" prints
+  whether the SDK samples target ARM64 or ARM64EC. Result (CI run 43190167072): AE SDK 69
+  project files with `Release|ARM64`, Premiere 27.0 SDK 7, **none with ARM64EC** — native ARM64 is
+  Adobe's choice too.
+- CI run 43190167072 / 43190167237: all four `.aex` load on the Arm runner; Premiere Setup installs
+  the ARM64 files there and the x64 CUDA files on x64; Resolve Setup installs both architecture
+  folders, and the installed Arm64EC / x64 binaries load on their machines.
+- Resolve: OpenFX 1.5 packaging says Resolve on Windows on Arm is an Arm64EC host and defines
+  `Contents/Win-arm64ec`. New CI build with `-A ARM64EC` on an Arm runner; the Resolve Setup ships
+  one bundle with `Win64` (x64 + CUDA) and `Win-arm64ec`; tested by installing on x64 and Arm
+  machines and loading the installed binary on each.
+- **No Premiere or Resolve test on a Windows-on-Arm PC.**
+
+## Simpler downloads (2026-11-12)
+
+- Premiere downloads renamed `FilmEffects-Premiere-*` (next to `FilmEffects-Resolve-*`).
+- One Windows Premiere build: the Setup installs the CUDA build only (it contains the CPU path and
+  falls back automatically); the CPU-only build is still compiled in CI but no longer shipped, and
+  the manual ZIPs are gone. CI now also checks that the `.aex`/`.ofx` do not import `nvcuda.dll`,
+  i.e. they load on PCs without an NVIDIA driver (the CUDA-built `.ofx` already loaded on the
+  driver-less Windows CI machine). Not host-tested on a non-NVIDIA PC.
+- Installers stay unsigned by the owner's choice (hobby project, public source).
+
+## DaVinci Resolve — first host test on macOS (2026-11-12)
+
+- **User-tested v1.0.9 in DaVinci Resolve on macOS: "works well".** macOS asked to allow the
+  unsigned installer in System Settings → Privacy & Security (expected: ad hoc signed, not
+  notarized). Detailed checks (Metal vs CPU mode, presets, export, comparison with Premiere) were
+  not reported separately.
+- Windows Resolve (CUDA) and Linux: still untested in Resolve. Windows showed the expected
+  unsigned-installer warning.
+
 ## DaVinci Resolve (OpenFX) — milestone 2: GPU rendering (2026-11-11)
 
 - v1.0.8 published the CPU-only Resolve downloads (Windows Setup, macOS pkg, Linux tarball).

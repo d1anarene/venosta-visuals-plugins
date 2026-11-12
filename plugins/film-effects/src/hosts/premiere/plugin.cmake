@@ -137,3 +137,8 @@ foreach(variant RANGE 3)
     target_sources(${bundle} PRIVATE ${rc})
   endif()
 endforeach()
+
+if(WIN32)
+  # Load test (no Adobe SDK needed at run time): LoadLibrary each .aex and check the entry points.
+  add_executable(fe_aex_load_test tests/premiere/aex_load_test.cpp)
+endif()
