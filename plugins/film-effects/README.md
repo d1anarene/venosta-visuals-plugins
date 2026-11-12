@@ -65,11 +65,10 @@ blocks it, use System Settings → Privacy & Security to review and allow this i
 
 Film Effects is a native effect; its installer is `.pkg`, rather than a UXP `.ccx`.
 Windows: download **`FilmEffects-Premiere-Windows-Setup-<version>.exe`** from Releases, double-click it,
-confirm the admin prompt and restart Premiere. The installer contains both experimental builds —
-**CUDA + CPU fallback** and **CPU-only** — and pre-selects CUDA when an NVIDIA driver is installed.
+confirm the admin prompt and restart Premiere. One build for every PC: it renders with NVIDIA CUDA
+when the project uses Mercury Playback Engine GPU Acceleration (CUDA) and on the CPU otherwise.
 Uninstall via Settings → Apps. The installer is not code-signed, so SmartScreen may warn
-("More info" → "Run anyway"). The same builds are also offered as ZIPs for manual installation;
-install one variant, not both. The CUDA build uses CUDA 12.9 and includes Pascal (`sm_61`) code for GTX 1080,
+("More info" → "Run anyway"). The CUDA build uses CUDA 12.9 and includes Pascal (`sm_61`) code for GTX 1080,
 plus targets for newer NVIDIA GPUs. It links the CUDA runtime statically: a compatible NVIDIA
 driver is required, but the CUDA Toolkit is not. Windows Premiere behavior and NVIDIA GPU
 execution remain unverified until hardware testing.

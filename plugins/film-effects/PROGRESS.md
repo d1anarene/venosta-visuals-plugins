@@ -2,6 +2,16 @@
 
 _Last update: 2026-11-11_
 
+## Simpler downloads (2026-11-12)
+
+- Premiere downloads renamed `FilmEffects-Premiere-*` (next to `FilmEffects-Resolve-*`).
+- One Windows Premiere build: the Setup installs the CUDA build only (it contains the CPU path and
+  falls back automatically); the CPU-only build is still compiled in CI but no longer shipped, and
+  the manual ZIPs are gone. CI now also checks that the `.aex`/`.ofx` do not import `nvcuda.dll`,
+  i.e. they load on PCs without an NVIDIA driver (the CUDA-built `.ofx` already loaded on the
+  driver-less Windows CI machine). Not host-tested on a non-NVIDIA PC.
+- Installers stay unsigned by the owner's choice (hobby project, public source).
+
 ## DaVinci Resolve — first host test on macOS (2026-11-12)
 
 - **User-tested v1.0.9 in DaVinci Resolve on macOS: "works well".** macOS asked to allow the

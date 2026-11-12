@@ -7,7 +7,7 @@
 | | macOS | Windows |
 | --- | --- | --- |
 | Plugin files | `Film*.plugin` bundles (arm64 + x86_64) | `Film*.aex` (x64) |
-| Rendering | CPU + Metal GPU | Separate CPU-only and CUDA + CPU fallback ZIPs |
+| Rendering | CPU + Metal GPU | CUDA + automatic CPU fallback (one Setup.exe) |
 | Status | User-tested in Premiere Pro 27 on Apple Silicon | CI-built; host testing pending |
 
 ## 1. Get the SDKs
@@ -69,22 +69,20 @@ Restart Premiere Pro. The effects are in **Effects → Video Effects → Venosta
 **Recommended:** run `FilmEffects-Premiere-Windows-Setup-<version>.exe` from Releases (Inno Setup wizard,
 needs admin rights). It installs the four `.aex` files into Premiere's
 shared plug-in folder (registry value `Plug-InsDir`, normally
-`C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore` — with a hyphen), pre-selects the CUDA build when
-`nvcuda.dll` (NVIDIA driver) is present and the CPU-only build otherwise, and registers an
+`C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore` — with a hyphen), one build for every PC
+(CUDA with automatic CPU fallback), and registers an
 uninstaller in Settings → Apps. Running a newer Setup upgrades in place. It is not code-signed:
 SmartScreen may show "Windows protected your PC" → "More info" → "Run anyway". Source:
 `installer/windows/FilmEffects.iss`, built in CI. The installer itself has not yet been run on a
 Windows machine.
 
-**Manual alternative:** download and extract **one** of the Windows ZIPs from Releases. Choose CUDA for a compatible
-NVIDIA GPU (including GTX 1080 / Pascal), or CPU-only for the software-only build. Both install
-the same four filenames; installing a different variant replaces the previous one, with backups.
-The CUDA build uses Toolkit 12.9.1, includes native `sm_61` code, and statically links its runtime.
-Users need a compatible NVIDIA display driver, not the development toolkit. Select Mercury
-Playback Engine GPU Acceleration (CUDA) in Premiere's project settings for the GPU path.
+The build uses CUDA Toolkit 12.9.1, includes native `sm_61` code (GTX 1080 / Pascal) and links
+the CUDA runtime statically: users need an NVIDIA display driver for the GPU path, not the
+toolkit. Select Mercury Playback Engine GPU Acceleration (CUDA) in Premiere's project settings for
+the GPU path; without it (or without an NVIDIA GPU) the effects render on the CPU.
 Actual GPU activation/rendering still needs Windows host testing.
 
-For downloaded ZIPs, run `install-windows.ps1` from the extracted folder. For local source builds:
+For local source builds:
 
 In PowerShell **as administrator**:
 ```powershell

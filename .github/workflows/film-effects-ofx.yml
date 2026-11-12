@@ -61,6 +61,7 @@ jobs:
             $dumpbin = Get-ChildItem "$vs/VC/Tools/MSVC/*/bin/Hostx64/x64/dumpbin.exe" | Sort-Object FullName -Descending | Select-Object -First 1
             $imports = & $dumpbin.FullName /dependents $bin
             if ($imports -match 'cudart64.*\.dll') { throw 'CUDA runtime must be linked statically' }
+            if ($imports -match 'nvcuda\.dll') { throw 'Must not import the NVIDIA driver library' }
             $deviceCode = & "$env:CUDA_PATH/bin/cuobjdump.exe" --list-elf $bin
             if ($LASTEXITCODE -ne 0 -or -not ($deviceCode -match 'sm_61')) { throw 'GTX 1080 (sm_61) device code missing' }
             Write-Host 'CUDA device code present, runtime static'

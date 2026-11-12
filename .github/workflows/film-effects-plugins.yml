@@ -120,6 +120,8 @@ jobs:
               $imports = & $dumpbin.FullName /dependents $plugin.FullName
               if ($LASTEXITCODE -ne 0) { throw "Cannot inspect $($plugin.Name)" }
               if ($imports -match 'cudart64.*\.dll') { throw 'CUDA runtime must be linked statically' }
+              # Must load on PCs without an NVIDIA driver (then Premiere renders on the CPU).
+              if ($imports -match 'nvcuda\.dll') { throw 'Must not import the NVIDIA driver library' }
               $deviceCode = & "$env:CUDA_PATH/bin/cuobjdump.exe" --list-elf $plugin.FullName
               if ($LASTEXITCODE -ne 0 -or -not ($deviceCode -match 'sm_61')) { throw "GTX 1080 device code missing: $($plugin.Name)" }
             }
@@ -141,7 +143,7 @@ jobs:
           path: out/FilmEffects-mac.pkg
           if-no-files-found: error
   windows-installer:
-    # One Setup.exe with both Windows builds (CUDA pre-selected when an NVIDIA driver is present).
+    # One Setup.exe for every Windows PC (CUDA build = CUDA + CPU fallback).
     needs: build
     runs-on: windows-latest
     steps:
@@ -153,12 +155,6 @@ jobs:
           TOKEN: ${{ secrets.ADOBE_SDK_TOKEN || secrets.ADBE_SDK_TOKEN }}
         run: |
           if [ -z "$TOKEN" ]; then echo "available=false" >> "$GITHUB_OUTPUT"; else echo "available=true" >> "$GITHUB_OUTPUT"; fi
-      - name: Download CPU build
-        if: steps.sdk.outputs.available == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: FilmEffects-win
-          path: _win/cpu
       - name: Download CUDA build
         if: steps.sdk.outputs.available == 'true'
         uses: actions/download-artifact@v4
@@ -176,7 +172,7 @@ jobs:
           }
           $version = "$((Get-Content VERSION -Raw).Trim()).$env:GITHUB_RUN_NUMBER"
           $root = (Get-Location).Path
-          & $iscc "/DAppVersion=$version" "/DCpuDir=$root\_win\cpu" "/DCudaDir=$root\_win\cuda" "/DRepoRoot=$root" "/DOutputDir=$root\out" "plugins\film-effects\installer\windows\FilmEffects.iss"
+          & $iscc "/DAppVersion=$version" "/DCudaDir=$root\_win\cuda" "/DRepoRoot=$root" "/DOutputDir=$root\out" "plugins\film-effects\installer\windows\FilmEffects.iss"
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compile failed' }
           Get-ChildItem out
       - name: Test installer (silent install, upgrade cleanup, registry folder, uninstall)
@@ -191,7 +187,7 @@ jobs:
           $uninst = "$env:ProgramFiles\Venosta Visuals\Film Effects\unins000.exe"
           $key = 'HKLM:\SOFTWARE\Adobe\Premiere Pro\CurrentVersion'
           function Install($log) {
-            $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TYPE=cpu', '/COMPONENTS=cpu', "/LOG=$log" -Wait -PassThru
+            $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=$log" -Wait -PassThru
             if ($p.ExitCode -ne 0) { Get-Content $log; throw "Setup exit code $($p.ExitCode)" }
           }
           function Uninstall($dir) {
