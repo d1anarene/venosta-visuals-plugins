@@ -94,5 +94,5 @@ jobs:
 
           Status of each plugin: see the README and each plugin's PROGRESS.md.
           NOTES
-          gh release create "$tag" out/*.ccx out/*.pkg out/*.exe out/*.zip out/*.tar.gz --target "$GITHUB_SHA" --title "$tag" \
+          gh release create "$tag" out/*.ccx out/*.pkg out/*.exe out/*.tar.gz --target "$GITHUB_SHA" --title "$tag" \
             --notes-file notes.md --generate-notes ${{ steps.version.outputs.pre }}
