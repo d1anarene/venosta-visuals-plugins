@@ -1,8 +1,6 @@
-# Copy built Film*.aex plugins into Adobe's shared MediaCore folder. Run PowerShell as administrator.
-# Only touches these four files; an existing copy is renamed to a timestamped backup first.
-#   .\scripts\install-dev-windows.ps1                 # all four
-#   .\scripts\install-dev-windows.ps1 FilmGrain       # only some
-param([string[]]$Names = @("FilmEffects", "FilmBloom", "FilmHalation", "FilmGrain"))
+# Copy the built FilmEffects.aex into Adobe's shared MediaCore folder. Run PowerShell as administrator.
+# An existing copy is renamed to a timestamped backup first.
+param([string[]]$Names = @("FilmEffects"))
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 # Documented common plug-in location (Premiere Pro SDK guide, "Plugin Installation").

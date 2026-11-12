@@ -21,15 +21,12 @@ cd plugins/film-effects
 ./scripts/build-macos.sh "/path/to/AfterEffectsSDK/Examples" "/path/to/Premiere Pro SDK"
 ```
 This runs the core tests, compiles the PiPL with `Rez`, the Metal kernels into
-`FilmEffects.metallib`, and produces four bundles (universal arm64 + x86_64) in `build-mac/`:
-`FilmEffects.plugin`, `FilmBloom.plugin`, `FilmHalation.plugin`, `FilmGrain.plugin`.
+`FilmEffects.metallib`, and produces `FilmEffects.plugin` (universal arm64 + x86_64) in `build-mac/`.
 
 **Build from the SDK sample (fallback)**: if the CMake build cannot find SDK headers, open the
 `SDK_ProcAmp` Xcode project from the Premiere SDK, replace its sources with
 `src/hosts/premiere/*` + `src/gpu/metal/*` + `src/core/**/*.cpp`, add `src/core` to the header
-search paths, replace its `.r` with `FilmEffectsPiPL.r`, and add the `.metal` file. For a standalone effect add
-the preprocessor define `FE_VARIANT=1` (Bloom), `2` (Halation) or `3` (Grain) to both the C++ and
-the Rez settings.
+search paths, replace its `.r` with `FilmEffectsPiPL.r`, and add the `.metal` file.
 
 ## 2b. Build (Windows)
 Requirements: Windows 10/11 x64, Visual Studio 2022 or newer with "Desktop development with C++", CMake 3.20+,
@@ -42,7 +39,7 @@ cd plugins\film-effects
 .\scripts\build-windows.ps1 "C:\AfterEffectsSDK\Examples" "C:\Premiere Pro SDK"
 ```
 This runs the core tests, converts the PiPL with the SDK's `PiPLtool.exe` (the step the SDK sample
-projects use) and builds `FilmEffects.aex`, `FilmBloom.aex`, `FilmHalation.aex`, `FilmGrain.aex`.
+projects use) and builds `FilmEffects.aex`.
 CMake prints "CUDA GPU path enabled" when it found the CUDA toolkit. In Premiere, check
 *File → Project Settings → General → Renderer* is "Mercury Playback Engine GPU Acceleration (CUDA)".
 
@@ -99,8 +96,8 @@ in System Settings → Privacy & Security.
 Quit Premiere, delete the `Film*.plugin` bundles (macOS) or `Film*.aex` files (Windows) from the
 folder above (and any `.backup-*` copies
 you no longer need), install the new build, restart Premiere. Projects keep their settings because
-the match names (`VVIS FilmEffects`, `VVIS FilmBloom`, `VVIS FilmHalation`, `VVIS FilmGrain`) and
-parameter IDs never change.
+the match name (`VVIS FilmEffects`) and parameter IDs never change. The standalone
+Film Bloom / Halation / Grain effects (until v1.0.11) were retired; the installers remove them.
 
 ## Package a Mac installer
 

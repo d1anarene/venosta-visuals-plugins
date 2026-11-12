@@ -7,7 +7,7 @@
 ; One build for every PC: the CUDA build contains the full CPU path and loads without an NVIDIA
 ; driver (the CUDA runtime is linked statically and looks for the driver only at run time), so
 ; Premiere renders on the CPU whenever CUDA is not available.
-; Installs Film Effects, Film Bloom, Film Halation and Film Grain into Adobe's shared MediaCore
+; Installs Film Effects (FilmEffects.aex) into Adobe's shared MediaCore
 ; plug-in folder: the Plug-InsDir registry value Premiere writes
 ; (HKLM\SOFTWARE\Adobe\Premiere Pro\CurrentVersion), falling back to
 ; C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore (WITH a hyphen). The uninstaller lives in
@@ -58,6 +58,10 @@ Source: "{#RepoRoot}\LICENSE"; DestDir: "{commonpf64}\Venosta Visuals\Film Effec
 Source: "{#CudaDir}\NVIDIA-CUDA-EULA.html"; DestDir: "{commonpf64}\Venosta Visuals\Film Effects"; Check: not IsArm64; Flags: ignoreversion skipifsourcedoesntexist
 
 [InstallDelete]
+; Standalone Film Bloom / Film Halation / Film Grain (until v1.0.11) are now part of Film Effects.
+Type: files; Name: "{app}\FilmBloom.aex"
+Type: files; Name: "{app}\FilmHalation.aex"
+Type: files; Name: "{app}\FilmGrain.aex"
 ; Clean up the wrong folder used by v1.0.6 (only when our files are found there).
 Type: files; Name: "{commonpf64}\Adobe\Common\Plugins\7.0\MediaCore\FilmEffects.aex"; Check: HasStrayInstall
 Type: files; Name: "{commonpf64}\Adobe\Common\Plugins\7.0\MediaCore\FilmBloom.aex"; Check: HasStrayInstall
@@ -97,7 +101,11 @@ var
 
 function InitializeSetup(): Boolean;
 begin
-  { Decide once: [InstallDelete] deletes FilmEffects.aex first, so re-checking per entry
+  { Decide once: [InstallDelete]
+; Standalone Film Bloom / Film Halation / Film Grain (until v1.0.11) are now part of Film Effects.
+Type: files; Name: "{app}\FilmBloom.aex"
+Type: files; Name: "{app}\FilmHalation.aex"
+Type: files; Name: "{app}\FilmGrain.aex" deletes FilmEffects.aex first, so re-checking per entry
     would skip the remaining stray files. }
   StrayFound := FileExists(ExpandConstant(StrayDir + '\FilmEffects.aex'));
   Result := True;

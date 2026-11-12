@@ -1,16 +1,13 @@
 #!/usr/bin/env bash
-# Copy built Film*.plugin bundles (Film Effects, Film Bloom, Film Halation, Film Grain) into Adobe's
-# shared MediaCore plug-in folder (needs admin rights). Only touches these four bundles; any
-# previous copy is moved to a timestamped backup first.
-#   scripts/install-dev-macos.sh            # install all four
-#   scripts/install-dev-macos.sh FilmGrain  # install only some
+# Copy the built FilmEffects.plugin into Adobe's shared MediaCore plug-in folder (needs admin
+# rights). Any previous copy is moved to a timestamped backup first.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # Confirmed in Premiere Pro 27.0 Plugin Loading.log on macOS.
 DEST="/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore"
 ALT="/Library/Application Support/Adobe/Common/Plugins/7.0/MediaCore"
 NAMES=("$@")
-[[ ${#NAMES[@]} -gt 0 ]] || NAMES=(FilmEffects FilmBloom FilmHalation FilmGrain)
+[[ ${#NAMES[@]} -gt 0 ]] || NAMES=(FilmEffects)
 sudo mkdir -p "$DEST"
 for name in "${NAMES[@]}"; do
   SRC="$(find build-mac -name "$name.plugin" -maxdepth 3 | head -1)"

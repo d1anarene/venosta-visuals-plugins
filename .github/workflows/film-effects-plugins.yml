@@ -80,7 +80,7 @@ jobs:
         working-directory: plugins/film-effects
         run: |
           cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0 -DFE_BUILD_PLUGIN=ON -DAE_SDK_DIR="$AE_SDK" -DPR_SDK_DIR="$PR_SDK"
-          cmake --build build-mac --config Release --parallel --target FilmEffects FilmBloom FilmHalation FilmGrain
+          cmake --build build-mac --config Release --parallel --target FilmEffects
           mkdir -p ../../out/FilmEffects-mac
           find build-mac -maxdepth 3 -name 'Film*.plugin' -exec cp -R {} ../../out/FilmEffects-mac/ \;
           cp scripts/install-mac.command ../../out/FilmEffects-mac/
@@ -118,7 +118,7 @@ jobs:
           }
           cmake @configureArgs
           if ($LASTEXITCODE -ne 0) { throw 'Windows plugin configuration failed' }
-          foreach ($t in "FilmEffects", "FilmBloom", "FilmHalation", "FilmGrain", "fe_aex_load_test") {
+          foreach ($t in "FilmEffects", "fe_aex_load_test") {
             cmake --build build-win --config Release --target $t
             if ($LASTEXITCODE -ne 0) { throw "build of $t failed" }
           }
@@ -206,7 +206,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $setup = (Resolve-Path out\FilmEffects-Windows-Setup.exe).Path
-          $names = 'FilmEffects.aex', 'FilmBloom.aex', 'FilmHalation.aex', 'FilmGrain.aex'
+          $names = @('FilmEffects.aex')
+          $retired = 'FilmBloom.aex', 'FilmHalation.aex', 'FilmGrain.aex'  # standalone effects until v1.0.11
           $fallback = "$env:ProgramFiles\Adobe\Common\Plug-ins\7.0\MediaCore"
           $stray = "$env:ProgramFiles\Adobe\Common\Plugins\7.0\MediaCore"
           $uninst = "$env:ProgramFiles\Venosta Visuals\Film Effects\unins000.exe"
@@ -223,9 +224,13 @@ jobs:
           }
           # 1) Upgrade over a simulated v1.0.6 install in the wrong folder, no Premiere registry value.
           New-Item -ItemType Directory -Force $stray | Out-Null
-          foreach ($n in $names + 'unins000.exe', 'unins000.dat') { Set-Content "$stray\$n" 'old' }
+          foreach ($n in $names + $retired + 'unins000.exe', 'unins000.dat') { Set-Content "$stray\$n" 'old' }
+          # ...and a v1.0.11 install in the right folder, with the retired standalone effects.
+          New-Item -ItemType Directory -Force $fallback | Out-Null
+          foreach ($n in $retired) { Set-Content "$fallback\$n" 'old' }
           Install "$env:RUNNER_TEMP\setup1.log"
           foreach ($n in $names) { if (-not (Test-Path "$fallback\$n")) { throw "Missing $fallback\$n" } }
+          foreach ($n in $retired) { if (Test-Path "$fallback\$n") { throw "Upgrade left the retired $n" } }
           foreach ($n in $names) { if ((Get-FileHash "$fallback\$n").Hash -ne (Get-FileHash "_win\cuda\$n").Hash) { throw "$n is not the x64 CUDA build" } }
           if (Test-Path "$env:ProgramFiles\Adobe\Common\Plugins") { Get-ChildItem -Recurse "$env:ProgramFiles\Adobe\Common\Plugins"; throw 'Stray Common\Plugins folder not removed' }
           Uninstall $fallback

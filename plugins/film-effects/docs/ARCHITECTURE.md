@@ -20,9 +20,9 @@ tests/core           unit/image tests (no dependencies)
 
 ## Effect variants
 
-Premiere loads one effect per plugin binary, so the same sources are built four times with
-`FE_VARIANT` (0 Film Effects, 1 Film Bloom, 2 Film Halation, 3 Film Grain), each with its own match
-name. `FilmEffectsParams.h` holds one table of every control (stable on-disk IDs); each variant
+Only **Film Effects** (`FE_VARIANT` 0) is built and shipped. Until v1.0.11 the same sources were
+also built as standalone Film Bloom / Film Halation / Film Grain (`FE_VARIANT` 1..3); the owner
+chose one panel instead. The variant code is kept so its parameter tables stay tested. `FilmEffectsParams.h` holds one table of every control (stable on-disk IDs); each variant
 lists the controls it shows. Controls a variant hides take their defaults, and a standalone
 variant enables only its own effect, so it renders bit-identically to the combined effect with
 only that section on (tested: `standalone_renders_identically_to_combined_section`).

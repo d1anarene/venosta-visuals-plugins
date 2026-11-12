@@ -1,6 +1,7 @@
 // Film Effects — OpenFX plug-in (DaVinci Resolve and other OFX hosts).
 //
-// One bundle, four effects: Film Effects (combined), Film Bloom, Film Halation, Film Grain — the
+// One effect, Film Effects, with every tool in one panel (standalone Bloom/Halation/Grain effects
+// existed until v1.0.11) — the
 // same variants, parameters and core renderer as the Premiere plug-ins (src/core). Built on the
 // BSD-licensed OpenFX C++ Support library (fetched at configure time, see ofx.cmake).
 //
@@ -366,14 +367,9 @@ class FilmEffectsFactory : public OFX::PluginFactoryHelper<FilmEffectsFactory<V>
 namespace OFX {
 namespace Plugin {
 void getPluginIDs(OFX::PluginFactoryArray& ids) {
+  // One effect with every tool. (Standalone Film Bloom / Halation / Grain existed until v1.0.11.)
   static FilmEffectsFactory<0> combined;
-  static FilmEffectsFactory<1> bloom;
-  static FilmEffectsFactory<2> halation;
-  static FilmEffectsFactory<3> grain;
   ids.push_back(&combined);
-  ids.push_back(&bloom);
-  ids.push_back(&halation);
-  ids.push_back(&grain);
 }
 }  // namespace Plugin
 }  // namespace OFX
