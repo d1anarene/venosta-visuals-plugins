@@ -48,10 +48,11 @@ certificates; the full source is public): allow them in System Settings → Priv
 | **Bloom** | Soft, multi-scale glow from highlights that keeps each light's colour | Intensity, Threshold, Soft Knee, Radius (% of frame height) |
 | **Halation** | Warm red/orange fringe just outside bright edges (windows, lamps, neon) — not a red wash | Intensity, Threshold, Radius, Warmth |
 | **Film Grain** | Organic, clumped grain that follows the image's tones, changes every frame and is identical every time you render the same frame | Amount, Size, Roughness, Shadow/Midtone/Highlight response, Luma/Color, Seed, Animate |
+| **Film Gate** | The film in a projector gate: gate weave (the image wobbles slightly), lamp flicker, dust specks and vertical scratches that move with the film, and a soft rounded gate edge | Gate Weave, Flicker, Gate Edge, Edge Softness, Corner Roundness, Dust, Scratches, Dust & Scratch Look (dark print / light negative / mixed), Gate Seed |
 
 Global: Master Enable, Global Mix, Working Space (Rec.709 gamma 2.4 / sRGB / Linear), Processing
 Quality. Presets: *Subtle Film, Soft Highlight Glow, Night Lights, Fine 35mm Grain, Coarse 16mm
-Grain, Halation Only, Off* — choosing one fills in the normal parameters, which you can then tweak
+Grain, Halation Only, Off, Old Projector* — choosing one fills in the normal parameters, which you can then tweak
 and keyframe.
 
 ## Install

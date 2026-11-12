@@ -15,6 +15,7 @@ namespace {
 using gpu::CompositeInfo;
 using gpu::F4;
 using gpu::FrameInfo;
+using gpu::GateInfo;
 using gpu::H4;
 using gpu::PlaneInfo;
 
@@ -72,6 +73,18 @@ __global__ void kComposite(const T* src, T* dst, const F4* lin, const F4* bloom,
                            const F4* hs, CompositeInfo ci) {
   uint32_t x, y;
   if (coords(ci.width, ci.height, x, y)) gpu::pxComposite(src, dst, lin, bloom, hn, hf, hs, ci, x, y);
+}
+
+template <typename T>
+__global__ void kCompositeFilm(const T* src, F4* film, const F4* lin, const F4* bloom, const F4* hn, const F4* hf,
+                               const F4* hs, CompositeInfo ci) {
+  uint32_t x, y;
+  if (coords(ci.width, ci.height, x, y)) gpu::pxCompositeFilm(src, film, lin, bloom, hn, hf, hs, ci, x, y);
+}
+template <typename T>
+__global__ void kGate(const T* src, T* dst, const F4* film, GateInfo g) {
+  uint32_t x, y;
+  if (coords(g.width, g.height, x, y)) gpu::pxGate(src, dst, film, g, x, y);
 }
 
 struct CudaBackend {
@@ -148,6 +161,23 @@ struct CudaBackend {
     else
       kComposite<<<grid(ci.width, ci.height), block(), 0, stream>>>(static_cast<const F4*>(src), static_cast<F4*>(dst),
                                                                     lin, bloom, hn, hf, hs, ci);
+    check();
+  }
+  void compositeFilm(const void* src, bool half, Buf film, Buf lin, Buf bloom, Buf hn, Buf hf, Buf hs,
+                     const CompositeInfo& ci) {
+    if (half)
+      kCompositeFilm<<<grid(ci.width, ci.height), block(), 0, stream>>>(static_cast<const H4*>(src), film, lin, bloom,
+                                                                        hn, hf, hs, ci);
+    else
+      kCompositeFilm<<<grid(ci.width, ci.height), block(), 0, stream>>>(static_cast<const F4*>(src), film, lin, bloom,
+                                                                        hn, hf, hs, ci);
+    check();
+  }
+  void gate(const void* src, void* dst, bool half, Buf film, const GateInfo& g) {
+    if (half)
+      kGate<<<grid(g.width, g.height), block(), 0, stream>>>(static_cast<const H4*>(src), static_cast<H4*>(dst), film, g);
+    else
+      kGate<<<grid(g.width, g.height), block(), 0, stream>>>(static_cast<const F4*>(src), static_cast<F4*>(dst), film, g);
     check();
   }
 };

@@ -9,6 +9,7 @@ namespace fe {
 enum class WorkingSpace : int { Rec709Gamma24 = 0, SRGB = 1, Linear = 2 };
 enum class GrainColor : int { Luma = 0, Color = 1 };
 enum class Quality : int { Normal = 0, High = 1 };
+enum class DefectLook : int { Dark = 0, Light = 1, Mixed = 2 };  // dust/scratches: print, negative, both
 
 struct BloomParams {
   bool enabled = false;
@@ -41,6 +42,22 @@ struct GrainParams {
   bool animate = true;
 };
 
+/** Film Gate: what happens to the film in the projector / scanner gate. All procedural and
+ *  deterministic per (seed, frame); always animated. */
+struct GateParams {
+  bool enabled = false;
+  float weave = 0.6f;          // gate weave amplitude, pixels of a 1080-line frame (0..10)
+  float flicker = 0.15f;       // exposure flicker, 0..1 (1 = about ±20% exposure)
+  float edge = 0.0f;           // gate edge inset, % of frame height (0 = no visible edge)
+  float edgeSoftness = 0.3f;   // 0..1
+  float edgeRoundness = 0.25f; // 0..1 corner radius
+  float dust = 0.1f;           // dust specks, 0..1
+  float scratches = 0.0f;      // vertical scratches, 0..1
+  DefectLook look = DefectLook::Dark;
+  int32_t seed = 7;
+  bool anyActive() const { return enabled && (weave > 0.f || flicker > 0.f || edge > 0.f || dust > 0.f || scratches > 0.f); }
+};
+
 struct FilmParams {
   bool masterEnable = true;
   float mix = 1.0f;  // 0..1
@@ -49,12 +66,13 @@ struct FilmParams {
   BloomParams bloom;
   HalationParams halation;
   GrainParams grain;
+  GateParams gate;
 
   bool anyEffectActive() const {
     return masterEnable && mix > 0.0f &&
            ((bloom.enabled && bloom.intensity > 0.0f) ||
             (halation.enabled && halation.intensity > 0.0f) ||
-            (grain.enabled && grain.amount > 0.0f));
+            (grain.enabled && grain.amount > 0.0f) || gate.anyActive());
   }
 };
 
@@ -67,7 +85,7 @@ struct Preset {
 };
 
 /** Built-in presets: Subtle Film, Soft Highlight Glow, Night Lights, Fine 35mm Grain,
- *  Coarse 16mm Grain, Halation Only, Off. */
+ *  Coarse 16mm Grain, Halation Only, Off, Old Projector. */
 const std::vector<Preset>& builtinPresets();
 const Preset* findPreset(const std::string& name);
 

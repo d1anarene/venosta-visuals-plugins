@@ -14,6 +14,9 @@
 //   void clear(Buf dst, PlaneInfo p);
 //   void composite(const void* src, void* dst, bool half, Buf lin, Buf bloom, Buf halNear, Buf halFar,
 //                  Buf halSrc, const CompositeInfo&);
+//   void compositeFilm(const void* src, bool half, Buf film, Buf lin, Buf bloom, Buf halNear, Buf halFar,
+//                      Buf halSrc, const CompositeInfo&);   // Film Gate only
+//   void gate(const void* src, void* dst, bool half, Buf film, const GateInfo&);  // Film Gate only
 // Every call must complete before the next one starts reading its output (in-order stream).
 #pragma once
 #include <algorithm>
@@ -24,6 +27,7 @@
 #include "blur/blur_plan.h"
 #include "common/fe_kernels.h"
 #include "fe_gpu_pixels.h"
+#include "gate/gate.h"
 #include "params/params.h"
 
 namespace fe {
@@ -63,6 +67,25 @@ inline CompositeInfo makeCompositeInfo(const FilmParams& p, uint32_t w, uint32_t
   ci.grainKey = fe_hash3(fe_uint(p.grain.seed), fe_uint(t & 0xffffffffu), fe_uint(t >> 32));
   ci.mix = p.mix;
   return ci;
+}
+
+/** GPU form of the per-frame gate values (computed on the host by the tested core). */
+inline GateInfo makeGateInfo(const GateFrame& f, uint32_t w, uint32_t h, uint32_t rowPixels, int32_t space, bool rgba,
+                             bool bottomUp, float mix) {
+  GateInfo g{};
+  g.width = w; g.height = h; g.rowPixels = rowPixels;
+  g.space = space; g.rgba = rgba ? 1 : 0; g.bottomUp = bottomUp ? 1 : 0;
+  g.doWeave = f.doWeave; g.doDefects = f.doDefects; g.doEdge = f.doEdge;
+  g.look = f.look; g.scratchCount = f.scratchCount;
+  g.dx = f.dx; g.dy = f.dy; g.gain = f.gain;
+  g.insetPx = f.insetPx; g.softPx = f.softPx; g.radiusPx = f.radiusPx;
+  g.dustCellPx = f.dustCellPx; g.dustDensity = f.dustDensity; g.dustSizePx = f.dustSizePx; g.dustKey = f.dustKey;
+  g.mix = mix;
+  for (int k = 0; k < kMaxScratches; ++k) {
+    g.sx0[k] = f.scratches[k].x0; g.sslope[k] = f.scratches[k].slope; g.swidth[k] = f.scratches[k].widthPx;
+    g.sstrength[k] = f.scratches[k].strength; g.skey[k] = f.scratches[k].key; g.ssign[k] = f.scratches[k].sign;
+  }
+  return g;
 }
 
 template <typename Backend>
@@ -112,14 +135,26 @@ class Pipeline {
     CompositeInfo ci = makeCompositeInfo(p, w, h, rowPixels, hplan, frameKey);
     ci.rgba = rgba ? 1 : 0;
     ci.bottomUp = bottomUp ? 1 : 0;
-    B.composite(src, dst, half, lin, accB[0], halNear, halFar, halSrc, ci);
+    const GateFrame gf = gateFrame(p.gate, int(w), int(h), frameKey);
+    if (gf.active) {
+      // Film image first (no mix), then the gate pass reads it with the weave offset and mixes.
+      if (!filmAllocated) {
+        film = B.alloc(size_t(w) * h);
+        filmAllocated = true;
+      }
+      B.compositeFilm(src, half, film, lin, accB[0], halNear, halFar, halSrc, ci);
+      B.gate(src, dst, half, film, makeGateInfo(gf, w, h, rowPixels, int32_t(p.space), rgba, bottomUp, p.mix));
+    } else {
+      B.composite(src, dst, half, lin, accB[0], halNear, halFar, halSrc, ci);
+    }
     return true;
   }
 
  private:
   Backend& B;
   uint32_t cachedW = 0, cachedH = 0;
-  Buf lin{}, halSrc{}, halNear{}, halFar{};
+  Buf lin{}, halSrc{}, halNear{}, halFar{}, film{};
+  bool filmAllocated = false;  // allocated on first use (Film Gate), released with the others
   std::vector<Buf> levels, accA, accB, tmpA, tmpB;
   std::vector<PlaneInfo> dims;
 
@@ -128,6 +163,7 @@ class Pipeline {
     cachedW = w;
     cachedH = h;
     B.releaseAll();  // previous frame size's buffers (no work is in flight between frames)
+    filmAllocated = false;
     const size_t full = size_t(w) * h;
     lin = B.alloc(full);
     halSrc = B.alloc(full);

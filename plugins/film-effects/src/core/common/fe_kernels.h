@@ -17,6 +17,7 @@
   FE_FN float fe_exp(float a) { return exp(a); }
   FE_FN float fe_floor(float a) { return floor(a); }
   FE_FN float fe_fabs(float a) { return fabs(a); }
+  FE_FN float fe_sqrt(float a) { return sqrt(a); }
 #else
   #include <cmath>
   #include <cstdint>
@@ -27,12 +28,14 @@
     #define FE_EXPF expf
     #define FE_FLOORF floorf
     #define FE_FABSF fabsf
+    #define FE_SQRTF sqrtf
   #else
     #define FE_FN inline
     #define FE_POWF std::pow
     #define FE_EXPF std::exp
     #define FE_FLOORF std::floor
     #define FE_FABSF std::fabs
+    #define FE_SQRTF std::sqrt
   #endif
   typedef uint32_t fe_uint;
   struct fe_float3 {
@@ -47,6 +50,7 @@
   FE_FN float fe_exp(float a) { return FE_EXPF(a); }
   FE_FN float fe_floor(float a) { return FE_FLOORF(a); }
   FE_FN float fe_fabs(float a) { return FE_FABSF(a); }
+  FE_FN float fe_sqrt(float a) { return FE_SQRTF(a); }
 #endif
 
 FE_FN float fe_clamp(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -204,6 +208,90 @@ FE_FN float fe_grain_response(float y, float shadows, float mids, float highs) {
   float wh = fe_smoothstep(0.55f, 1.0f, v);
   float wm = 1.0f - ws - wh;
   return fe_max(ws * shadows + wm * mids + wh * highs, 0.0f);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Film Gate (per pixel). Per-frame values (weave offset, flicker gain, scratch lines) are computed
+// once per frame on the host (src/core/gate) and passed in. Coordinates are full-frame pixels,
+// top row = 0; sizes are already scaled to the frame.
+// ---------------------------------------------------------------------------------------------
+
+// Hash -> [0, 1).
+FE_FN float fe_unit(fe_uint h) { return (float)(h >> 8) * (1.0f / 16777216.0f); }
+
+// Catmull-Rom cubic weight for tap k (offsets -1, 0, 1, 2) at fractional position t in [0, 1).
+// Sharp (interpolating) resampling for the gate weave; weights sum to 1.
+FE_FN float fe_catmull_rom(float t, int k) {
+  float t2 = t * t, t3 = t2 * t;
+  if (k == 0) return 0.5f * (-t3 + 2.0f * t2 - t);
+  if (k == 1) return 0.5f * (3.0f * t3 - 5.0f * t2 + 2.0f);
+  if (k == 2) return 0.5f * (-3.0f * t3 + 4.0f * t2 + t);
+  return 0.5f * (t3 - t2);
+}
+
+// Visible part of the frame inside a rounded, soft-edged gate aperture (1 inside, 0 outside).
+// insetPx: aperture edge distance from the frame border; softPx: half width of the soft edge;
+// radiusPx: corner radius.
+FE_FN float fe_gate_mask(float x, float y, float w, float h, float insetPx, float softPx, float radiusPx) {
+  float hx = fe_max(w * 0.5f - insetPx, 1.0f), hy = fe_max(h * 0.5f - insetPx, 1.0f);
+  float r = fe_min(radiusPx, fe_min(hx, hy));
+  float qx = fe_fabs(x + 0.5f - w * 0.5f) - (hx - r);
+  float qy = fe_fabs(y + 0.5f - h * 0.5f) - (hy - r);
+  float ox = fe_max(qx, 0.0f), oy = fe_max(qy, 0.0f);
+  float sd = fe_sqrt(ox * ox + oy * oy) + fe_min(fe_max(qx, qy), 0.0f) - r;  // signed distance
+  return 1.0f - fe_smoothstep(-softPx, softPx, sd);
+}
+
+// Dust at film position (x, y): signed coverage, < 0 dark speck, > 0 light speck, 0 none.
+// Specks live in a hashed grid (cellPx >= 4 * sizePx), one candidate per cell with probability
+// `density`, so only the 3x3 neighbouring cells need checking. look: 0 dark, 1 light, 2 mixed.
+FE_FN float fe_dust(float x, float y, float cellPx, float density, float sizePx, fe_uint key, int look) {
+  int cx = (int)fe_floor(x / cellPx), cy = (int)fe_floor(y / cellPx);
+  float best = 0.0f;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      fe_uint h = fe_hash3((fe_uint)(cx + i), (fe_uint)(cy + j), key);
+      if (fe_unit(h) >= density) continue;
+      fe_uint h1 = fe_hash(h + 0x68E31DA4U), h2 = fe_hash(h + 0xB5297A4DU), h3 = fe_hash(h + 0x1B56C4E9U);
+      float u = fe_unit(h3);
+      float radius = sizePx * (0.3f + 0.7f * u * u);  // mostly small specks, a few larger ones
+      float px = ((float)(cx + i) + 0.15f + 0.7f * fe_unit(h1)) * cellPx;
+      float py = ((float)(cy + j) + 0.15f + 0.7f * fe_unit(h2)) * cellPx;
+      float dx = x + 0.5f - px, dy = y + 0.5f - py;
+      // Irregular outline: the radius wobbles with low-frequency noise around the speck.
+      float wob = 1.0f + 0.3f * fe_clamp(fe_value_noise(dx / (radius * 0.8f) + 7.1f, dy / (radius * 0.8f) + 3.3f, h), -1.5f, 1.5f);
+      float d = fe_sqrt(dx * dx + dy * dy) / fe_max(radius * wob, 0.3f);
+      float cov = (1.0f - fe_smoothstep(0.7f, 1.0f, d)) * (0.55f + 0.45f * fe_unit(fe_hash(h + 0x2545F491U)));
+      float sgn = look == 0 ? -1.0f : (look == 1 ? 1.0f : (((h >> 3) & 1U) != 0U ? 1.0f : -1.0f));
+      if (cov * cov > best * best) best = cov * sgn;
+    }
+  }
+  return best;
+}
+
+// One vertical scratch at film position (x, y): coverage 0..1. x0: line position at mid height,
+// slope: horizontal drift per pixel of height, widthPx: line width, strength: 0..1.
+FE_FN float fe_scratch(float x, float y, float h, float x0, float slope, float widthPx, float strength, fe_uint key) {
+  float lx = x0 + slope * (y - h * 0.5f) + widthPx * 1.5f * fe_value_noise(0.37f, y / (h * 0.15f), key);
+  float d = fe_fabs(x + 0.5f - lx);
+  float core = 1.0f - fe_smoothstep(widthPx * 0.5f, widthPx * 0.5f + 1.0f, d);
+  // Breaks and density changes along the length.
+  float along = fe_clamp(0.55f + 0.6f * fe_value_noise(5.3f, y / (h * 0.04f), key ^ 0x9E3779B9U), 0.0f, 1.0f);
+  return core * along * strength;
+}
+
+// Apply defects (signed: dark < 0 < light), flicker gain and gate mask to an encoded colour.
+FE_FN fe_float3 fe_gate_shade(fe_float3 enc, float defect, float gain, float mask, int space) {
+  if (defect == 0.0f && gain == 1.0f && mask == 1.0f) return enc;  // nothing to do: exact
+  fe_float3 l = fe_to_linear(enc, space);
+  if (defect < 0.0f) {
+    l = l * (1.0f + 0.9f * defect);  // dark: dust on the print blocks light
+  } else if (defect > 0.0f) {
+    fe_float3 up = fe_make3(fe_max(1.0f - l.x, 0.0f), fe_max(1.0f - l.y, 0.0f), fe_max(1.0f - l.z, 0.0f));
+    l = l + up * (0.9f * defect);    // light: dust on the negative prints as white
+  }
+  l = l * (gain * mask);
+  return fe_from_linear(l, space);
 }
 
 #endif  // FE_KERNELS_H

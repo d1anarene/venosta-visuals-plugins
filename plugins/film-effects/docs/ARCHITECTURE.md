@@ -45,8 +45,16 @@ only that section on (tested: `standalone_renders_identically_to_combined_sectio
 6. **Grain** in the working encoding (perceptual domain): multiscale value-noise field (3 octaves,
    hashed lattice → no repeating tile), amplitude from a smooth shadow/mid/highlight response on the
    pixel's own luma, luma or colour mode.
-7. **Global Mix** against the original; non-finite results fall back to the original pixel.
-8. **Alpha** copied unchanged; fully transparent pixels are returned untouched.
+7. **Film Gate** (optional, `src/core/gate`) on the finished film image (steps 3-6):
+   dust/scratches are on the film, so they are placed in film coordinates and move with it;
+   the film moves in the gate by the per-frame *weave* offset (sub-pixel, Catmull-Rom resampling,
+   edge-clamped; vertical amplitude 1×, horizontal 0.6×, smooth drift + 30 % jitter); the lamp
+   *flicker* is an exposure gain in linear light (amount 1 ≈ ±20 %); the *gate aperture* is a
+   rounded rectangle with a soft edge, fixed to the frame, black outside. Defects darken (print)
+   or lighten (negative) in linear light. Per-frame values come from the seed and frame key only;
+   GPU backends compute the film image into a separate buffer, then run one gate pass.
+8. **Global Mix** against the original; non-finite results fall back to the original pixel.
+9. **Alpha** copied unchanged; fully transparent pixels are returned untouched.
 
 ## Conventions
 

@@ -31,6 +31,14 @@ FilmParams sanitized(const FilmParams& in) {
   p.grain.midtones = clampf(p.grain.midtones, 0.f, 2.f, d.grain.midtones);
   p.grain.highlights = clampf(p.grain.highlights, 0.f, 2.f, d.grain.highlights);
   p.grain.chroma = clampf(p.grain.chroma, 0.f, 1.f, d.grain.chroma);
+  p.gate.weave = clampf(p.gate.weave, 0.f, 10.f, d.gate.weave);
+  p.gate.flicker = clampf(p.gate.flicker, 0.f, 1.f, d.gate.flicker);
+  p.gate.edge = clampf(p.gate.edge, 0.f, 15.f, d.gate.edge);
+  p.gate.edgeSoftness = clampf(p.gate.edgeSoftness, 0.f, 1.f, d.gate.edgeSoftness);
+  p.gate.edgeRoundness = clampf(p.gate.edgeRoundness, 0.f, 1.f, d.gate.edgeRoundness);
+  p.gate.dust = clampf(p.gate.dust, 0.f, 1.f, d.gate.dust);
+  p.gate.scratches = clampf(p.gate.scratches, 0.f, 1.f, d.gate.scratches);
+  if (static_cast<int>(p.gate.look) < 0 || static_cast<int>(p.gate.look) > 2) p.gate.look = d.gate.look;
   return p;
 }
 
@@ -78,6 +86,23 @@ const std::vector<Preset>& builtinPresets() {
       p.halation = {true, 0.18f, 0.85f, 0.30f, 0.7f, 0.35f};
     });
     add("Off", [](FilmParams&) {});
+    // Appended last: preset menu values are saved in projects, so the order must never change.
+    add("Old Projector", [](FilmParams& p) {
+      p.bloom = {true, 0.12f, 0.80f, 0.50f, 4.0f};
+      p.halation = {true, 0.10f, 0.90f, 0.30f, 0.6f, 0.35f};
+      p.grain.enabled = true;
+      p.grain.amount = 0.32f;
+      p.grain.size = 1.8f;
+      p.gate.enabled = true;
+      p.gate.weave = 1.6f;
+      p.gate.flicker = 0.35f;
+      p.gate.edge = 2.5f;
+      p.gate.edgeSoftness = 0.35f;
+      p.gate.edgeRoundness = 0.35f;
+      p.gate.dust = 0.35f;
+      p.gate.scratches = 0.3f;
+      p.gate.look = DefectLook::Dark;
+    });
     return v;
   }();
   return presets;

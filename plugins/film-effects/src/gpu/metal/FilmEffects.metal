@@ -59,6 +59,21 @@ struct CompositeInfo {
   int bottomUp;          // 1: row 0 is the bottom row (OpenFX); grain rows count from the top
 };
 
+// Must match gpu::GateInfo in src/gpu/common/fe_gpu_pixels.h (4-byte members only).
+struct GateInfo {
+  uint width, height, rowPixels;
+  int space, rgba, bottomUp;
+  int doWeave, doDefects, doEdge, look, scratchCount;
+  float dx, dy, gain;
+  float insetPx, softPx, radiusPx;
+  float dustCellPx, dustDensity, dustSizePx;
+  uint dustKey;
+  float mix;
+  float sx0[4], sslope[4], swidth[4], sstrength[4];
+  uint skey[4];
+  int ssign[4];
+};
+
 // ---------------------------------------------------------------------------------------------
 // 1. Linearise the host frame (BGRA) and extract bloom/halation sources.
 // ---------------------------------------------------------------------------------------------
@@ -174,17 +189,10 @@ static float grain_sample(uint x, uint y, constant CompositeInfo& ci, int channe
   return fe_grain_field(float(x) + 0.5f, float(y) + 0.5f, ci.grainSizePx, ci.grainRoughness, key);
 }
 
-template <typename T>
-static void composite_impl(device const T* src, device T* dst, device const float4* lin, device const float4* bloom,
-                           device const float4* halNear, device const float4* halFar, device const float4* halSrc,
-                           constant CompositeInfo& ci, uint2 gid) {
-  if (gid.x >= ci.width || gid.y >= ci.height) return;
-  uint fi = gid.y * ci.rowPixels + gid.x;
-  uint pi = gid.y * ci.width + gid.x;
-  float4 s = float4(src[fi]);
-  float3 orig = ci.rgba != 0 ? s.xyz : float3(s.z, s.y, s.x);
-  float alpha = s.w;
-  uint gy = ci.bottomUp != 0 ? ci.height - 1 - gid.y : gid.y;  // grain rows counted from the top
+// Bloom + halation + grain for one pixel (no mix); orig is RGB in working encoding.
+static float3 composite_color(float3 orig, device const float4* lin, device const float4* bloom,
+                              device const float4* halNear, device const float4* halFar, device const float4* halSrc,
+                              constant CompositeInfo& ci, uint x, uint gy, uint pi) {
   float3 o = orig;
   if (ci.doBloom != 0 || ci.doHal != 0) {
     float3 add = 0.0f;
@@ -201,16 +209,31 @@ static void composite_impl(device const T* src, device T* dst, device const floa
   if (ci.doGrain != 0) {
     float a = ci.grainAmp * fe_grain_response(fe_luma(o), ci.grainShadows, ci.grainMids, ci.grainHighs);
     if (a > 0.0f) {
-      float base = grain_sample(gid.x, gy, ci, 0);
+      float base = grain_sample(x, gy, ci, 0);
       if (ci.grainColor == 0) {
         o += a * base;
       } else {
-        o.x += a * (base + ci.grainChroma * grain_sample(gid.x, gy, ci, 1));
-        o.y += a * (base + ci.grainChroma * grain_sample(gid.x, gy, ci, 2));
-        o.z += a * (base + ci.grainChroma * grain_sample(gid.x, gy, ci, 3));
+        o.x += a * (base + ci.grainChroma * grain_sample(x, gy, ci, 1));
+        o.y += a * (base + ci.grainChroma * grain_sample(x, gy, ci, 2));
+        o.z += a * (base + ci.grainChroma * grain_sample(x, gy, ci, 3));
       }
     }
   }
+  return o;
+}
+
+template <typename T>
+static void composite_impl(device const T* src, device T* dst, device const float4* lin, device const float4* bloom,
+                           device const float4* halNear, device const float4* halFar, device const float4* halSrc,
+                           constant CompositeInfo& ci, uint2 gid) {
+  if (gid.x >= ci.width || gid.y >= ci.height) return;
+  uint fi = gid.y * ci.rowPixels + gid.x;
+  uint pi = gid.y * ci.width + gid.x;
+  float4 s = float4(src[fi]);
+  float3 orig = ci.rgba != 0 ? s.xyz : float3(s.z, s.y, s.x);
+  float alpha = s.w;
+  uint gy = ci.bottomUp != 0 ? ci.height - 1 - gid.y : gid.y;  // grain rows counted from the top
+  float3 o = composite_color(orig, lin, bloom, halNear, halFar, halSrc, ci, gid.x, gy, pi);
   if (alpha <= 0.0f) {
     o = orig;  // never invent colour where the layer is transparent
   } else if (ci.mix < 1.0f) {
@@ -233,4 +256,96 @@ kernel void fe_composite_f16(device const half4* src [[buffer(0)]], device half4
                              device const float4* halSrc [[buffer(6)]], constant CompositeInfo& ci [[buffer(7)]],
                              uint2 gid [[thread_position_in_grid]]) {
   composite_impl(src, dst, lin, bloom, halNear, halFar, halSrc, ci, gid);
+}
+
+// ---------------------------------------------------------------------------------------------
+// 6. Film Gate (src/core/gate): film image without mix, then weave / defects / flicker / aperture.
+// ---------------------------------------------------------------------------------------------
+template <typename T>
+static void composite_film_impl(device const T* src, device float4* film, device const float4* lin,
+                                device const float4* bloom, device const float4* halNear, device const float4* halFar,
+                                device const float4* halSrc, constant CompositeInfo& ci, uint2 gid) {
+  if (gid.x >= ci.width || gid.y >= ci.height) return;
+  uint pi = gid.y * ci.width + gid.x;
+  float4 s = float4(src[gid.y * ci.rowPixels + gid.x]);
+  float3 orig = ci.rgba != 0 ? s.xyz : float3(s.z, s.y, s.x);
+  float3 o = orig;
+  if (s.w > 0.0f) {
+    uint gy = ci.bottomUp != 0 ? ci.height - 1 - gid.y : gid.y;
+    o = composite_color(orig, lin, bloom, halNear, halFar, halSrc, ci, gid.x, gy, pi);
+    if (!isfinite(o.x)) o.x = orig.x;
+    if (!isfinite(o.y)) o.y = orig.y;
+    if (!isfinite(o.z)) o.z = orig.z;
+  }
+  film[pi] = float4(o, s.w);
+}
+kernel void fe_composite_film_f32(device const float4* src [[buffer(0)]], device float4* film [[buffer(1)]],
+                                  device const float4* lin [[buffer(2)]], device const float4* bloom [[buffer(3)]],
+                                  device const float4* halNear [[buffer(4)]], device const float4* halFar [[buffer(5)]],
+                                  device const float4* halSrc [[buffer(6)]], constant CompositeInfo& ci [[buffer(7)]],
+                                  uint2 gid [[thread_position_in_grid]]) {
+  composite_film_impl(src, film, lin, bloom, halNear, halFar, halSrc, ci, gid);
+}
+kernel void fe_composite_film_f16(device const half4* src [[buffer(0)]], device float4* film [[buffer(1)]],
+                                  device const float4* lin [[buffer(2)]], device const float4* bloom [[buffer(3)]],
+                                  device const float4* halNear [[buffer(4)]], device const float4* halFar [[buffer(5)]],
+                                  device const float4* halSrc [[buffer(6)]], constant CompositeInfo& ci [[buffer(7)]],
+                                  uint2 gid [[thread_position_in_grid]]) {
+  composite_film_impl(src, film, lin, bloom, halNear, halFar, halSrc, ci, gid);
+}
+
+static float gate_defect(constant GateInfo& g, float fx, float fy) {
+  float d = g.dustDensity > 0.0f ? fe_dust(fx, fy, g.dustCellPx, g.dustDensity, g.dustSizePx, g.dustKey, g.look) : 0.0f;
+  for (int k = 0; k < g.scratchCount; ++k)
+    d += float(g.ssign[k]) * fe_scratch(fx, fy, float(g.height), g.sx0[k], g.sslope[k], g.swidth[k], g.sstrength[k], g.skey[k]);
+  return fe_clamp(d, -1.0f, 1.0f);
+}
+
+template <typename T>
+static void gate_impl(device const T* src, device T* dst, device const float4* film, constant GateInfo& g, uint2 gid) {
+  if (gid.x >= g.width || gid.y >= g.height) return;
+  uint fi = gid.y * g.rowPixels + gid.x;
+  float4 s = float4(src[fi]);
+  float3 orig = g.rgba != 0 ? s.xyz : float3(s.z, s.y, s.x);
+  float3 o = orig;
+  if (s.w > 0.0f) {
+    int H = int(g.height), W = int(g.width);
+    float ty = float(g.bottomUp != 0 ? g.height - 1 - gid.y : gid.y);  // top-down row
+    float fx = float(gid.x) - g.dx, fy = ty - g.dy;
+    float3 col;
+    if (g.doWeave != 0) {
+      float bx = floor(fx), by = floor(fy);
+      float tx = fx - bx, tyf = fy - by;
+      col = 0.0f;
+      for (int j = 0; j < 4; ++j) {
+        int r = clamp(int(by) - 1 + j, 0, H - 1);
+        if (g.bottomUp != 0) r = H - 1 - r;
+        float wy = fe_catmull_rom(tyf, j);
+        for (int i = 0; i < 4; ++i) {
+          int c = clamp(int(bx) - 1 + i, 0, W - 1);
+          col += (wy * fe_catmull_rom(tx, i)) * film[uint(r) * g.width + uint(c)].xyz;
+        }
+      }
+    } else {
+      col = film[gid.y * g.width + gid.x].xyz;
+    }
+    float defect = g.doDefects != 0 ? gate_defect(g, fx, fy) : 0.0f;
+    float mask = g.doEdge != 0 ? fe_gate_mask(float(gid.x), ty, float(g.width), float(g.height), g.insetPx, g.softPx, g.radiusPx) : 1.0f;
+    float3 sh = fe_gate_shade(col, defect, g.gain, mask, g.space);
+    o = g.mix < 1.0f ? orig + (sh - orig) * g.mix : sh;
+    if (!isfinite(o.x)) o.x = orig.x;
+    if (!isfinite(o.y)) o.y = orig.y;
+    if (!isfinite(o.z)) o.z = orig.z;
+  }
+  dst[fi] = g.rgba != 0 ? T(float4(o, s.w)) : T(float4(o.z, o.y, o.x, s.w));
+}
+kernel void fe_gate_f32(device const float4* src [[buffer(0)]], device float4* dst [[buffer(1)]],
+                        device const float4* film [[buffer(2)]], constant GateInfo& g [[buffer(3)]],
+                        uint2 gid [[thread_position_in_grid]]) {
+  gate_impl(src, dst, film, g, gid);
+}
+kernel void fe_gate_f16(device const half4* src [[buffer(0)]], device half4* dst [[buffer(1)]],
+                        device const float4* film [[buffer(2)]], constant GateInfo& g [[buffer(3)]],
+                        uint2 gid [[thread_position_in_grid]]) {
+  gate_impl(src, dst, film, g, gid);
 }

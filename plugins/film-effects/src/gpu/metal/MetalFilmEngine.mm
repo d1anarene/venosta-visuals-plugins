@@ -12,6 +12,7 @@
 #include "blur/blur.h"
 #include "blur/blur_plan.h"
 #include "common/fe_kernels.h"
+#include "gate/gate.h"
 
 namespace fe {
 namespace {
@@ -44,6 +45,21 @@ struct CompositeInfo {
   int32_t bottomUp;
 };
 
+// Must match GateInfo in FilmEffects.metal (4-byte members only, same order).
+struct GateInfo {
+  uint32_t width, height, rowPixels;
+  int32_t space, rgba, bottomUp;
+  int32_t doWeave, doDefects, doEdge, look, scratchCount;
+  float dx, dy, gain;
+  float insetPx, softPx, radiusPx;
+  float dustCellPx, dustDensity, dustSizePx;
+  uint32_t dustKey;
+  float mix;
+  float sx0[4], sslope[4], swidth[4], sstrength[4];
+  uint32_t skey[4];
+  int32_t ssign[4];
+};
+
 PlaneInfo half(PlaneInfo p) { return {std::max(1u, (p.width + 1) / 2), std::max(1u, (p.height + 1) / 2)}; }
 
 }  // namespace
@@ -56,6 +72,7 @@ struct MetalFilmEngine::Impl {
   // Scratch buffers are cached per frame size and reused between frames.
   uint32_t cachedW = 0, cachedH = 0;
   id<MTLBuffer> lin = nil, halSrc = nil, halNear = nil, halFar = nil;
+  id<MTLBuffer> film = nil;  // Film Gate only, allocated on first use
   std::vector<id<MTLBuffer>> levels;  // bloom pyramid levels (level 0 = bright, full res)
   std::vector<id<MTLBuffer>> accA, accB, tmpA, tmpB;  // per-level scratch
   std::vector<PlaneInfo> dims;
@@ -76,6 +93,7 @@ struct MetalFilmEngine::Impl {
     halSrc = buf(full);
     halNear = buf(full);
     halFar = buf(full);
+    film = nil;
     dims.clear();
     levels.clear();
     accA.clear(); accB.clear(); tmpA.clear(); tmpB.clear();
@@ -174,7 +192,8 @@ MetalFilmEngine::MetalFilmEngine(id<MTLDevice> device, const std::string& metall
     return;
   }
   for (const char* name : {"fe_prepare_f32", "fe_prepare_f16", "fe_downsample", "fe_blur_h", "fe_blur_v",
-                           "fe_upsample", "fe_axpy", "fe_clear", "fe_composite_f32", "fe_composite_f16"}) {
+                           "fe_upsample", "fe_axpy", "fe_clear", "fe_composite_f32", "fe_composite_f16",
+                           "fe_composite_film_f32", "fe_composite_film_f16", "fe_gate_f32", "fe_gate_f16"}) {
     id<MTLFunction> fn = [lib newFunctionWithName:[NSString stringWithUTF8String:name]];
     id<MTLComputePipelineState> ps = fn ? [device newComputePipelineStateWithFunction:fn error:&err] : nil;
     if (!ps) {
@@ -280,15 +299,41 @@ bool MetalFilmEngine::encode(id<MTLCommandBuffer> cb, const MetalFrame& src, con
   ci.rgba = src.rgba ? 1 : 0;
   ci.bottomUp = src.bottomUp ? 1 : 0;
 
+  const GateFrame gf = gateFrame(p.gate, int(w), int(h), frameKey);
+  if (gf.active && !I.film) I.film = I.buf(size_t(w) * h * sizeof(float) * 4);
   [enc setBuffer:src.buffer offset:0 atIndex:0];
-  [enc setBuffer:dst.buffer offset:0 atIndex:1];
+  [enc setBuffer:(gf.active ? I.film : dst.buffer) offset:0 atIndex:1];
   [enc setBuffer:I.lin offset:0 atIndex:2];
   [enc setBuffer:bloomResult offset:0 atIndex:3];
   [enc setBuffer:I.halNear offset:0 atIndex:4];
   [enc setBuffer:I.halFar offset:0 atIndex:5];
   [enc setBuffer:I.halSrc offset:0 atIndex:6];
   [enc setBytes:&ci length:sizeof(ci) atIndex:7];
-  Impl::dispatch(enc, I.pso(src.halfFloat ? "fe_composite_f16" : "fe_composite_f32"), w, h);
+  if (!gf.active) {
+    Impl::dispatch(enc, I.pso(src.halfFloat ? "fe_composite_f16" : "fe_composite_f32"), w, h);
+  } else {
+    // Film Gate: film image (no mix) first, then weave / defects / flicker / aperture and mix.
+    Impl::dispatch(enc, I.pso(src.halfFloat ? "fe_composite_film_f16" : "fe_composite_film_f32"), w, h);
+    GateInfo g{};
+    g.width = w; g.height = h; g.rowPixels = src.rowPixels;
+    g.space = int32_t(p.space); g.rgba = src.rgba ? 1 : 0; g.bottomUp = src.bottomUp ? 1 : 0;
+    g.doWeave = gf.doWeave; g.doDefects = gf.doDefects; g.doEdge = gf.doEdge;
+    g.look = gf.look; g.scratchCount = gf.scratchCount;
+    g.dx = gf.dx; g.dy = gf.dy; g.gain = gf.gain;
+    g.insetPx = gf.insetPx; g.softPx = gf.softPx; g.radiusPx = gf.radiusPx;
+    g.dustCellPx = gf.dustCellPx; g.dustDensity = gf.dustDensity; g.dustSizePx = gf.dustSizePx;
+    g.dustKey = gf.dustKey;
+    g.mix = p.mix;
+    for (int k = 0; k < kMaxScratches; ++k) {
+      g.sx0[k] = gf.scratches[k].x0; g.sslope[k] = gf.scratches[k].slope; g.swidth[k] = gf.scratches[k].widthPx;
+      g.sstrength[k] = gf.scratches[k].strength; g.skey[k] = gf.scratches[k].key; g.ssign[k] = gf.scratches[k].sign;
+    }
+    [enc setBuffer:src.buffer offset:0 atIndex:0];
+    [enc setBuffer:dst.buffer offset:0 atIndex:1];
+    [enc setBuffer:I.film offset:0 atIndex:2];
+    [enc setBytes:&g length:sizeof(g) atIndex:3];
+    Impl::dispatch(enc, I.pso(src.halfFloat ? "fe_gate_f16" : "fe_gate_f32"), w, h);
+  }
   [enc endEncoding];
   return true;
 }

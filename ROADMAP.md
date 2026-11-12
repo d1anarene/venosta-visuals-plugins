@@ -5,7 +5,7 @@ Resolve** (macOS Metal, Windows CUDA, CPU fallback) where it is an effect. Order
 
 | # | Plugin | Idea | Status |
 | --- | --- | --- | --- |
-| 1 | **Film Effects** + Film Gate | One panel: Bloom, Halation, Grain, and new **Film Gate** (gate weave, flicker, gate edges, dust & scratches, all procedural). Standalone Bloom/Halation/Grain effects retired. | in progress |
+| 1 | **Film Effects** + Film Gate | One panel: Bloom, Halation, Grain, and new **Film Gate** (gate weave, flicker, gate edges, dust & scratches, all procedural). Standalone Bloom/Halation/Grain effects retired. | implemented, awaiting host test |
 | 2 | **Lens & Diffusion** | Diffusion filter (mist looks), vignette, chromatic aberration, anamorphic streaks. Reuses the bloom engine. | planned |
 | 3 | **Exposure & False Color** | False color, zebras, exposure/skin-tone guides as viewer aids, split-screen before/after. | planned |
 | 4 | **Retro** | Tape/VHS artefacts, CRT lines, analogue colour bleed. | planned |
