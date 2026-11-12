@@ -79,6 +79,8 @@ set_target_properties(FilmEffectsOFX PROPERTIES PREFIX "" SUFFIX ".ofx" OUTPUT_N
 
 if(APPLE)
   set(FE_OFX_ARCH MacOS)
+elseif(WIN32 AND CMAKE_GENERATOR_PLATFORM MATCHES "^[Aa][Rr][Mm]64[Ee][Cc]$")
+  set(FE_OFX_ARCH Win-arm64ec)  # OpenFX 1.5: Resolve on Windows-on-Arm is an Arm64EC host
 elseif(WIN32)
   set(FE_OFX_ARCH Win64)
 else()

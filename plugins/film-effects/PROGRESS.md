@@ -2,6 +2,20 @@
 
 _Last update: 2026-11-11_
 
+## Windows on Arm (2026-11-12)
+
+- User: Premiere supports Windows on Arm since 26.0. Premiere: new CI build `win-arm64` on a
+  `windows-11-arm` runner (native ARM64, CPU only); the Premiere Setup installs it when
+  `IsArm64`, the x64 CUDA build otherwise. `fe_aex_load_test` loads every `.aex` with LoadLibrary
+  on its own architecture; an extra CI job installs the Setup on an Arm machine and checks that
+  the ARM64 files were installed. The CI step "Show Windows-on-Arm hints in the Adobe SDKs" prints
+  whether the SDK samples target ARM64 or ARM64EC (to confirm the native ARM64 choice).
+- Resolve: OpenFX 1.5 packaging says Resolve on Windows on Arm is an Arm64EC host and defines
+  `Contents/Win-arm64ec`. New CI build with `-A ARM64EC` on an Arm runner; the Resolve Setup ships
+  one bundle with `Win64` (x64 + CUDA) and `Win-arm64ec`; tested by installing on x64 and Arm
+  machines and loading the installed binary on each.
+- **No Premiere or Resolve test on a Windows-on-Arm PC.**
+
 ## Simpler downloads (2026-11-12)
 
 - Premiere downloads renamed `FilmEffects-Premiere-*` (next to `FilmEffects-Resolve-*`).

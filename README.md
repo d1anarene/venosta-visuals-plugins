@@ -38,6 +38,7 @@ See [LICENSE](LICENSE) for the full terms.
 - Adobe Premiere Pro (current version; see each plugin's README for tested versions)
 - Adobe Media Encoder for plugins that queue exports
 - Film Effects also has an experimental DaVinci Resolve (OpenFX) build for Windows, macOS and Linux
+- Film Effects Windows installers also cover Windows on Arm (CPU only, untested on Arm hardware)
 - Windows and macOS: Track Range Exporter is a UXP panel (both systems); Film Effects builds on
   both; the Mac release includes Metal acceleration, while experimental Windows downloads offer CPU-only or CUDA acceleration
 

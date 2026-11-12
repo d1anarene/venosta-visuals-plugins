@@ -1,7 +1,8 @@
 ; Film Effects for DaVinci Resolve (OpenFX) — Windows installer (Inno Setup 6).
 ; Built in CI (.github/workflows/film-effects-ofx.yml):
 ;   ISCC /DAppVersion=1.0.7 /DBundleDir=<FilmEffects.ofx.bundle> /DRepoRoot=<repo> /DOutputDir=<out> FilmEffectsResolve.iss
-; Includes the CPU path and the NVIDIA CUDA GPU path (used when Resolve renders with CUDA).
+; Contents\Win64: x64 with CPU and NVIDIA CUDA paths. Contents\Win-arm64ec: Windows on Arm (Resolve
+; is an Arm64EC host there; CPU only). Resolve loads the folder for its own architecture.
 ; Installs FilmEffects.ofx.bundle into the standard OpenFX folder
 ; C:\Program Files\Common Files\OFX\Plugins, where DaVinci Resolve looks for OFX plug-ins.
 
@@ -48,6 +49,7 @@ Source: "{#BundleDir}\..\NVIDIA-CUDA-EULA.html"; DestDir: "{commonpf64}\Venosta 
 
 [UninstallDelete]
 Type: dirifempty; Name: "{app}\FilmEffects.ofx.bundle\Contents\Win64"
+Type: dirifempty; Name: "{app}\FilmEffects.ofx.bundle\Contents\Win-arm64ec"
 Type: dirifempty; Name: "{app}\FilmEffects.ofx.bundle\Contents"
 Type: dirifempty; Name: "{app}\FilmEffects.ofx.bundle"
 Type: dirifempty; Name: "{commonpf64}\Venosta Visuals\Film Effects for Resolve"

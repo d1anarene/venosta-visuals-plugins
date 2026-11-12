@@ -27,7 +27,9 @@ macOS, Linux), with the same parameters, presets and rendering code. Releases in
 `FilmEffects-Resolve-linux-<version>.tar.gz`. After installing, restart Resolve. The effects are in
 the **Effects** library under **OpenFX → Venosta Visuals**.
 GPU: **Metal** on macOS and **NVIDIA CUDA** on Windows (GTX 1080 and newer; needs the NVIDIA
-driver, not the CUDA Toolkit), CPU otherwise and on Linux. One download per system contains both
+driver, not the CUDA Toolkit), CPU otherwise and on Linux. The Windows Setup also covers Windows on
+Arm (a native Arm64EC build in the bundle's `Win-arm64ec` folder, as OpenFX 1.5 specifies for
+Resolve there; CPU only, untested in Resolve). One download per system contains both
 paths; Resolve uses CUDA when Preferences → Memory and GPU → GPU processing mode is CUDA, and
 the CPU otherwise. Status: built and loaded like an OFX
 host in CI; the GPU maths in Resolve's frame layout is checked against the CPU reference.
@@ -67,8 +69,10 @@ Film Effects is a native effect; its installer is `.pkg`, rather than a UXP `.cc
 Windows: download **`FilmEffects-Premiere-Windows-Setup-<version>.exe`** from Releases, double-click it,
 confirm the admin prompt and restart Premiere. One build for every PC: it renders with NVIDIA CUDA
 when the project uses Mercury Playback Engine GPU Acceleration (CUDA) and on the CPU otherwise.
-Uninstall via Settings → Apps. The installer is not code-signed, so SmartScreen may warn
-("More info" → "Run anyway"). The CUDA build uses CUDA 12.9 and includes Pascal (`sm_61`) code for GTX 1080,
+On Windows on Arm (Premiere 26 and later run natively there) the same Setup installs a
+native ARM64 build instead, CPU only (CUDA does not exist on Arm); built and load-tested on an
+Arm machine in CI, not yet tested in Premiere. Uninstall via Settings → Apps. The installer is
+not code-signed, so SmartScreen may warn ("More info" → "Run anyway"). The CUDA build uses CUDA 12.9 and includes Pascal (`sm_61`) code for GTX 1080,
 plus targets for newer NVIDIA GPUs. It links the CUDA runtime statically: a compatible NVIDIA
 driver is required, but the CUDA Toolkit is not. Windows Premiere behavior and NVIDIA GPU
 execution remain unverified until hardware testing.

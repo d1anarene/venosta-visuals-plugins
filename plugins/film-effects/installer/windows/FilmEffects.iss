@@ -1,7 +1,9 @@
 ; Film Effects — Windows installer (Inno Setup 6).
 ; Built in CI (.github/workflows/film-effects-plugins.yml) from the CPU and CUDA plugin builds:
-;   ISCC /DAppVersion=1.0.10 /DCudaDir=<CUDA-build .aex folder> /DRepoRoot=<repository root>
-;        /DOutputDir=<out> FilmEffects.iss
+;   ISCC /DAppVersion=1.0.10 /DCudaDir=<x64 CUDA-build .aex folder> /DArm64Dir=<ARM64 .aex folder>
+;        /DRepoRoot=<repository root> /DOutputDir=<out> FilmEffects.iss
+; Windows on Arm (Premiere 26+ runs natively there) gets the native ARM64 build (CPU only); every
+; other PC gets the x64 build.
 ; One build for every PC: the CUDA build contains the full CPU path and loads without an NVIDIA
 ; driver (the CUDA runtime is linked statically and looks for the driver only at run time), so
 ; Premiere renders on the CPU whenever CUDA is not available.
@@ -49,10 +51,11 @@ CloseApplications=yes
 RestartApplications=no
 
 [Files]
-Source: "{#CudaDir}\*.aex"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#CudaDir}\*.aex"; DestDir: "{app}"; Check: not IsArm64; Flags: ignoreversion
+Source: "{#Arm64Dir}\*.aex"; DestDir: "{app}"; Check: IsArm64; Flags: ignoreversion
 ; Licence notices go to a normal program folder, not into Adobe's plug-in folder.
 Source: "{#RepoRoot}\LICENSE"; DestDir: "{commonpf64}\Venosta Visuals\Film Effects"; DestName: "LICENSE.txt"; Flags: ignoreversion
-Source: "{#CudaDir}\NVIDIA-CUDA-EULA.html"; DestDir: "{commonpf64}\Venosta Visuals\Film Effects"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#CudaDir}\NVIDIA-CUDA-EULA.html"; DestDir: "{commonpf64}\Venosta Visuals\Film Effects"; Check: not IsArm64; Flags: ignoreversion skipifsourcedoesntexist
 
 [InstallDelete]
 ; Clean up the wrong folder used by v1.0.6 (only when our files are found there).
