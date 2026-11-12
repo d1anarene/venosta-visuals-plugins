@@ -101,11 +101,7 @@ var
 
 function InitializeSetup(): Boolean;
 begin
-  { Decide once: [InstallDelete]
-; Standalone Film Bloom / Film Halation / Film Grain (until v1.0.11) are now part of Film Effects.
-Type: files; Name: "{app}\FilmBloom.aex"
-Type: files; Name: "{app}\FilmHalation.aex"
-Type: files; Name: "{app}\FilmGrain.aex" deletes FilmEffects.aex first, so re-checking per entry
+  { Decide once: [InstallDelete] deletes FilmEffects.aex first, so re-checking per entry
     would skip the remaining stray files. }
   StrayFound := FileExists(ExpandConstant(StrayDir + '\FilmEffects.aex'));
   Result := True;
