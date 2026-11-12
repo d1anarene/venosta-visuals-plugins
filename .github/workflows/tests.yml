@@ -28,6 +28,66 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: ./scripts/run-core-tests.sh
+  lens-diffusion-core:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: plugins/lens-diffusion
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run the core tests
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --parallel
+          ctest --test-dir build -C Release --output-on-failure
+  lens-diffusion-metal:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: plugins/lens-diffusion
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Metal kernels, engine and comparison tool
+        run: |
+          cmake -S . -B build-gpu -DCMAKE_BUILD_TYPE=Release -DLD_BUILD_GPU_TESTS=ON
+          cmake --build build-gpu --parallel --target ld_metal_vs_cpu
+      - name: Compare GPU with CPU reference
+        run: ./build-gpu/ld_metal_vs_cpu build-gpu/metal/LensDiffusion.metallib
+  lens-diffusion-cuda:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: plugins/lens-diffusion
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract CUDA compiler (NVIDIA repository only)
+        working-directory: .
+        run: |
+          # Ubuntu mirror DNS is unreliable on these runners. The host C++ toolchain is
+          # already installed; extract NVIDIA's compiler/runtime packages into a private
+          # toolkit directory, without apt-installing Ubuntu's build-essential metapackage.
+          wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+          sudo dpkg -i cuda-keyring_1.1-1_all.deb
+          NVIDIA_SOURCE=/etc/apt/sources.list.d/cuda-ubuntu2404-x86_64.list
+          APT_OPTIONS=(-o "Dir::Etc::sourcelist=$NVIDIA_SOURCE" -o "Dir::Etc::sourceparts=-" -o Acquire::Retries=3)
+          sudo apt-get "${APT_OPTIONS[@]}" update --error-on=any -q
+          mkdir -p "$RUNNER_TEMP/cuda-debs" "$RUNNER_TEMP/cuda-toolkit"
+          cd "$RUNNER_TEMP/cuda-debs"
+          apt-get "${APT_OPTIONS[@]}" download cuda-nvcc-12-6 cuda-cudart-dev-12-6 \
+            cuda-cccl-12-6 cuda-crt-12-6 cuda-cudart-12-6 cuda-driver-dev-12-6 cuda-nvvm-12-6
+          for package in *.deb; do dpkg-deb -x "$package" "$RUNNER_TEMP/cuda-toolkit"; done
+          CUDA_ROOT="$RUNNER_TEMP/cuda-toolkit/usr/local/cuda-12.6"
+          test -x "$CUDA_ROOT/bin/nvcc"
+          echo "$CUDA_ROOT/bin" >> "$GITHUB_PATH"
+          echo "CUDACXX=$CUDA_ROOT/bin/nvcc" >> "$GITHUB_ENV"
+          echo "CUDAToolkit_ROOT=$CUDA_ROOT" >> "$GITHUB_ENV"
+      - name: Compile the CUDA engine with nvcc
+        run: |
+          cmake -S . -B build-cuda -DCMAKE_BUILD_TYPE=Release -DLD_BUILD_OFX=ON -DVV_WITH_CUDA=ON -DCMAKE_CUDA_COMPILER="$CUDACXX"
+          cmake --build build-cuda --parallel --target ld_cuda_engine
   film-effects-core-windows:
     runs-on: windows-latest
     defaults:

@@ -1,0 +1,236 @@
+name: vv-premiere
+# Reusable: builds one plugin's Premiere Pro effect (shared engine adapter) for macOS (universal,
+# Metal when the plugin has it) and Windows (x64, CUDA optional; ARM64 for Windows on Arm), runs
+# the load tests, builds and tests the installers. Called by each plugin's workflow.
+#
+# The Adobe SDKs are NOT in this repository: they come from the private repository d1anarene/vvp-sdk
+# via the ADOBE_SDK_TOKEN secret (ADBE_SDK_TOKEN accepted), are used only on the temporary build
+# machine and never uploaded. Without the secret every job skips cleanly.
+#
+# Release files (uploaded as artifacts "release-<binary>-premiere-<platform>"):
+#   <binary>-Premiere-mac.pkg, <binary>-Premiere-Windows-Setup.exe
+on:
+  workflow_call:
+    inputs:
+      plugin:            { type: string, required: true }   # folder under plugins/
+      binary:            { type: string, required: true }   # target / bundle / .aex name
+      name:              { type: string, required: true }   # display name, e.g. "Film Effects"
+      cmake_flags:       { type: string, required: true }   # e.g. -DFE_BUILD_PLUGIN=ON
+      cuda:              { type: boolean, default: false }  # x64 build with the CUDA renderer
+      metal:             { type: boolean, default: false }  # mac bundle must contain a metallib
+      mac_min:           { type: string, default: '13.0' }  # deployment target
+      mac_pkg_id:        { type: string, required: true }
+      mac_pkg_args:      { type: string, default: '' }      # e.g. --min-macos 26 --retire Old
+      iss:               { type: string, required: true }   # plugin's Inno Setup script
+      extra_installer_test: { type: string, default: '' }   # optional pwsh script (repo path)
+    secrets:
+      ADOBE_SDK_TOKEN: { required: false }
+      ADBE_SDK_TOKEN: { required: false }
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, platform: mac }
+          # CUDA 12.x supports VS 2022; avoid the rolling runner's newer VS toolchain.
+          - { os: windows-2022, platform: win }
+          # Premiere 26+ runs natively on Windows on Arm: native ARM64 build, CPU only.
+          - { os: windows-11-arm, platform: win-arm64, arch: ARM64 }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check SDK access
+        id: sdk
+        env:
+          TOKEN: ${{ secrets.ADOBE_SDK_TOKEN || secrets.ADBE_SDK_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::notice::ADOBE_SDK_TOKEN is not set - skipping the Premiere build."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Fetch Adobe SDKs (private)
+        if: steps.sdk.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: d1anarene/vvp-sdk
+          token: ${{ secrets.ADOBE_SDK_TOKEN || secrets.ADBE_SDK_TOKEN }}
+          path: _sdk_zips
+      - name: Unpack SDKs
+        if: steps.sdk.outputs.available == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/sdk/ae" "$RUNNER_TEMP/sdk/pr"
+          if [ "${{ matrix.platform }}" = mac ]; then ae='*AfterEffects*mac*.zip'; pr='*Premiere*Mac*.zip'; else ae='*AfterEffects*win*.zip'; pr='*Premiere*Windows*.zip'; fi
+          unzip -q _sdk_zips/$ae -d "$RUNNER_TEMP/sdk/ae"
+          unzip -q _sdk_zips/$pr -d "$RUNNER_TEMP/sdk/pr"
+          rm -rf _sdk_zips
+          AE=$(dirname "$(dirname "$(find "$RUNNER_TEMP/sdk/ae" -name AE_Effect.h -path '*Examples/Headers/*' | head -1)")")
+          PR=$(dirname "$(dirname "$(dirname "$(find "$RUNNER_TEMP/sdk/pr" -name PrSDKAESupport.h -path '*Examples/Headers/*' | head -1)")")")
+          [ -d "$AE/Headers" ] && [ -d "$PR/Examples/Headers" ] || { echo "SDK layout not recognised"; exit 1; }
+          if [ "${{ runner.os }}" = Windows ]; then AE=$(cygpath -m "$AE"); PR=$(cygpath -m "$PR"); fi
+          echo "AE_SDK=$AE" >> "$GITHUB_ENV"
+          echo "PR_SDK=$PR" >> "$GITHUB_ENV"
+          echo "VV_VERSION=$(tr -d ' \n\r' < VERSION).${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+      - name: Build and package (macOS)
+        if: steps.sdk.outputs.available == 'true' && matrix.platform == 'mac'
+        working-directory: plugins/${{ inputs.plugin }}
+        run: |
+          cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ inputs.mac_min }} ${{ inputs.cmake_flags }} -DAE_SDK_DIR="$AE_SDK" -DPR_SDK_DIR="$PR_SDK"
+          cmake --build build-mac --config Release --parallel --target ${{ inputs.binary }}
+          mkdir -p bundles ../../out
+          find build-mac -maxdepth 3 -name '${{ inputs.binary }}.plugin' -exec cp -R {} bundles/ \;
+          metal=""; [ "${{ inputs.metal }}" = true ] && metal="--metal"
+          bash ../../shared/engine/installer/macos/package-premiere.sh bundles "../../out/${{ inputs.binary }}-Premiere-mac.pkg" "$VV_VERSION" \
+            "${{ inputs.mac_pkg_id }}" "${{ inputs.binary }}" $metal ${{ inputs.mac_pkg_args }}
+      - name: Install Windows CUDA compiler and Visual Studio integration
+        if: steps.sdk.outputs.available == 'true' && matrix.platform == 'win' && inputs.cuda
+        uses: Jimver/cuda-toolkit@b8bf9c6c28f8a92fbb04dcfcaee872e60c57462d # v0.2.36
+        with:
+          cuda: '12.9.1'
+          method: network
+          sub-packages: '["nvcc", "cudart", "cuobjdump", "visual_studio_integration"]'
+          log-file-suffix: ${{ inputs.binary }}-win
+      - name: Build and test (Windows)
+        if: steps.sdk.outputs.available == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        working-directory: plugins/${{ inputs.plugin }}
+        run: |
+          $cuda = if ('${{ matrix.platform }}' -eq 'win' -and '${{ inputs.cuda }}' -eq 'true') { 'ON' } else { 'OFF' }
+          $arch = if ('${{ matrix.arch }}') { '${{ matrix.arch }}' } else { 'x64' }
+          $configureArgs = @('-S', '.', '-B', 'build-win', '-A', $arch, "-DAE_SDK_DIR=$env:AE_SDK", "-DPR_SDK_DIR=$env:PR_SDK", "-DVV_WITH_CUDA=$cuda")
+          $configureArgs += '${{ inputs.cmake_flags }}'.Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries)
+          if ($cuda -eq 'ON') {
+            # Keep the architecture list as one array element (PowerShell splatting).
+            $configureArgs += @('-G', 'Visual Studio 17 2022', '-DCMAKE_CUDA_ARCHITECTURES=61-real;75-real;86-real;89-real;89-virtual')
+          }
+          cmake @configureArgs
+          if ($LASTEXITCODE -ne 0) { throw 'configuration failed' }
+          foreach ($t in "${{ inputs.binary }}", "vv_aex_load_test") {
+            cmake --build build-win --config Release --target $t
+            if ($LASTEXITCODE -ne 0) { throw "build of $t failed" }
+          }
+          $output = '../../out/${{ inputs.binary }}-${{ matrix.platform }}'
+          New-Item -ItemType Directory -Force -Path $output | Out-Null
+          Get-ChildItem -Recurse build-win -Filter "${{ inputs.binary }}.aex" | Copy-Item -Destination $output
+          # Load the plug-in like Premiere does, on this machine's architecture (the build machines
+          # have no NVIDIA driver: a CUDA build must still load).
+          & build-win/Release/vv_aex_load_test.exe (Get-ChildItem $output -Filter '*.aex' | ForEach-Object FullName)
+          if ($LASTEXITCODE -ne 0) { throw 'Plug-in load test failed' }
+          if ($cuda -eq 'ON') {
+            $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -version '[17.0,18.0)' -latest -property installationPath
+            $dumpbin = Get-ChildItem "$vs/VC/Tools/MSVC/*/bin/Hostx64/x64/dumpbin.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+            foreach ($plugin in Get-ChildItem $output -Filter '*.aex') {
+              $exports = & $dumpbin.FullName /exports $plugin.FullName
+              if ($LASTEXITCODE -ne 0 -or -not ($exports -match '\bxGPUFilterEntry\b')) { throw "CUDA entry missing: $($plugin.Name)" }
+              $imports = & $dumpbin.FullName /dependents $plugin.FullName
+              if ($imports -match 'cudart64.*\.dll') { throw 'CUDA runtime must be linked statically' }
+              if ($imports -match 'nvcuda\.dll') { throw 'Must not import the NVIDIA driver library' }
+              $deviceCode = & "$env:CUDA_PATH/bin/cuobjdump.exe" --list-elf $plugin.FullName
+              if ($LASTEXITCODE -ne 0 -or -not ($deviceCode -match 'sm_61')) { throw "GTX 1080 device code missing: $($plugin.Name)" }
+            }
+            Invoke-WebRequest 'https://docs.nvidia.com/cuda/archive/12.9.1/eula/index.html' -OutFile "$output/NVIDIA-CUDA-EULA.html"
+          }
+          Get-ChildItem $output
+      - name: Upload Windows build
+        if: steps.sdk.outputs.available == 'true' && runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ inputs.binary }}-premiere-${{ matrix.platform }}
+          path: out/${{ inputs.binary }}-${{ matrix.platform }}
+          if-no-files-found: error
+      - name: Upload Mac installer
+        if: steps.sdk.outputs.available == 'true' && matrix.platform == 'mac'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ inputs.binary }}-premiere-mac
+          path: out/${{ inputs.binary }}-Premiere-mac.pkg
+          if-no-files-found: error
+
+  windows-installer:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check SDK access
+        id: sdk
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.ADOBE_SDK_TOKEN || secrets.ADBE_SDK_TOKEN }}
+        run: if [ -z "$TOKEN" ]; then echo "available=false" >> "$GITHUB_OUTPUT"; else echo "available=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/download-artifact@v4
+        if: steps.sdk.outputs.available == 'true'
+        with:
+          name: build-${{ inputs.binary }}-premiere-win
+          path: _win/x64
+      - uses: actions/download-artifact@v4
+        if: steps.sdk.outputs.available == 'true'
+        with:
+          name: build-${{ inputs.binary }}-premiere-win-arm64
+          path: _win/arm64
+      - name: Build installer (Inno Setup)
+        if: steps.sdk.outputs.available == 'true'
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Installing Inno Setup failed' }
+          }
+          $version = "$((Get-Content VERSION -Raw).Trim()).$env:GITHUB_RUN_NUMBER"
+          $root = (Get-Location).Path
+          & $iscc "/DAppVersion=$version" "/DX64Dir=$root\_win\x64" "/DArm64Dir=$root\_win\arm64" "/DRepoRoot=$root" "/DOutputDir=$root\out" "${{ inputs.iss }}"
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compile failed' }
+          Move-Item "out\${{ inputs.binary }}-Windows-Setup.exe" "out\${{ inputs.binary }}-Premiere-Windows-Setup.exe"
+      - name: Test installer (silent install, registry folder, uninstall)
+        if: steps.sdk.outputs.available == 'true'
+        shell: pwsh
+        run: |
+          & shared/engine/installer/windows/test-premiere-setup.ps1 -Setup (Resolve-Path "out\${{ inputs.binary }}-Premiere-Windows-Setup.exe").Path `
+            -Binary '${{ inputs.binary }}' -Name '${{ inputs.name }}' -Expected (Resolve-Path "_win\x64\${{ inputs.binary }}.aex").Path
+      - name: Plugin-specific installer test
+        if: steps.sdk.outputs.available == 'true' && inputs.extra_installer_test != ''
+        shell: pwsh
+        run: |
+          & '${{ inputs.extra_installer_test }}' -Setup (Resolve-Path "out\${{ inputs.binary }}-Premiere-Windows-Setup.exe").Path -X64Dir (Resolve-Path _win\x64).Path
+      - uses: actions/upload-artifact@v4
+        if: steps.sdk.outputs.available == 'true'
+        with:
+          name: release-${{ inputs.binary }}-premiere-windows
+          path: out/${{ inputs.binary }}-Premiere-Windows-Setup.exe
+          if-no-files-found: error
+
+  windows-installer-arm:
+    # The same Setup on a Windows-on-Arm machine must install the ARM64 plug-in.
+    needs: windows-installer
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check SDK access
+        id: sdk
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.ADOBE_SDK_TOKEN || secrets.ADBE_SDK_TOKEN }}
+        run: if [ -z "$TOKEN" ]; then echo "available=false" >> "$GITHUB_OUTPUT"; else echo "available=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/download-artifact@v4
+        if: steps.sdk.outputs.available == 'true'
+        with:
+          name: release-${{ inputs.binary }}-premiere-windows
+          path: _setup
+      - uses: actions/download-artifact@v4
+        if: steps.sdk.outputs.available == 'true'
+        with:
+          name: build-${{ inputs.binary }}-premiere-win-arm64
+          path: _arm64
+      - name: Test installer on Windows on Arm
+        if: steps.sdk.outputs.available == 'true'
+        shell: pwsh
+        run: |
+          & shared/engine/installer/windows/test-premiere-setup.ps1 -Setup (Resolve-Path "_setup\${{ inputs.binary }}-Premiere-Windows-Setup.exe").Path `
+            -Binary '${{ inputs.binary }}' -Name '${{ inputs.name }}' -Expected (Resolve-Path "_arm64\${{ inputs.binary }}.aex").Path -SkipRegistryTest

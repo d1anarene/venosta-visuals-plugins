@@ -10,13 +10,15 @@ concurrency:
   group: release
   cancel-in-progress: false
 jobs:
-  native-plugins:
-    uses: ./.github/workflows/film-effects-plugins.yml
+  # Every effect plugin: Premiere + Resolve builds, tests and installers (shared workflows).
+  film-effects:
+    uses: ./.github/workflows/film-effects.yml
     secrets: inherit
-  resolve-plugin:
-    uses: ./.github/workflows/film-effects-ofx.yml
+  lens-diffusion:
+    uses: ./.github/workflows/lens-diffusion.yml
+    secrets: inherit
   release:
-    needs: [native-plugins, resolve-plugin]
+    needs: [film-effects, lens-diffusion]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,30 +45,19 @@ jobs:
         run: |
           tag=${{ steps.version.outputs.tag }}
           plugins/track-range-exporter/scripts/package-ccx.sh "$PWD/out" "-${tag}" "${tag#v}"
-      - name: Download Film Effects Mac installer
+      - name: Download all plugin installers
         uses: actions/download-artifact@v4
         with:
-          name: FilmEffects-mac-installer
-          path: out
-      - name: Download Film Effects Windows installer
-        uses: actions/download-artifact@v4
-        with:
-          name: FilmEffects-windows-installer
-          path: out
-      - name: Download Film Effects for DaVinci Resolve
-        uses: actions/download-artifact@v4
-        with:
-          pattern: FilmEffects-Resolve-*
+          pattern: release-*
           path: out
           merge-multiple: true
-      - name: Name native release downloads
+      - name: Add the version to the file names
         run: |
           tag=${{ steps.version.outputs.tag }}
-          mv out/FilmEffects-mac.pkg "out/FilmEffects-Premiere-mac-${tag}.pkg"
-          mv out/FilmEffects-Windows-Setup.exe "out/FilmEffects-Premiere-Windows-Setup-${tag}.exe"
-          mv out/FilmEffects-Resolve-mac.pkg "out/FilmEffects-Resolve-mac-${tag}.pkg"
-          mv out/FilmEffects-Resolve-Windows-Setup.exe "out/FilmEffects-Resolve-Windows-Setup-${tag}.exe"
-          mv out/FilmEffects-Resolve-linux.tar.gz "out/FilmEffects-Resolve-linux-${tag}.tar.gz"
+          cd out
+          for f in *.pkg *.exe; do [ -e "$f" ] && mv "$f" "${f%.*}-${tag}.${f##*.}"; done
+          for f in *.tar.gz; do [ -e "$f" ] && mv "$f" "${f%.tar.gz}-${tag}.tar.gz"; done
+          ls -l
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -85,6 +76,10 @@ jobs:
           - \`FilmEffects-Premiere-mac-${tag}.pkg\`: quit Premiere, double-click to install, then restart Premiere. Installs Film Effects under Video Effects → Venosta Visuals (the former standalone Film Bloom / Halation / Grain are part of it now and are removed on upgrade).
           - Mac: macOS 26+, Apple Silicon + Intel. User-tested in Premiere Pro 27 on an Apple Silicon Mac. Installer is unsigned, bundles are ad hoc signed, and this release is not Apple-notarized.
           - \`FilmEffects-Premiere-Windows-Setup-${tag}.exe\`: double-click, confirm the admin prompt, finish the wizard, restart Premiere. One build for every PC: renders with NVIDIA CUDA when the project uses Mercury Playback Engine GPU (CUDA), otherwise on the CPU (needs an NVIDIA driver for CUDA, not the CUDA Toolkit; includes GTX 1080 / Pascal code). On Windows on Arm (Premiere 26+) it installs a native ARM64 build instead (CPU only, untested in Premiere). Uninstall via Settings → Apps. Not code-signed: Windows may warn — "More info" → "Run anyway". Windows host behavior is unverified.
+          ### Lens & Diffusion — new, experimental
+          - \`LensDiffusion-Premiere-mac-${tag}.pkg\`, \`LensDiffusion-Premiere-Windows-Setup-${tag}.exe\` (Premiere Pro) and \`LensDiffusion-Resolve-…\` (DaVinci Resolve: Windows, macOS, Linux). One effect, **Lens & Diffusion**, under Venosta Visuals: diffusion filter (mist to black-mist look), vignette, chromatic aberration, anamorphic streaks, presets.
+          - GPU rendering with Metal (macOS) and NVIDIA CUDA (Windows), CPU otherwise. Built, loaded and installer-tested in CI, GPU maths checked against the CPU reference; **not yet tested inside Premiere or Resolve**.
+
           ### Film Effects for DaVinci Resolve (OpenFX) — experimental
           - \`FilmEffects-Resolve-Windows-Setup-${tag}.exe\`, \`FilmEffects-Resolve-mac-${tag}.pkg\` (macOS 12+, Apple Silicon + Intel), \`FilmEffects-Resolve-linux-${tag}.tar.gz\` (extract the bundle into /usr/OFX/Plugins). The Windows Setup covers x64 PCs and Windows on Arm (native Arm64EC build, CPU only, untested in Resolve). Film Effects appears in Resolve's Effects library under OpenFX → Venosta Visuals.
           - GPU rendering: **Metal** on macOS, **NVIDIA CUDA** on Windows (includes GTX 1080 / Pascal code; needs an NVIDIA driver, not the CUDA Toolkit), CPU fallback otherwise and on Linux — one download per system, no separate CUDA/CPU versions. Resolve chooses: CUDA when Preferences → Memory and GPU is set to CUDA, otherwise CPU. Built and load-tested in CI, GPU maths checked against the CPU reference in CI; user-tested in DaVinci Resolve on macOS; Windows and Linux not yet tested in Resolve. Installers are unsigned: allow them in System Settings → Privacy & Security (Mac) / confirm the Windows warning.

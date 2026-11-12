@@ -1,59 +1,10 @@
-; Film Effects for DaVinci Resolve (OpenFX) — Windows installer (Inno Setup 6).
-; Built in CI (.github/workflows/film-effects-ofx.yml):
-;   ISCC /DAppVersion=1.0.7 /DBundleDir=<FilmEffects.ofx.bundle> /DRepoRoot=<repo> /DOutputDir=<out> FilmEffectsResolve.iss
-; Contents\Win64: x64 with CPU and NVIDIA CUDA paths. Contents\Win-arm64ec: Windows on Arm (Resolve
-; is an Arm64EC host there; CPU only). Resolve loads the folder for its own architecture.
-; Installs FilmEffects.ofx.bundle into the standard OpenFX folder
-; C:\Program Files\Common Files\OFX\Plugins, where DaVinci Resolve looks for OFX plug-ins.
+; Film Effects for DaVinci Resolve (OpenFX) — Windows installer on the shared template
+; (shared/engine/installer/windows/vv_ofx_setup.iss). Built in CI:
+;   ISCC /DAppVersion=1.0.x /DBundleDir=<FilmEffects.ofx.bundle> /DRepoRoot=<repo> /DOutputDir=<out> FilmEffectsResolve.iss
+; Contents\Win64: x64 with CPU and NVIDIA CUDA paths; Contents\Win-arm64ec: Windows on Arm (CPU).
 
-#ifndef AppVersion
-  #define AppVersion "0.0.0"
-#endif
-#ifndef OutputDir
-  #define OutputDir "."
-#endif
+#define VV_APP_ID "{{5d0c1f4e-7a7b-4f43-9a55-2f3cbb8c6e21}"
+#define VV_NAME "Film Effects"
+#define VV_BUNDLE "FilmEffects"
 
-[Setup]
-; Never change AppId (separate product from the Premiere installer).
-AppId={{5d0c1f4e-7a7b-4f43-9a55-2f3cbb8c6e21}
-AppName=Film Effects for DaVinci Resolve
-AppVersion={#AppVersion}
-AppVerName=Film Effects for DaVinci Resolve {#AppVersion}
-AppPublisher=Venosta Visuals
-AppPublisherURL=https://venostavisuals.com
-AppSupportURL=https://github.com/d1anarene/venosta-visuals-plugins
-DefaultDirName={commoncf64}\OFX\Plugins
-UsePreviousAppDir=no
-UninstallFilesDir={commonpf64}\Venosta Visuals\Film Effects for Resolve
-DisableDirPage=yes
-DisableProgramGroupPage=yes
-DirExistsWarning=no
-UninstallDisplayName=Film Effects for DaVinci Resolve (Venosta Visuals)
-PrivilegesRequired=admin
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
-LicenseFile={#RepoRoot}\LICENSE
-OutputDir={#OutputDir}
-OutputBaseFilename=FilmEffects-Resolve-Windows-Setup
-Compression=lzma2
-SolidCompression=yes
-WizardStyle=modern
-CloseApplications=yes
-RestartApplications=no
-
-[Files]
-Source: "{#BundleDir}\*"; DestDir: "{app}\FilmEffects.ofx.bundle"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#RepoRoot}\LICENSE"; DestDir: "{commonpf64}\Venosta Visuals\Film Effects for Resolve"; DestName: "LICENSE.txt"; Flags: ignoreversion
-; CUDA runtime is linked statically into the plug-in: ship NVIDIA's licence next to ours.
-Source: "{#BundleDir}\..\NVIDIA-CUDA-EULA.html"; DestDir: "{commonpf64}\Venosta Visuals\Film Effects for Resolve"; Flags: ignoreversion skipifsourcedoesntexist
-
-[UninstallDelete]
-Type: dirifempty; Name: "{app}\FilmEffects.ofx.bundle\Contents\Win64"
-Type: dirifempty; Name: "{app}\FilmEffects.ofx.bundle\Contents\Win-arm64ec"
-Type: dirifempty; Name: "{app}\FilmEffects.ofx.bundle\Contents"
-Type: dirifempty; Name: "{app}\FilmEffects.ofx.bundle"
-Type: dirifempty; Name: "{commonpf64}\Venosta Visuals\Film Effects for Resolve"
-Type: dirifempty; Name: "{commonpf64}\Venosta Visuals"
-
-[Messages]
-FinishedLabel=Film Effects is installed. Start (or restart) DaVinci Resolve; the effects are in the Effects library under OpenFX > Venosta Visuals.
+#include "..\..\..\..\shared\engine\installer\windows\vv_ofx_setup.iss"

@@ -12,8 +12,8 @@ namespace {
 // Hashed value in [-1, 1] for integer n.
 double signedHash(int64_t n, uint32_t key) {
   const uint64_t u = static_cast<uint64_t>(n);
-  const fe_uint h = fe_hash3(static_cast<fe_uint>(u & 0xffffffffu), static_cast<fe_uint>(u >> 32), key);
-  return fe_unit(h) * 2.0 - 1.0;
+  const vv_uint h = vv_hash3(static_cast<vv_uint>(u & 0xffffffffu), static_cast<vv_uint>(u >> 32), key);
+  return vv_unit(h) * 2.0 - 1.0;
 }
 
 // Smooth 1-D noise in [-1, 1] over time t (in lattice units), quintic interpolation. Double
@@ -39,7 +39,7 @@ GateFrame gateFrame(const GateParams& raw, int width, int height, int64_t frameK
   const GateParams& g = raw;
   f.active = true;
   const float scale = static_cast<float>(height) / 1080.0f;
-  const uint32_t seed = fe_hash(static_cast<fe_uint>(g.seed) * 0x9E3779B9u + 0x7f4a7c15u);
+  const uint32_t seed = vv_hash(static_cast<vv_uint>(g.seed) * 0x9E3779B9u + 0x7f4a7c15u);
 
   // Weave: vertical (frame registration) stronger than horizontal, slow drift plus jitter.
   if (g.weave > 0.f) {
@@ -60,36 +60,36 @@ GateFrame gateFrame(const GateParams& raw, int width, int height, int64_t frameK
     f.radiusPx = g.edgeRoundness * 0.12f * height;
   }
   // Dust: new specks every frame.
-  const fe_uint frameHash = fe_hash3(static_cast<fe_uint>(static_cast<uint64_t>(frameKey) & 0xffffffffu),
-                                     static_cast<fe_uint>(static_cast<uint64_t>(frameKey) >> 32), seed);
+  const vv_uint frameHash = vv_hash3(static_cast<vv_uint>(static_cast<uint64_t>(frameKey) & 0xffffffffu),
+                                     static_cast<vv_uint>(static_cast<uint64_t>(frameKey) >> 32), seed);
   f.look = static_cast<int32_t>(g.look);
   if (g.dust > 0.f) {
     f.dustSizePx = std::max(1.0f, 3.0f * scale);
     f.dustCellPx = std::max(4.0f * f.dustSizePx, 32.0f * scale);
     f.dustDensity = 0.06f * g.dust;
-    f.dustKey = fe_hash(frameHash ^ 0xD1B54A32u);
+    f.dustKey = vv_hash(frameHash ^ 0xD1B54A32u);
     f.doDefects = true;
   }
   // Scratches: up to four slots; each scratch lives for a run of frames, then moves elsewhere.
   if (g.scratches > 0.f) {
     for (int s = 0; s < kMaxScratches; ++s) {
-      const uint32_t slotKey = fe_hash(seed + 0x632BE5ABu * static_cast<uint32_t>(s + 1));
-      const int64_t life = 6 + static_cast<int64_t>(fe_unit(slotKey) * 34.0f);  // 6..40 frames
-      const int64_t offset = static_cast<int64_t>(fe_unit(fe_hash(slotKey)) * static_cast<float>(life));
+      const uint32_t slotKey = vv_hash(seed + 0x632BE5ABu * static_cast<uint32_t>(s + 1));
+      const int64_t life = 6 + static_cast<int64_t>(vv_unit(slotKey) * 34.0f);  // 6..40 frames
+      const int64_t offset = static_cast<int64_t>(vv_unit(vv_hash(slotKey)) * static_cast<float>(life));
       const int64_t t = frameKey + offset;
       const int64_t epoch = t >= 0 ? t / life : -((-t + life - 1) / life);
-      const fe_uint h = fe_hash3(static_cast<fe_uint>(static_cast<uint64_t>(epoch) & 0xffffffffu),
-                                 static_cast<fe_uint>(static_cast<uint64_t>(epoch) >> 32), slotKey);
+      const vv_uint h = vv_hash3(static_cast<vv_uint>(static_cast<uint64_t>(epoch) & 0xffffffffu),
+                                 static_cast<vv_uint>(static_cast<uint64_t>(epoch) >> 32), slotKey);
       // Slot s is used when the amount reaches its threshold, and then present on part of its runs.
       if (g.scratches * kMaxScratches <= static_cast<float>(s) * 0.85f) continue;
-      if (fe_unit(h) > 0.35f + 0.6f * g.scratches) continue;
+      if (vv_unit(h) > 0.35f + 0.6f * g.scratches) continue;
       GateScratch& sc = f.scratches[f.scratchCount++];
       const float age = static_cast<float>(t - epoch * life);
-      sc.x0 = (0.05f + 0.9f * fe_unit(fe_hash(h + 1u))) * width + (fe_unit(fe_hash(h + 2u)) - 0.5f) * 0.3f * scale * age;
-      sc.slope = (fe_unit(fe_hash(h + 3u)) - 0.5f) * 0.02f;
-      sc.widthPx = std::max(0.8f, (0.8f + 1.6f * fe_unit(fe_hash(h + 4u))) * scale);
-      sc.strength = 0.35f + 0.65f * fe_unit(fe_hash(h + 5u));
-      sc.key = fe_hash(h + 6u);
+      sc.x0 = (0.05f + 0.9f * vv_unit(vv_hash(h + 1u))) * width + (vv_unit(vv_hash(h + 2u)) - 0.5f) * 0.3f * scale * age;
+      sc.slope = (vv_unit(vv_hash(h + 3u)) - 0.5f) * 0.02f;
+      sc.widthPx = std::max(0.8f, (0.8f + 1.6f * vv_unit(vv_hash(h + 4u))) * scale);
+      sc.strength = 0.35f + 0.65f * vv_unit(vv_hash(h + 5u));
+      sc.key = vv_hash(h + 6u);
       sc.sign = g.look == DefectLook::Light ? 1 : (g.look == DefectLook::Dark ? -1 : ((h >> 7) & 1u ? 1 : -1));
     }
     if (f.scratchCount > 0) f.doDefects = true;
@@ -104,7 +104,7 @@ float gateDefect(const GateFrame& f, float x, float y, int height) {
     const GateScratch& sc = f.scratches[s];
     d += static_cast<float>(sc.sign) * fe_scratch(x, y, static_cast<float>(height), sc.x0, sc.slope, sc.widthPx, sc.strength, sc.key);
   }
-  return fe_clamp(d, -1.f, 1.f);
+  return vv_clamp(d, -1.f, 1.f);
 }
 
 void applyGate(const Image& film, const Image& src, Image& dst, const GateFrame& f, int space, float mix) {
@@ -127,10 +127,10 @@ void applyGate(const Image& film, const Image& src, Image& dst, const GateFrame&
         col[0] = col[1] = col[2] = 0.f;
         for (int j = 0; j < 4; ++j) {
           const int sy = std::min(std::max(static_cast<int>(by) - 1 + j, 0), h - 1);
-          const float wy = fe_catmull_rom(ty, j);
+          const float wy = vv_catmull_rom(ty, j);
           for (int i = 0; i < 4; ++i) {
             const int sx = std::min(std::max(static_cast<int>(bx) - 1 + i, 0), w - 1);
-            const float wgt = wy * fe_catmull_rom(tx, i);
+            const float wgt = wy * vv_catmull_rom(tx, i);
             const float* p = film.at(sx, sy);
             col[0] += wgt * p[0]; col[1] += wgt * p[1]; col[2] += wgt * p[2];
           }
@@ -143,7 +143,7 @@ void applyGate(const Image& film, const Image& src, Image& dst, const GateFrame&
       const float mask = f.doEdge ? fe_gate_mask(static_cast<float>(x), static_cast<float>(y), static_cast<float>(w),
                                                  static_cast<float>(h), f.insetPx, f.softPx, f.radiusPx)
                                   : 1.f;
-      const fe_float3 o = fe_gate_shade(fe_make3(col[0], col[1], col[2]), defect, f.gain, mask, space);
+      const vv_float3 o = fe_gate_shade(vv_make3(col[0], col[1], col[2]), defect, f.gain, mask, space);
       const float out[3] = {o.x, o.y, o.z};
       for (int c = 0; c < 3; ++c) {
         const float v = mix >= 1.0f ? out[c] : orig[c] + (out[c] - orig[c]) * mix;

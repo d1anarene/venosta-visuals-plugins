@@ -15,6 +15,7 @@
 #include "gate/gate.h"
 #include "pipeline/pipeline.h"
 #include "FilmEffectsParams.h"
+#include "vv/effect.h"
 
 using namespace fe;
 
@@ -169,13 +170,13 @@ TEST(no_hdr_clipping) {
 TEST(soft_knee_is_monotonic_and_continuous) {
   float prevExcess = 0.f;
   for (float l = 0.f; l < 4.f; l += 0.001f) {
-    float excess = l * fe_soft_knee_weight(l, 0.8f, 0.5f);
+    float excess = l * vv_soft_knee_weight(l, 0.8f, 0.5f);
     CHECK(excess >= prevExcess - 1e-6f);
     CHECK(excess - prevExcess < 0.0011f);  // no jumps
     prevExcess = excess;
   }
-  CHECK(fe_soft_knee_weight(0.2f, 0.8f, 0.5f) == 0.f);
-  CHECK_NEAR(2.f * fe_soft_knee_weight(2.f, 0.8f, 0.5f), 1.2f, 1e-5f);
+  CHECK(vv_soft_knee_weight(0.2f, 0.8f, 0.5f) == 0.f);
+  CHECK_NEAR(2.f * vv_soft_knee_weight(2.f, 0.8f, 0.5f), 1.2f, 1e-5f);
 }
 TEST(bloom_increases_monotonically_with_intensity_and_lower_threshold) {
   Image base = solid(64, 64, 0.f, 0.f, 0.f);
@@ -291,10 +292,10 @@ TEST(halation_is_warm_and_concentrated_at_edges) {
   CHECK_NEAR(im.at(2, 2)[0], ref.at(2, 2)[0], 1e-6f);
 }
 TEST(halation_warmth_moves_towards_orange) {
-  fe_float3 red = fe_halation_tint(0.f), orange = fe_halation_tint(1.f);
+  vv_float3 red = fe_halation_tint(0.f), orange = fe_halation_tint(1.f);
   CHECK(orange.y / orange.x > red.y / red.x);
-  CHECK_NEAR(fe_luma(red), 0.3f, 1e-4f);
-  CHECK_NEAR(fe_luma(orange), 0.3f, 1e-4f);
+  CHECK_NEAR(vv_luma(red), 0.3f, 1e-4f);
+  CHECK_NEAR(vv_luma(orange), 0.3f, 1e-4f);
 }
 TEST(halation_responds_to_cyan_less_than_white) {
   auto edgeRed = [](float r, float g, float b) {
@@ -497,22 +498,22 @@ TEST(presets_exist_and_are_sane) {
 }
 
 // ---------- host parameter mapping (no SDK needed) ----------
-// Reader backed by a key->value map for a given variant (simulates the host's params array).
-struct FakeReader : ParamReader {
-  Variant v;
+// Reader/writer backed by an array indexed like the host's params (simulates a host).
+struct FakeHost : ParamReader, vv::ParamWriter {
   std::vector<double> vals;
-  explicit FakeReader(Variant var) : v(var) {
-    const auto keys = variantKeys(var);
-    vals.assign(keys.size() + 1, 0.0);
-    for (size_t i = 0; i < keys.size(); ++i) vals[i + 1] = specFor(keys[i]).dflt;  // host starts at defaults
+  FakeHost() {
+    const auto& all = allParams();
+    vals.assign(all.size() + 1, 0.0);
+    for (size_t i = 0; i < all.size(); ++i) vals[i + 1] = all[i].dflt;  // host starts at defaults
   }
-  void set(ParamKey k, double x) {
-    int i = paramIndex(v, k);
-    if (i > 0) vals[i] = x;
-  }
+  void set(ParamKey k, double x) { vals[paramIndex(k)] = x; }
+  double get(ParamKey k) const { return vals[paramIndex(k)]; }
   double number(int i) const override { return vals[i]; }
   bool flag(int i) const override { return vals[i] != 0.0; }
   int popup(int i) const override { return static_cast<int>(vals[i]); }
+  void setNumber(int i, double v) override { vals[i] = v; }
+  void setFlag(int i, bool v) override { vals[i] = v ? 1.0 : 0.0; }
+  void setPopup(int i, int v) override { vals[i] = v; }
 };
 
 TEST(param_table_is_complete_and_stable) {
@@ -521,7 +522,8 @@ TEST(param_table_is_complete_and_stable) {
   std::vector<int> ids;
   for (int k = 0; k < static_cast<int>(ParamKey::Count); ++k) {
     const ParamSpec& sp = specFor(static_cast<ParamKey>(k));
-    CHECK(sp.key == static_cast<ParamKey>(k));  // table order == enum order
+    CHECK(sp.key == k);  // table order == enum order
+    CHECK(paramIndex(static_cast<ParamKey>(k)) == k + 1);
     ids.push_back(sp.diskId);
     if (sp.kind == ParamKind::Float || sp.kind == ParamKind::IntSlider) {
       CHECK(sp.validMin <= sp.sliderMin && sp.sliderMin < sp.sliderMax && sp.sliderMax <= sp.validMax);
@@ -531,30 +533,22 @@ TEST(param_table_is_complete_and_stable) {
   }
   std::sort(ids.begin(), ids.end());
   CHECK(std::adjacent_find(ids.begin(), ids.end()) == ids.end());  // disk IDs unique
-  // The combined effect keeps its original on-disk IDs (projects depend on them).
+  // On-disk IDs never change (projects depend on them).
   CHECK(specFor(ParamKey::Preset).diskId == 1);
   CHECK(specFor(ParamKey::BloomRadius).diskId == 11);
   CHECK(specFor(ParamKey::GrainGroupEnd).diskId == 32);
-}
-
-TEST(param_groups_balanced_in_every_variant) {
-  for (Variant v : {Variant::Combined, Variant::Bloom, Variant::Halation, Variant::Grain}) {
-    int depth = 0;
-    for (ParamKey k : variantKeys(v)) {
-      ParamKind kind = specFor(k).kind;
-      if (kind == ParamKind::GroupStart) ++depth;
-      if (kind == ParamKind::GroupEnd) --depth;
-      CHECK(depth >= 0 && depth <= 1);
-    }
-    CHECK(depth == 0);
-    CHECK(paramIndex(v, ParamKey::Mix) == 1 || v == Variant::Combined);
+  CHECK(specFor(ParamKey::GateGroupEnd).diskId == 44);
+  int depth = 0;
+  for (const ParamSpec& sp : all) {
+    if (sp.kind == ParamKind::GroupStart) ++depth;
+    if (sp.kind == ParamKind::GroupEnd) --depth;
+    CHECK(depth >= 0 && depth <= 1);
   }
-  CHECK(paramIndex(Variant::Combined, ParamKey::Preset) == 1);
-  CHECK(paramIndex(Variant::Bloom, ParamKey::GrainAmount) == -1);
+  CHECK(depth == 0);
 }
 
-TEST(host_param_mapping_combined) {
-  FakeReader r(Variant::Combined);
+TEST(host_param_mapping) {
+  FakeHost r;
   r.set(ParamKey::Mix, 50.0);
   r.set(ParamKey::WorkingSpace, 3);
   r.set(ParamKey::Quality, 2);
@@ -563,53 +557,43 @@ TEST(host_param_mapping_combined) {
   r.set(ParamKey::GrainSeed, 77);
   r.set(ParamKey::GrainColor, 2);
   r.set(ParamKey::BloomRadius, 1e9);  // out of range -> clamped
-  FilmParams p = readParams(r, Variant::Combined);
+  FilmParams p = readParams(r);
   CHECK(p.masterEnable);
   CHECK_NEAR(p.mix, 0.5f, 1e-6f);
   CHECK(p.space == WorkingSpace::Linear);
   CHECK(p.quality == Quality::High);
   CHECK(p.grain.enabled && p.grain.seed == 77 && p.grain.color == GrainColor::Color);
-  CHECK(!p.bloom.enabled && !p.halation.enabled);  // table defaults
+  CHECK(!p.bloom.enabled && !p.halation.enabled && !p.gate.enabled);  // table defaults
   CHECK(p.bloom.radius <= 25.f);
   // Defaults of the host table equal the core defaults
-  FilmParams d = readParams(FakeReader(Variant::Combined), Variant::Combined);
+  FilmParams d = readParams(FakeHost());
   FilmParams core;
-  CHECK(d.bloom.intensity == core.bloom.intensity && d.grain.size == core.grain.size && d.mix == core.mix);
+  CHECK(d.bloom.intensity == core.bloom.intensity && d.grain.size == core.grain.size && d.mix == core.mix &&
+        d.gate.weave == core.gate.weave && d.gate.seed == core.gate.seed);
 }
 
-TEST(standalone_variants_enable_only_their_effect) {
-  FilmParams b = readParams(FakeReader(Variant::Bloom), Variant::Bloom);
-  FilmParams h = readParams(FakeReader(Variant::Halation), Variant::Halation);
-  FilmParams g = readParams(FakeReader(Variant::Grain), Variant::Grain);
-  CHECK(b.bloom.enabled && !b.halation.enabled && !b.grain.enabled && b.masterEnable);
-  CHECK(!h.bloom.enabled && h.halation.enabled && !h.grain.enabled);
-  CHECK(!g.bloom.enabled && !g.halation.enabled && g.grain.enabled && g.grain.animate);
-  CHECK(b.anyEffectActive() && h.anyEffectActive() && g.anyEffectActive());
-}
-
-TEST(standalone_renders_identically_to_combined_section) {
-  // Same settings through a standalone variant and through the combined effect with only that
-  // section enabled must give bit-identical pixels.
-  struct Case { Variant v; ParamKey enable; std::vector<std::pair<ParamKey, double>> sets; };
-  std::vector<Case> cases = {
-      {Variant::Bloom, ParamKey::BloomEnable, {{ParamKey::BloomIntensity, 0.4}, {ParamKey::BloomRadius, 6.0}, {ParamKey::Mix, 80}}},
-      {Variant::Halation, ParamKey::HalEnable, {{ParamKey::HalIntensity, 0.3}, {ParamKey::HalWarmth, 0.8}}},
-      {Variant::Grain, ParamKey::GrainEnable, {{ParamKey::GrainAmount, 0.5}, {ParamKey::GrainSeed, 9}, {ParamKey::GrainColor, 2}}},
-  };
-  for (auto& c : cases) {
-    FakeReader solo(c.v), comb(Variant::Combined);
-    comb.set(c.enable, 1);
-    for (auto& [k, x] : c.sets) {
-      solo.set(k, x);
-      comb.set(k, x);
-    }
-    Image a = solid(160, 90, 0.3f, 0.3f, 0.3f);
-    rect(a, 60, 30, 100, 60, 1.6f, 1.4f, 1.2f);
-    Image b = a;
-    process(a, readParams(solo, c.v), RenderContext{4});
-    process(b, readParams(comb, Variant::Combined), RenderContext{4});
-    CHECK(sameImage(a, b));
-  }
+TEST(effect_interface_presets_bypass_and_render) {
+  const vv::Effect& fx = vv::effect();
+  CHECK(std::string(fx.info().matchName) == "VVIS FilmEffects");
+  CHECK(std::string(fx.info().ofxId) == "com.venostavisuals.FilmEffects");
+  CHECK(std::string(fx.info().ofxParamPrefix) == "fe");
+  CHECK(&fx.params() == &allParams());
+  FakeHost h;
+  CHECK(!fx.active(h));  // everything off by default -> host bypass
+  // Choosing "Old Projector" in the menu fills in the controls and resets the menu.
+  const int menu = paramIndex(ParamKey::Preset);
+  h.setPopup(menu, FE_PRESET_COUNT);
+  CHECK(fx.paramChanged(menu, h, h));
+  CHECK(h.get(ParamKey::Preset) == 1);
+  CHECK(h.get(ParamKey::GateEnable) == 1 && h.get(ParamKey::GrainEnable) == 1);
+  CHECK_NEAR(h.get(ParamKey::GateWeave), 1.6, 1e-6);
+  CHECK(!fx.paramChanged(paramIndex(ParamKey::Mix), h, h));
+  CHECK(fx.active(h));
+  // Rendering through the interface equals the core pipeline.
+  Image a = solid(120, 70, 0.4f, 0.45f, 0.5f), b = a;
+  CHECK(fx.render(a, h, 6));
+  CHECK(process(b, readParams(h), RenderContext{6}));
+  CHECK(sameImage(a, b));
 }
 
 TEST(frame_keys_from_host_time) {

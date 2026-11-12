@@ -12,9 +12,9 @@ float grainSample(int x, int y, int imageHeight, const GrainParams& g, int64_t f
   const float scale = static_cast<float>(imageHeight) / 1080.0f;
   const float sizePx = g.size * scale;
   const uint64_t t = g.animate ? static_cast<uint64_t>(frameKey) : 0u;
-  fe_uint key = fe_hash3(static_cast<fe_uint>(g.seed), static_cast<fe_uint>(t & 0xffffffffu),
-                         static_cast<fe_uint>(t >> 32));
-  key = fe_hash(key + static_cast<fe_uint>(channel) * 0x632BE5ABu);
+  vv_uint key = vv_hash3(static_cast<vv_uint>(g.seed), static_cast<vv_uint>(t & 0xffffffffu),
+                         static_cast<vv_uint>(t >> 32));
+  key = vv_hash(key + static_cast<vv_uint>(channel) * 0x632BE5ABu);
   return fe_grain_field(static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f, sizePx, g.roughness, key);
 }
 

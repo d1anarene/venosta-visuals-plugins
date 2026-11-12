@@ -1,5 +1,6 @@
-// Film Effects — per-pixel GPU pass functions, shared by the CUDA kernels (src/gpu/cuda) and the
-// CPU emulation used in tests (tests/gpu/gpu_emulation_test.cpp). Valid C++17 and CUDA C++.
+// Film Effects — film-specific per-pixel GPU passes (prepare, composite, Film Gate), shared by the
+// CUDA kernels (src/gpu/cuda) and the CPU emulation used in tests. Valid C++17 and CUDA C++. The
+// generic passes (pyramid, blur, half floats) come from the shared engine (gpu/vv_gpu_pixels.h).
 //
 // Each function computes ONE output pixel (x, y), exactly like one GPU thread. The CUDA kernels
 // are thin wrappers that compute (x, y) from the thread index and call these; the emulation calls
@@ -9,87 +10,19 @@
 #include <cstring>
 
 #include "common/fe_kernels.h"
+#include "gpu/vv_gpu_pixels.h"
 
-#ifdef __CUDACC__
-#define FE_HD __host__ __device__ inline
-#else
-#define FE_HD inline
-#endif
+#define FE_HD VV_HD
 
 namespace fe {
 namespace gpu {
-
-struct alignas(16) F4 {
-  float x, y, z, w;
-};
-
-/** Half-float pixel (Premiere GPU_BGRA_4444_16f): four IEEE binary16 values. */
-struct alignas(8) H4 {
-  uint16_t x, y, z, w;
-};
-
-// Portable IEEE half <-> float (round to nearest even), identical on host and device.
-FE_HD float halfToFloat(uint16_t h) {
-  uint32_t sign = (h & 0x8000u) << 16, exp = (h >> 10) & 0x1Fu, man = h & 0x3FFu;
-  uint32_t bits;
-  if (exp == 0) {
-    if (man == 0) {
-      bits = sign;
-    } else {  // subnormal
-      int e = -1;
-      do { ++e; man <<= 1; } while ((man & 0x400u) == 0);
-      bits = sign | (uint32_t(127 - 15 - e) << 23) | ((man & 0x3FFu) << 13);
-    }
-  } else if (exp == 31) {
-    bits = sign | 0x7F800000u | (man << 13);
-  } else {
-    bits = sign | ((exp + 112u) << 23) | (man << 13);
-  }
-  float f;
-  memcpy(&f, &bits, 4);
-  return f;
-}
-
-FE_HD uint16_t floatToHalf(float f) {
-  uint32_t x;
-  memcpy(&x, &f, 4);
-  uint32_t sign = (x >> 16) & 0x8000u;
-  uint32_t absx = x & 0x7FFFFFFFu;
-  if (absx >= 0x7F800000u) return uint16_t(sign | 0x7C00u | (absx > 0x7F800000u ? 0x200u : 0u));  // inf/nan
-  if (absx >= 0x477FF000u) return uint16_t(sign | 0x7C00u);  // overflow -> inf
-  if (absx < 0x38800000u) {                                   // subnormal or zero
-    if (absx < 0x33000000u) return uint16_t(sign);
-    uint32_t e = absx >> 23, m = (absx & 0x7FFFFFu) | 0x800000u;
-    uint32_t shift = 126 - e;  // 113..125 range handled
-    uint32_t half = m >> shift;
-    uint32_t rem = m & ((1u << shift) - 1u), mid = 1u << (shift - 1);
-    if (rem > mid || (rem == mid && (half & 1u))) ++half;
-    return uint16_t(sign | half);
-  }
-  uint32_t half = ((absx - 0x38000000u) >> 13);
-  uint32_t rem = absx & 0x1FFFu;
-  if (rem > 0x1000u || (rem == 0x1000u && (half & 1u))) ++half;
-  return uint16_t(sign | half);
-}
-
-FE_HD F4 loadPx(const F4* frame, uint32_t i) { return frame[i]; }
-FE_HD F4 loadPx(const H4* frame, uint32_t i) {
-  H4 h = frame[i];
-  return F4{halfToFloat(h.x), halfToFloat(h.y), halfToFloat(h.z), halfToFloat(h.w)};
-}
-FE_HD void storePx(F4* frame, uint32_t i, F4 v) { frame[i] = v; }
-FE_HD void storePx(H4* frame, uint32_t i, F4 v) {
-  frame[i] = H4{floatToHalf(v.x), floatToHalf(v.y), floatToHalf(v.z), floatToHalf(v.w)};
-}
+using namespace vv::gpu;  // F4, H4, PlaneInfo, loadPx/storePx, pyramid and blur passes
 
 struct FrameInfo {
   uint32_t width, height, rowPixels;
   int32_t space;
   float bloomThreshold, bloomKnee, halThreshold, halKnee;
   int32_t rgba;  // 1: host frame is RGBA (OpenFX), 0: BGRA (Premiere)
-};
-struct PlaneInfo {
-  uint32_t width, height;
 };
 struct CompositeInfo {
   uint32_t width, height, rowPixels;
@@ -121,85 +54,25 @@ struct GateInfo {
   int32_t ssign[4];
 };
 
-FE_HD int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
-
 // 1. Linearise the host frame (BGRA or RGBA) and extract bloom/halation sources.
 template <typename T>
 FE_HD void pxPrepare(const T* frame, F4* lin, F4* bright, F4* halSrc, const FrameInfo& fi, uint32_t x, uint32_t y) {
   F4 px = loadPx(frame, y * fi.rowPixels + x);
-  fe_float3 l = fe_to_linear(fi.rgba ? fe_make3(px.x, px.y, px.z) : fe_make3(px.z, px.y, px.x), fi.space);
+  vv_float3 l = vv_to_linear(fi.rgba ? vv_make3(px.x, px.y, px.z) : vv_make3(px.z, px.y, px.x), fi.space);
   uint32_t i = y * fi.width + x;
   lin[i] = F4{l.x, l.y, l.z, 0.0f};
-  float w = fe_soft_knee_weight(fe_luma(l), fi.bloomThreshold, fi.bloomKnee);
-  fe_float3 pos = fe_make3(fe_max(l.x, 0.0f), fe_max(l.y, 0.0f), fe_max(l.z, 0.0f));
+  float w = vv_soft_knee_weight(vv_luma(l), fi.bloomThreshold, fi.bloomKnee);
+  vv_float3 pos = vv_make3(vv_max(l.x, 0.0f), vv_max(l.y, 0.0f), vv_max(l.z, 0.0f));
   bright[i] = F4{pos.x * w, pos.y * w, pos.z * w, 0.0f};
   halSrc[i] = F4{fe_halation_source(pos, fi.halThreshold, fi.halKnee), 0.0f, 0.0f, 0.0f};
 }
 
-// 2. [1 3 3 1]/8 separable downsample by 2 (single 4x4 pass), clamp-to-edge.
-FE_HD void pxDownsample(const F4* src, F4* dst, PlaneInfo s, PlaneInfo d, uint32_t x, uint32_t y) {
-  const float k[4] = {0.125f, 0.375f, 0.375f, 0.125f};
-  F4 acc{0, 0, 0, 0};
-  for (int ty = 0; ty < 4; ++ty) {
-    int sy = clampi(int(y) * 2 - 1 + ty, 0, int(s.height) - 1);
-    F4 row{0, 0, 0, 0};
-    for (int tx = 0; tx < 4; ++tx) {
-      int sx = clampi(int(x) * 2 - 1 + tx, 0, int(s.width) - 1);
-      F4 v = src[sy * s.width + sx];
-      row.x += k[tx] * v.x; row.y += k[tx] * v.y; row.z += k[tx] * v.z; row.w += k[tx] * v.w;
-    }
-    acc.x += k[ty] * row.x; acc.y += k[ty] * row.y; acc.z += k[ty] * row.z; acc.w += k[ty] * row.w;
-  }
-  dst[y * d.width + x] = acc;
-}
-
-// 3. Separable Gaussian, clamp-to-edge. `weights` has 2*radius+1 taps (core gaussianKernel()).
-FE_HD void pxBlurH(const F4* src, F4* dst, PlaneInfo p, const float* weights, int radius, uint32_t x, uint32_t y) {
-  F4 acc{0, 0, 0, 0};
-  for (int i = -radius; i <= radius; ++i) {
-    F4 v = src[y * p.width + clampi(int(x) + i, 0, int(p.width) - 1)];
-    float k = weights[i + radius];
-    acc.x += v.x * k; acc.y += v.y * k; acc.z += v.z * k; acc.w += v.w * k;
-  }
-  dst[y * p.width + x] = acc;
-}
-FE_HD void pxBlurV(const F4* src, F4* dst, PlaneInfo p, const float* weights, int radius, uint32_t x, uint32_t y) {
-  F4 acc{0, 0, 0, 0};
-  for (int i = -radius; i <= radius; ++i) {
-    F4 v = src[clampi(int(y) + i, 0, int(p.height) - 1) * p.width + x];
-    float k = weights[i + radius];
-    acc.x += v.x * k; acc.y += v.y * k; acc.z += v.z * k; acc.w += v.w * k;
-  }
-  dst[y * p.width + x] = acc;
-}
-
-// 4. Bilinear 2x upsample (grid inverse of pxDownsample), weighted accumulate, clear.
-FE_HD void pxUpsample(const F4* src, F4* dst, PlaneInfo s, PlaneInfo d, uint32_t x, uint32_t y) {
-  float fy = fe_clamp((float(y) + 0.5f) * 0.5f - 0.5f, 0.0f, float(s.height - 1));
-  float fx = fe_clamp((float(x) + 0.5f) * 0.5f - 0.5f, 0.0f, float(s.width - 1));
-  int y0 = int(fy), x0 = int(fx);
-  int y1 = y0 + 1 < int(s.height) ? y0 + 1 : int(s.height) - 1;
-  int x1 = x0 + 1 < int(s.width) ? x0 + 1 : int(s.width) - 1;
-  float ty = fy - float(y0), tx = fx - float(x0);
-  F4 a = src[y0 * s.width + x0], b = src[y0 * s.width + x1], c = src[y1 * s.width + x0], e = src[y1 * s.width + x1];
-  F4 top{a.x + (b.x - a.x) * tx, a.y + (b.y - a.y) * tx, a.z + (b.z - a.z) * tx, a.w + (b.w - a.w) * tx};
-  F4 bot{c.x + (e.x - c.x) * tx, c.y + (e.y - c.y) * tx, c.z + (e.z - c.z) * tx, c.w + (e.w - c.w) * tx};
-  dst[y * d.width + x] = F4{top.x + (bot.x - top.x) * ty, top.y + (bot.y - top.y) * ty, top.z + (bot.z - top.z) * ty,
-                            top.w + (bot.w - top.w) * ty};
-}
-FE_HD void pxAxpy(F4* acc, const F4* v, float w, PlaneInfo p, uint32_t x, uint32_t y) {
-  uint32_t i = y * p.width + x;
-  acc[i].x += w * v[i].x; acc[i].y += w * v[i].y; acc[i].z += w * v[i].z; acc[i].w += w * v[i].w;
-}
-FE_HD void pxClear(F4* dst, PlaneInfo p, uint32_t x, uint32_t y) { dst[y * p.width + x] = F4{0, 0, 0, 0}; }
-
 // 5. Composite: bloom + halation (linear) -> encoding -> grain -> mix; alpha untouched.
 FE_HD float grainAt(uint32_t x, uint32_t y, const CompositeInfo& ci, int channel) {
-  fe_uint key = fe_hash(ci.grainKey + fe_uint(channel) * 0x632BE5ABu);
+  vv_uint key = vv_hash(ci.grainKey + vv_uint(channel) * 0x632BE5ABu);
   return fe_grain_field(float(x) + 0.5f, float(y) + 0.5f, ci.grainSizePx, ci.grainRoughness, key);
 }
 
-FE_HD bool isFiniteF(float v) { return v == v && v - v == 0.0f; }
 
 // Bloom + halation + grain for one pixel, without mix. `orig` is RGB in working encoding.
 FE_HD void compositeColor(const float orig[3], const F4* lin, const F4* bloom, const F4* halNear, const F4* halFar,
@@ -219,10 +92,10 @@ FE_HD void compositeColor(const float orig[3], const F4* lin, const F4* bloom, c
     }
     const float l[3] = {lin[pi].x, lin[pi].y, lin[pi].z};
     for (int c = 0; c < 3; ++c)
-      if (add[c] != 0.0f) o[c] = fe_from_linear1(l[c] + add[c], ci.space);
+      if (add[c] != 0.0f) o[c] = vv_from_linear1(l[c] + add[c], ci.space);
   }
   if (ci.doGrain) {
-    float a = ci.grainAmp * fe_grain_response(fe_luma(fe_make3(o[0], o[1], o[2])), ci.grainShadows, ci.grainMids,
+    float a = ci.grainAmp * fe_grain_response(vv_luma(vv_make3(o[0], o[1], o[2])), ci.grainShadows, ci.grainMids,
                                               ci.grainHighs);
     if (a > 0.0f) {
       float base = grainAt(x, gy, ci, 0);
@@ -273,7 +146,7 @@ FE_HD float gateDefectAt(const GateInfo& g, float fx, float fy) {
   float d = g.dustDensity > 0.0f ? fe_dust(fx, fy, g.dustCellPx, g.dustDensity, g.dustSizePx, g.dustKey, g.look) : 0.0f;
   for (int k = 0; k < g.scratchCount; ++k)
     d += float(g.ssign[k]) * fe_scratch(fx, fy, float(g.height), g.sx0[k], g.sslope[k], g.swidth[k], g.sstrength[k], g.skey[k]);
-  return fe_clamp(d, -1.0f, 1.0f);
+  return vv_clamp(d, -1.0f, 1.0f);
 }
 
 // Film Gate, step 2: weave (Catmull-Rom), dust/scratches, flicker, aperture, mix against the source.
@@ -289,16 +162,16 @@ FE_HD void pxGate(const T* src, T* dst, const F4* film, const GateInfo& g, uint3
     const float fx = float(x) - g.dx, fy = ty - g.dy;              // film position seen here
     float col[3];
     if (g.doWeave) {
-      const float bx = fe_floor(fx), by = fe_floor(fy);
+      const float bx = vv_floor(fx), by = vv_floor(fy);
       const float tx = fx - bx, tyf = fy - by;
       col[0] = col[1] = col[2] = 0.0f;
       for (int j = 0; j < 4; ++j) {
         int r = clampi(int(by) - 1 + j, 0, H - 1);
         if (g.bottomUp) r = H - 1 - r;  // top-down row -> buffer row
-        const float wy = fe_catmull_rom(tyf, j);
+        const float wy = vv_catmull_rom(tyf, j);
         for (int i = 0; i < 4; ++i) {
           const int c = clampi(int(bx) - 1 + i, 0, W - 1);
-          const float wgt = wy * fe_catmull_rom(tx, i);
+          const float wgt = wy * vv_catmull_rom(tx, i);
           const F4 p = film[uint32_t(r) * g.width + uint32_t(c)];
           col[0] += wgt * p.x; col[1] += wgt * p.y; col[2] += wgt * p.z;
         }
@@ -309,7 +182,7 @@ FE_HD void pxGate(const T* src, T* dst, const F4* film, const GateInfo& g, uint3
     }
     const float defect = g.doDefects ? gateDefectAt(g, fx, fy) : 0.0f;
     const float mask = g.doEdge ? fe_gate_mask(float(x), ty, float(g.width), float(g.height), g.insetPx, g.softPx, g.radiusPx) : 1.0f;
-    const fe_float3 sh = fe_gate_shade(fe_make3(col[0], col[1], col[2]), defect, g.gain, mask, g.space);
+    const vv_float3 sh = fe_gate_shade(vv_make3(col[0], col[1], col[2]), defect, g.gain, mask, g.space);
     const float out[3] = {sh.x, sh.y, sh.z};
     for (int c = 0; c < 3; ++c) {
       float v = g.mix < 1.0f ? orig[c] + (out[c] - orig[c]) * g.mix : out[c];

@@ -18,9 +18,10 @@ delivery. More plugins (and possibly other Adobe apps) will follow.
 | --- | --- | --- |
 | [Track Range Exporter](plugins/track-range-exporter/README.md) | Pick a guide track (e.g. V1). Every clip on it becomes its own export job in Adobe Media Encoder, rendering the **full graded sequence** (all tracks, adjustment layers, Lumetri, audio) for exactly that clip's time range. | Early version — **works in Premiere Pro 27 on macOS** (user-tested); frame-exact checks and Windows still open |
 | [Film Effects](plugins/film-effects/README.md) | Native video effect with **Bloom**, **Halation**, **Film Grain** and **Film Gate** (weave, flicker, dust, scratches, gate edge) in one panel — designed to sit after Lumetri or on an adjustment layer. | **Host-tested on macOS** — user-tested in Premiere Pro 27 on Apple Silicon; CPU tests and Metal comparison pass in CI. Mac installer available in releases (macOS 26+); Windows Setup.exe (CUDA + CPU fallback) experimental. **DaVinci Resolve (OpenFX) version** — user-tested in Resolve on macOS; Windows (CUDA) and Linux not yet tested in Resolve |
+| [Lens & Diffusion](plugins/lens-diffusion/README.md) | Optical finishing in one effect: **diffusion filter** (mist to black-mist look), **vignette**, **chromatic aberration** and **anamorphic streaks**, for Premiere Pro and DaVinci Resolve. | **New, experimental** — CPU + Metal / CUDA rendering; built and installer-tested in CI; not yet tested in Premiere or Resolve |
 
 Each plugin folder has its own README with installation steps, usage and known limitations.
-Planned next: Lens & Diffusion, Exposure & False Color, Retro, Denoise and Retime — see
+Planned next: Exposure & False Color, Retro, Denoise and Retime — see
 [ROADMAP.md](ROADMAP.md).
 
 ---
@@ -71,7 +72,7 @@ cd plugins/film-effects && cmake -S . -B build-ofx -DFE_BUILD_OFX=ON && cmake --
 Package prebuilt Mac bundles (on macOS, with Xcode):
 
 ```bash
-bash plugins/film-effects/scripts/package-macos.sh /path/to/bundles /path/to/FilmEffects.pkg 1.0.0
+bash shared/engine/installer/macos/package-premiere.sh /path/to/bundles /path/to/FilmEffects.pkg 1.0.0 com.venostavisuals.filmeffects.preview FilmEffects --metal --min-macos 26
 ```
 
 GitHub Actions (`.github/workflows/tests.yml`) runs these on every push (Linux, macOS, Windows),

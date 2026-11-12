@@ -1,0 +1,40 @@
+name: film-effects
+# Film Effects for Premiere Pro and DaVinci Resolve, built and tested with the shared workflows.
+on:
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      ADOBE_SDK_TOKEN: { required: false }
+      ADBE_SDK_TOKEN: { required: false }
+permissions:
+  contents: read
+jobs:
+  premiere:
+    uses: ./.github/workflows/vv-premiere.yml
+    secrets: inherit
+    with:
+      plugin: film-effects
+      binary: FilmEffects
+      name: Film Effects
+      cmake_flags: -DFE_BUILD_PLUGIN=ON
+      cuda: true
+      metal: true
+      mac_min: '26.0'
+      mac_pkg_id: com.venostavisuals.filmeffects.preview
+      mac_pkg_args: --min-macos 26 --retire FilmBloom --retire FilmHalation --retire FilmGrain
+      iss: plugins/film-effects/installer/windows/FilmEffects.iss
+      extra_installer_test: plugins/film-effects/installer/windows/test-legacy-upgrade.ps1
+  resolve:
+    uses: ./.github/workflows/vv-ofx.yml
+    with:
+      plugin: film-effects
+      bundle: FilmEffects
+      name: Film Effects
+      ofx_id: com.venostavisuals.FilmEffects
+      cmake_flags: -DFE_BUILD_OFX=ON
+      cuda: true
+      metal: true
+      mac_pkg_id: com.venostavisuals.filmeffects.resolve
+      iss: plugins/film-effects/installer/windows/FilmEffectsResolve.iss

@@ -2,6 +2,20 @@
 
 _Last update: 2026-11-11_
 
+## Shared engine, phases A + B (2026-11-12)
+
+- Owner chose a shared engine (`shared/engine`) over copying code into new plugins.
+- Phase A: image types, threading, blur pyramid, pixel formats and generic per-pixel maths moved to
+  `shared/engine/core/vv` (`vv_` prefix); Film Effects keeps its own maths.
+- Phase B: Film Effects is now a `vv::Effect` (`src/effect/`): parameter table, CPU render,
+  presets through `paramChanged`, Metal/CUDA renderers shared by both hosts. The Premiere adapter
+  (AE API + GPU entries + PiPL template) and the OpenFX adapter live in `shared/engine/hosts`.
+  The old variant mechanism is gone (only Film Effects is built since the standalone effects were
+  retired). Saved-project identifiers unchanged: match name `VVIS FilmEffects`, disk IDs, OpenFX id
+  `com.venostavisuals.FilmEffects` and parameter names `fe<diskId>`.
+- Verified locally (Linux): all tests pass (21,247 checks + GPU emulation + OFX load) and an
+  "Old Projector" frame is byte-identical before/after. Premiere adapter only compiles in CI (SDK).
+
 ## Film Gate + one effect (2026-11-12)
 
 - Owner: one Film Effects panel instead of separate effects; standalone Film Bloom / Halation /

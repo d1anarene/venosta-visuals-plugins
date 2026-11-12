@@ -104,7 +104,7 @@ Film Bloom / Halation / Grain effects (until v1.0.11) were retired; the installe
 On macOS with Xcode, from the repository root:
 
 ```bash
-bash plugins/film-effects/scripts/package-macos.sh /path/to/bundles /path/to/FilmEffects.pkg 1.0.0
+bash shared/engine/installer/macos/package-premiere.sh /path/to/bundles /path/to/FilmEffects.pkg 1.0.0 com.venostavisuals.filmeffects.preview FilmEffects --metal --min-macos 26
 ```
 
 The bundle folder must contain all four `.plugin` bundles with their PiPL and Metal resources.
