@@ -79,7 +79,7 @@ Estimate/truth ratios at 960×540 (median per band 0–1 and channel; `dn_eval_t
 **Conclusions:**
 1. A single-frame spatial estimate is reliable only where the frame has flat areas. It cannot
    separate uniform fine texture from noise.
-2. **R4 (next):** temporal estimation. In static areas the difference between consecutive frames
+2. **R4 (done for static shots, see below):** temporal estimation. In static areas the difference between consecutive frames
    (after motion compensation) is noise ×√2 *regardless of texture*. This is the planned primary
    estimator for video, with the spatial estimate as fallback and initial guess.
 3. **R5:** calibrate the quantile/truncation statistics for the measured spatial correlation of
@@ -104,3 +104,22 @@ Estimate/truth ratios at 960×540 (median per band 0–1 and channel; `dn_eval_t
 Blur helps smooth content and destroys fine detail (weave −7 dB, text −15 dB). The denoiser
 must beat the best blur on smooth images **and** keep weave/text at or above the noisy input.
 These are the D2/D3 acceptance numbers.
+
+### R4 temporal estimate (two frames, `estimateProfileTemporal`, `dn_eval_tool temporal`)
+
+(a − b)/√2 has exactly one frame's noise wherever the scene is static, and the picture cancels.
+Binning uses (a + b)/2, and moving areas are rejected by the same robust statistics. Tested with
+the second frame containing a moving block (16 % of the frame shifted by 9 px). Medians per band
+0–1 and channel, estimate/truth:
+
+| Image | Spatial | Temporal |
+| --- | --- | --- |
+| weave | 1.07–6.4 | 0.67–1.02 |
+| foliage | 0.97–9.3 | 0.86–1.11 |
+| text | 0.97–43 | 0.83–1.15 |
+| skin | 0.75–1.02 | 0.78–1.01 |
+| ramp / chart (saturated colours) | 0.8–1.0 (dark bins 0.3–0.7) | same (R6: colour crosstalk, not texture) |
+
+The temporal estimate becomes the primary method once neighbouring frames are available (Final
+mode), with motion compensation from D4 so that panning shots work too. Single-frame spatial
+estimation remains the fallback (Preview, first frame, hosts without temporal access).

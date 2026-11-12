@@ -225,6 +225,42 @@ TEST(blind_estimate_text_background_and_edge_bound) {
   }
 }
 
+// Temporal estimate: texture cancels in static areas, so textured frames (where the spatial
+// estimate fails by 3-40x) are measured correctly; a moving block is rejected.
+TEST(temporal_estimate_handles_texture_and_motion) {
+  for (const char* name : {"weave", "foliage", "text"}) {
+    const int w = 960, h = 540;
+    const vv::Image src = makeTestImage(name, w, h);
+    vv::Image moved = src;
+    for (int y = h / 4; y < h / 4 + h * 2 / 5; ++y)
+      for (int x = w / 3; x < w / 3 + w * 2 / 5; ++x)
+        for (int c = 0; c < 4; ++c) moved.at(x, y)[c] = src.at(std::min(x + 9, w - 1), y)[c];
+    NoiseSim sim;
+    const Synth a = synthesize(src, sim, 7u, 0), b = synthesize(moved, sim, 7u, 1);
+    const NoiseProfile truth = measureProfile(toRgbPlane(a.noisy), toRgbPlane(a.clean));
+    EstimateStats st;
+    const NoiseProfile est = estimateProfileTemporal(toRgbPlane(a.noisy), toRgbPlane(b.noisy), &st);
+    const NoiseProfile spatial = estimateProfile(toRgbPlane(a.noisy));
+    for (int bnd = 0; bnd < 2; ++bnd)
+      for (int c = 0; c < 3; ++c) {
+        std::vector<float> r, rs;
+        for (int k = 0; k < kBins; ++k)
+          if (st.binMeasured[bnd][c][k] && st.blocks[bnd][c][k] >= 40) {
+            r.push_back(est.sigma[bnd][c][k] / truth.sigma[bnd][c][k]);
+            rs.push_back(spatial.sigma[bnd][c][k] / truth.sigma[bnd][c][k]);
+          }
+        CHECK(!r.empty());
+        if (r.empty()) continue;
+        std::sort(r.begin(), r.end());
+        std::sort(rs.begin(), rs.end());
+        const float med = r[r.size() / 2], medS = rs[rs.size() / 2];
+        if (!(med > 0.65f && med < 1.3f)) std::printf("    %s band %d ch %d: temporal %.2f (spatial %.2f)\n", name, bnd, c, med, medS);
+        CHECK(med > 0.65f && med < 1.3f);  // measured: 0.70-1.07 (weave red band 0 lowest)
+        (void)medS;
+      }
+  }
+}
+
 TEST(noise_free_frame_estimates_almost_zero) {
   const NoiseProfile est = estimateProfile(toRgbPlane(makeTestImage("skin", 480, 270)));
   for (int c = 0; c < 3; ++c) CHECK(est.at(0, c, 0.5f) < 0.004f);  // texture floor << typical noise (~0.01)

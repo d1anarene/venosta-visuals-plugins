@@ -48,4 +48,8 @@ struct EstimateStats {
 /** Blind estimate from a noisy frame alone (see dn_profile.cpp for the method). */
 NoiseProfile estimateProfile(const vv::Plane& noisyRgb, EstimateStats* stats = nullptr);
 
+/** Temporal estimate from two frames of the same shot (consecutive, or motion-compensated):
+ *  static areas give the noise directly, independent of texture; moving areas are rejected. */
+NoiseProfile estimateProfileTemporal(const vv::Plane& frameA, const vv::Plane& frameB, EstimateStats* stats = nullptr);
+
 }  // namespace dn

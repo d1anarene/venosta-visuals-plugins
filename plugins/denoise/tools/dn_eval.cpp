@@ -1,6 +1,8 @@
 // Denoise evaluation harness (development tool, not part of a plug-in).
 //   dn_eval_tool profile   - blind noise-profile estimate vs ground truth on every test image and
 //                            noise setting; prints the estimate/truth ratio per band and channel.
+//   dn_eval_tool temporal  - the same with the two-frame temporal estimate (static shot plus a
+//                            moving block).
 //   dn_eval_tool baseline  - PSNR/SSIM of the noisy input and of a Gaussian-blur baseline.
 #include <algorithm>
 #include <cmath>
@@ -35,7 +37,7 @@ std::vector<Setting> settings() {
   return s;
 }
 
-int profileReport(int w, int h) {
+int profileReport(int w, int h, bool temporal) {
   std::printf("ratio = estimate / truth (1.00 is perfect), per RGB channel: median/worst over measured bins\n");
   std::printf("%-13s %-17s | %-29s | %-29s | corr err\n", "image", "noise", "band0 R / G / B", "band1 R / G / B");
   double worstAll = 1.0, worstCorr = 0;
@@ -45,7 +47,19 @@ int profileReport(int w, int h) {
       const Synth s = synthesize(src, st.sim, 7u);
       const NoiseProfile truth = measureProfile(toRgbPlane(s.noisy), toRgbPlane(s.clean));
       EstimateStats stats;
-      const NoiseProfile est = estimateProfile(toRgbPlane(s.noisy), &stats);
+      NoiseProfile est;
+      if (temporal) {
+        // Second frame of the same static shot (new noise), with a moving block (16 % of the
+        // frame shifted by 9 px) so motion rejection is exercised too.
+        vv::Image moved = src;
+        for (int y = h / 4; y < h / 4 + h * 2 / 5; ++y)
+          for (int x = w / 3; x < w / 3 + w * 2 / 5; ++x)
+            for (int c = 0; c < 4; ++c) moved.at(x, y)[c] = src.at(std::min(x + 9, w - 1), y)[c];
+        const Synth s2 = synthesize(moved, st.sim, 7u, 1);
+        est = estimateProfileTemporal(toRgbPlane(s.noisy), toRgbPlane(s2.noisy), &stats);
+      } else {
+        est = estimateProfile(toRgbPlane(s.noisy), &stats);
+      }
       std::printf("%-13s %-17s |", name.c_str(), st.name);
       double ce = 0;
       for (int b = 0; b < 2; ++b) {
@@ -98,8 +112,9 @@ int baselineReport(int w, int h) {
 int main(int argc, char** argv) {
   const std::string mode = argc > 1 ? argv[1] : "profile";
   const int w = argc > 3 ? std::atoi(argv[2]) : 960, h = argc > 3 ? std::atoi(argv[3]) : 540;
-  if (mode == "profile") return profileReport(w, h);
+  if (mode == "profile") return profileReport(w, h, false);
+  if (mode == "temporal") return profileReport(w, h, true);
   if (mode == "baseline") return baselineReport(w, h);
-  std::fprintf(stderr, "usage: dn_eval_tool profile|baseline [w h]\n");
+  std::fprintf(stderr, "usage: dn_eval_tool profile|temporal|baseline [w h]\n");
   return 2;
 }

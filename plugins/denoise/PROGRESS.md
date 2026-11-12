@@ -23,9 +23,11 @@ _Last update: 2026-11-12_
 - Evaluation: camera-like noise synthesis with ground truth (Bayer, colour matrix, sharpening),
   PSNR, SSIM, procedural test images (weave, foliage, text, skin, ramp + engine scenes),
   `dn_eval_tool`.
-- 13 tests pass. Measured estimator accuracy and limits, plus blur baselines: docs/RESEARCH.md
-  ("D1 results"). The spatial estimate is reliable on frames with flat areas only; temporal
-  estimation (R4) is next.
+- 14 tests pass. Measured estimator accuracy and limits, plus blur baselines: docs/RESEARCH.md
+  ("D1 results"). The spatial estimate is reliable on frames with flat areas only.
+- R4: two-frame temporal estimate. Texture cancels in static areas: weave/foliage/text go from
+  3–43× over to 0.7–1.15 of the truth, with a moving block in frame. Becomes the primary
+  estimator with motion compensation (D4).
 - Found and fixed in the shared engine: `vv::gaussianBlurDirect` / `gaussianBlurAccumulate`
   overflowed a 3-entry stack array for planes with 4+ channels (no existing plugin used that).
   Results for 1–3 channels are unchanged; regression test added.

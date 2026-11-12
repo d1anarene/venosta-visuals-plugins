@@ -239,12 +239,15 @@ NoiseProfile measureProfile(const vv::Plane& noisy, const vv::Plane& clean) {
   return prof;
 }
 
-NoiseProfile estimateProfile(const vv::Plane& noisy, EstimateStats* stats) {
+namespace {
+// Shared by the spatial and temporal estimators: band coefficients come from `signal`, the value
+// used for binning from `values`.
+NoiseProfile estimateImpl(const vv::Plane& signal, const vv::Plane& values, EstimateStats* stats) {
   const Calib* cal = calibration();
-  const Pyramid p = decompose(noisy, kBands);
+  const Pyramid p = decompose(signal, kBands);
   NoiseProfile prof;
   for (int b = 0; b < kBands && b + 1 < int(p.bands.size()); ++b) {
-    const std::vector<Block> bl = blocks(p.bands[size_t(b)], bandLowpass(noisy, b));
+    const std::vector<Block> bl = blocks(p.bands[size_t(b)], bandLowpass(values, b));
     for (int c = 0; c < 3; ++c) {
       // Start: low quantile per bin (texture only adds variance).
       std::vector<float> perBin[kBins], all;
@@ -326,6 +329,22 @@ NoiseProfile estimateProfile(const vv::Plane& noisy, EstimateStats* stats) {
     }
   }
   return prof;
+}
+
+}  // namespace
+
+NoiseProfile estimateProfile(const vv::Plane& noisy, EstimateStats* stats) { return estimateImpl(noisy, noisy, stats); }
+
+NoiseProfile estimateProfileTemporal(const vv::Plane& a, const vv::Plane& b, EstimateStats* stats) {
+  // (a - b) / sqrt2 has the noise of one frame wherever the scene is static; the picture itself
+  // cancels, so texture no longer looks like noise. Moving areas look like strong "texture" and are
+  // rejected by the same robust statistics. Values for binning: (a + b) / 2.
+  vv::Plane d = a, m = a;
+  for (size_t i = 0; i < d.v.size(); ++i) {
+    d.v[i] = (a.v[i] - b.v[i]) * 0.70710678f;
+    m.v[i] = (a.v[i] + b.v[i]) * 0.5f;
+  }
+  return estimateImpl(d, m, stats);
 }
 
 }  // namespace dn
