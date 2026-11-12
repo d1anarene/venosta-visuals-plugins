@@ -155,3 +155,68 @@ Plane blurByPlan(const Plane& src, const BlurStep& step) {
   return cur;
 }
 }  // namespace vv
+
+namespace vv {
+
+Plane downsampleX2(const Plane& src) {
+  const int w = std::max(1, (src.width + 1) / 2);
+  static const float k[4] = {0.125f, 0.375f, 0.375f, 0.125f};
+  const int c = src.channels;
+  Plane d(w, src.height, c);
+  parallelRows(src.height, [&](int y) {
+    for (int x = 0; x < w; ++x)
+      for (int ch = 0; ch < c; ++ch) {
+        float acc = 0;
+        for (int t = 0; t < 4; ++t) acc += k[t] * src.at(std::clamp(2 * x - 1 + t, 0, src.width - 1), y)[ch];
+        d.at(x, y)[ch] = acc;
+      }
+  });
+  return d;
+}
+
+Plane upsampleXTo(const Plane& src, int w) {
+  Plane d(w, src.height, src.channels);
+  parallelRows(src.height, [&](int y) {
+    for (int x = 0; x < w; ++x) {
+      // Same grid as upsampleTo: full-res x+0.5 maps to half-res (x+0.5)/2 - 0.5.
+      float fx = std::clamp((x + 0.5f) * 0.5f - 0.5f, 0.0f, static_cast<float>(src.width - 1));
+      int x0 = static_cast<int>(fx), x1 = std::min(x0 + 1, src.width - 1);
+      float tx = fx - x0;
+      for (int ch = 0; ch < src.channels; ++ch) {
+        float a = src.at(x0, y)[ch], b = src.at(x1, y)[ch];
+        d.at(x, y)[ch] = a + (b - a) * tx;
+      }
+    }
+  });
+  return d;
+}
+
+namespace {
+Plane blurRowsDirect(const Plane& src, float sigma) {
+  if (sigma < 0.05f) return src;
+  const std::vector<float> k = gaussianKernel(sigma);
+  const int r = static_cast<int>(k.size() / 2), c = src.channels;
+  Plane d(src.width, src.height, c);
+  parallelRows(src.height, [&](int y) {
+    for (int x = 0; x < src.width; ++x)
+      for (int ch = 0; ch < c; ++ch) {
+        float acc = 0;
+        for (int i = -r; i <= r; ++i) acc += k[i + r] * src.at(std::clamp(x + i, 0, src.width - 1), y)[ch];
+        d.at(x, y)[ch] = acc;
+      }
+  });
+  return d;
+}
+}  // namespace
+
+Plane gaussianBlurHorizontal(const Plane& src, float sigma) {
+  const BlurStep step = planGaussianHorizontal(sigma, src.width);
+  std::vector<Plane> levels;
+  levels.push_back(src);
+  for (int L = 1; L <= step.level; ++L) levels.push_back(downsampleX2(levels.back()));
+  Plane cur = blurRowsDirect(levels.back(), step.sigmaAtLevel);
+  for (int L = step.level - 1; L >= 0; --L) cur = upsampleXTo(cur, levels[L].width);
+  return cur;
+}
+
+}  // namespace vv

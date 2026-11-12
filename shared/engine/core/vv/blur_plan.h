@@ -18,4 +18,7 @@ float pyramidVariance(int level);
 /** Coarsest level at which `sigma` is still >= 2 level pixels and the level is >= 8x8. */
 BlurStep planGaussian(float sigma, int width, int height);
 
+/** Same for a horizontal-only blur on a horizontal-only pyramid (only the width limits levels). */
+BlurStep planGaussianHorizontal(float sigma, int width);
+
 }  // namespace vv

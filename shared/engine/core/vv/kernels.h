@@ -160,4 +160,25 @@ VV_FN float vv_catmull_rom(float t, int k) {
 }
 
 
+// ---------------------------------------------------------------------------------------------
+// Highlight extraction with a soft knee (quadratic, no hard edge). Returns the factor by which
+// the linear colour is multiplied to obtain the "light that scatters". Chroma is preserved.
+// threshold/knee are in linear luminance units (1.0 = diffuse white in SDR).
+// ---------------------------------------------------------------------------------------------
+VV_FN float vv_soft_knee_weight(float lum, float threshold, float knee) {
+  float l = vv_max(lum, 0.0f);
+  float k = vv_max(knee, 1e-4f);
+  float lo = threshold - k;
+  float excess;
+  if (l <= lo) {
+    excess = 0.0f;
+  } else if (l < threshold + k) {
+    float t = l - lo;
+    excess = t * t / (4.0f * k);
+  } else {
+    excess = l - threshold;
+  }
+  return l > 1e-6f ? excess / l : 0.0f;
+}
+
 #endif  // VV_KERNELS_H

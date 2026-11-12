@@ -1,4 +1,4 @@
-// Synthetic, redistributable test scenes shared by tools/fe_render and tests/gpu.
+// Synthetic, redistributable test scenes for every plugin's tests and render tools.
 #pragma once
 #include <algorithm>
 #include <cmath>
@@ -6,10 +6,10 @@
 #include <cstdlib>
 #include <string>
 
-#include "common/fe_kernels.h"
 #include "image.h"
+#include "kernels.h"
 
-namespace fe {
+namespace vv {
 namespace scenes {
 
 inline void put(Image& im, int x, int y, float r, float g, float b) {
@@ -110,4 +110,4 @@ inline Image makeScene(const std::string& name, int w, int h) {
 inline const char* const kAll[] = {"point-lights", "window", "neon", "gradient", "chart", "night-street", "foliage", "midgrey"};
 
 }  // namespace scenes
-}  // namespace fe
+}  // namespace vv

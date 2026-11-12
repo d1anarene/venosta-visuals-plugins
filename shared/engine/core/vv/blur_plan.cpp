@@ -18,4 +18,13 @@ BlurStep planGaussian(float sigma, int w, int h) {
   return s;
 }
 
+BlurStep planGaussianHorizontal(float sigma, int w) {
+  BlurStep s;
+  int L = 0;
+  while (sigma / std::pow(2.0f, static_cast<float>(L + 1)) >= 2.0f && (w >> (L + 1)) >= 8) ++L;
+  s.level = L;
+  s.sigmaAtLevel = std::sqrt(std::max(sigma * sigma - pyramidVariance(L), 0.25f)) / std::pow(2.0f, static_cast<float>(L));
+  return s;
+}
+
 }  // namespace vv

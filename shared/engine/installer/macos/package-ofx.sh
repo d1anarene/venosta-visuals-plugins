@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
-# Package the OpenFX bundle (DaVinci Resolve) as a macOS installer that installs
-# /Library/OFX/Plugins/FilmEffects.ofx.bundle. Ad hoc signed, not notarized.
-# Usage: package-resolve-macos.sh <FilmEffects.ofx.bundle> <output.pkg> <version>
+# Package an OpenFX bundle (DaVinci Resolve) as a macOS installer that installs
+# /Library/OFX/Plugins/<Name>.ofx.bundle. Ad hoc signed, not notarized.
+# Usage: package-ofx.sh <Name.ofx.bundle> <output.pkg> <version> <pkg-identifier> [--metal]
 set -euo pipefail
-[[ $# -eq 3 ]] || { echo "Usage: $0 <FilmEffects.ofx.bundle> <output.pkg> <version>" >&2; exit 1; }
+[[ $# -ge 4 ]] || { echo "Usage: $0 <Name.ofx.bundle> <output.pkg> <version> <pkg-identifier> [--metal]" >&2; exit 1; }
 SOURCE="$(cd "$1" && pwd)"
 mkdir -p "$(dirname "$2")"
 OUTPUT="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
 VERSION="$3"
+PKGID="$4"
+METAL=0
+[[ "${5:-}" == "--metal" ]] && METAL=1
+NAME="$(basename "$SOURCE" .ofx.bundle)"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
-BUNDLE="$STAGE/root/Library/OFX/Plugins/FilmEffects.ofx.bundle"
+BUNDLE="$STAGE/root/Library/OFX/Plugins/$NAME.ofx.bundle"
 mkdir -p "$(dirname "$BUNDLE")"
 ditto "$SOURCE" "$BUNDLE"
-BIN="$BUNDLE/Contents/MacOS/FilmEffects.ofx"
+BIN="$BUNDLE/Contents/MacOS/$NAME.ofx"
 [[ -f "$BIN" ]] || { echo "Missing $BIN" >&2; exit 1; }
 chmod 755 "$BIN"
-[[ -s "$BUNDLE/Contents/Resources/FilmEffects.metallib" ]] || { echo "Missing FilmEffects.metallib (Metal GPU path)" >&2; exit 1; }
+if [[ $METAL -eq 1 ]]; then
+  ls "$BUNDLE/Contents/Resources/"*.metallib >/dev/null || { echo "Missing Metal library (GPU path)" >&2; exit 1; }
+fi
 architectures=" $(lipo -archs "$BIN") "
 [[ "$architectures" == *" arm64 "* && "$architectures" == *" x86_64 "* ]] || { echo "Bundle must contain arm64 and x86_64" >&2; exit 1; }
 codesign --force --sign - --timestamp=none "$BUNDLE"
@@ -32,5 +38,5 @@ for component in components:
 path.write_bytes(plistlib.dumps(components))
 PY
 pkgbuild --root "$STAGE/root" --component-plist "$STAGE/components.plist" \
-  --identifier com.venostavisuals.filmeffects.resolve --version "$VERSION" \
+  --identifier "$PKGID" --version "$VERSION" \
   --install-location / --ownership recommended "$OUTPUT"

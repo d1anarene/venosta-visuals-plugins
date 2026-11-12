@@ -28,6 +28,9 @@ if(WIN32)
     set(FE_CUDA_DEFAULT ON)
   endif()
 endif()
+if(DEFINED VV_WITH_CUDA)  # set by the shared CI workflows
+  set(FE_CUDA_DEFAULT ${VV_WITH_CUDA})
+endif()
 option(FE_WITH_CUDA "Build the CUDA GPU entry point (Windows, needs the CUDA toolkit)" ${FE_CUDA_DEFAULT})
 
 set(FE_PR_SOURCES src/effect/FilmEffectsEffect.cpp src/effect/FilmEffectsCuda.cpp)

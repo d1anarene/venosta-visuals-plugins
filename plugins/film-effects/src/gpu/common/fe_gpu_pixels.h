@@ -61,7 +61,7 @@ FE_HD void pxPrepare(const T* frame, F4* lin, F4* bright, F4* halSrc, const Fram
   vv_float3 l = vv_to_linear(fi.rgba ? vv_make3(px.x, px.y, px.z) : vv_make3(px.z, px.y, px.x), fi.space);
   uint32_t i = y * fi.width + x;
   lin[i] = F4{l.x, l.y, l.z, 0.0f};
-  float w = fe_soft_knee_weight(vv_luma(l), fi.bloomThreshold, fi.bloomKnee);
+  float w = vv_soft_knee_weight(vv_luma(l), fi.bloomThreshold, fi.bloomKnee);
   vv_float3 pos = vv_make3(vv_max(l.x, 0.0f), vv_max(l.y, 0.0f), vv_max(l.z, 0.0f));
   bright[i] = F4{pos.x * w, pos.y * w, pos.z * w, 0.0f};
   halSrc[i] = F4{fe_halation_source(pos, fi.halThreshold, fi.halKnee), 0.0f, 0.0f, 0.0f};

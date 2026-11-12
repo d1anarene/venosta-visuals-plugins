@@ -86,7 +86,7 @@ static void prepare_impl(device const T* frame, device float4* lin, device float
   float3 l = vv_to_linear(enc, fi.space);
   uint i = gid.y * fi.width + gid.x;
   lin[i] = float4(l, 0.0f);
-  float w = fe_soft_knee_weight(vv_luma(l), fi.bloomThreshold, fi.bloomKnee);
+  float w = vv_soft_knee_weight(vv_luma(l), fi.bloomThreshold, fi.bloomKnee);
   bright[i] = float4(max(l, float3(0.0f)) * w, 0.0f);
   float h = fe_halation_source(max(l, float3(0.0f)), fi.halThreshold, fi.halKnee);
   halSrc[i] = float4(h, 0.0f, 0.0f, 0.0f);

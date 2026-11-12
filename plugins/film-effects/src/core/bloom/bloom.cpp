@@ -22,7 +22,7 @@ Plane bloomEnergy(const Image& img, WorkingSpace space, const BloomParams& p, Qu
     for (int x = 0; x < w; ++x) {
       const float* e = img.at(x, y);
       float c[3] = {vv_to_linear1(e[0], sp), vv_to_linear1(e[1], sp), vv_to_linear1(e[2], sp)};
-      float wgt = fe_soft_knee_weight(vv_luma(vv_make3(c[0], c[1], c[2])), p.threshold, p.knee);
+      float wgt = vv_soft_knee_weight(vv_luma(vv_make3(c[0], c[1], c[2])), p.threshold, p.knee);
       float* b = bright.at(x, y);
       for (int ch = 0; ch < 3; ++ch) b[ch] = std::fmax(c[ch], 0.0f) * wgt;
     }

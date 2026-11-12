@@ -28,6 +28,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: ./scripts/run-core-tests.sh
+  lens-diffusion-core:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: plugins/lens-diffusion
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run the core tests
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --parallel
+          ctest --test-dir build -C Release --output-on-failure
   film-effects-core-windows:
     runs-on: windows-latest
     defaults:

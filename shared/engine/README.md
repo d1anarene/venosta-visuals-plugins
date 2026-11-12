@@ -12,8 +12,12 @@ Owner decision (2026-11-12): shared engine instead of copying code between plugi
 | OpenFX adapter (DaVinci Resolve): parameters, presets, CPU + CUDA/Metal render, bundle layout incl. Win-arm64ec | `hosts/ofx/`, `cmake/vv_ofx.cmake` | in use (Film Effects) |
 | Metal shader compile helper | `cmake/vv_metal.cmake` | in use |
 | Load tests (`.aex` LoadLibrary, `.ofx` dlopen + identifier check) | `tests/` | in use |
-| GPU framework (CUDA/Metal helpers, pyramid passes) | — | planned |
-| Installer and CI templates | — | planned |
+| GPU framework: per-pixel pyramid/blur passes and half floats (C++/CUDA), `vv::gpu::Pyramid` | `gpu/` | in use (Film Effects) |
+| Metal/CUDA kernel helpers for the generic passes | — | planned |
+| Horizontal-only blur pyramid, synthetic test scenes | `core/vv/blur.h`, `core/vv/scenes.h` | in use |
+| Installer templates: Windows (Inno Setup) for Premiere and Resolve, macOS `.pkg` scripts, installer test | `installer/` | in use (Film Effects, Lens & Diffusion) |
+| CI templates: `.github/workflows/vv-premiere.yml`, `vv-ofx.yml` (build, load tests, installers, installer tests on x64 and Arm) | repository `.github/workflows` | in use |
+
 
 A new plugin implements `vv::Effect` once (and `vv::effect()`), writes a two-line PiPL file
 that defines `VV_PIPL_NAME`, `VV_PIPL_MATCH`, `VV_PIPL_CATEGORY` and includes `vv_pipl.r`, and

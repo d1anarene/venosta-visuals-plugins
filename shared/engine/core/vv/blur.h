@@ -26,6 +26,14 @@ Plane downsample2(const Plane& src);
 /** Bilinear upsample to an exact size (pixel-centre aligned). */
 Plane upsampleTo(const Plane& src, int width, int height);
 
+/** Horizontal-only Gaussian (e.g. anamorphic streaks): no vertical spread at all. Large sigmas use
+ *  a horizontal-only 2x pyramid, so the cost stays independent of sigma. */
+Plane gaussianBlurHorizontal(const Plane& src, float sigma);
+
+/** [1 3 3 1] horizontal downsample by 2 / linear horizontal upsample to an exact width. */
+Plane downsampleX2(const Plane& src);
+Plane upsampleXTo(const Plane& src, int width);
+
 }  // namespace vv
 
 #include "blur_plan.h"

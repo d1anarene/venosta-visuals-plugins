@@ -170,13 +170,13 @@ TEST(no_hdr_clipping) {
 TEST(soft_knee_is_monotonic_and_continuous) {
   float prevExcess = 0.f;
   for (float l = 0.f; l < 4.f; l += 0.001f) {
-    float excess = l * fe_soft_knee_weight(l, 0.8f, 0.5f);
+    float excess = l * vv_soft_knee_weight(l, 0.8f, 0.5f);
     CHECK(excess >= prevExcess - 1e-6f);
     CHECK(excess - prevExcess < 0.0011f);  // no jumps
     prevExcess = excess;
   }
-  CHECK(fe_soft_knee_weight(0.2f, 0.8f, 0.5f) == 0.f);
-  CHECK_NEAR(2.f * fe_soft_knee_weight(2.f, 0.8f, 0.5f), 1.2f, 1e-5f);
+  CHECK(vv_soft_knee_weight(0.2f, 0.8f, 0.5f) == 0.f);
+  CHECK_NEAR(2.f * vv_soft_knee_weight(2.f, 0.8f, 0.5f), 1.2f, 1e-5f);
 }
 TEST(bloom_increases_monotonically_with_intensity_and_lower_threshold) {
   Image base = solid(64, 64, 0.f, 0.f, 0.f);
