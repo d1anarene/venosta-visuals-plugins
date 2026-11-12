@@ -1,3 +1,5 @@
+[Setup]
+; (Starts with a section header so it can be #included after a plugin's own [Code] section.)
 ; Venosta Visuals engine — Windows installer template for a Premiere Pro effect (Inno Setup 6).
 ; A plugin's own .iss defines the values below, may add its own sections (e.g. [InstallDelete]
 ; for files of older versions, a [Code] procedure named by VV_EXTRA_INIT), then #includes this file

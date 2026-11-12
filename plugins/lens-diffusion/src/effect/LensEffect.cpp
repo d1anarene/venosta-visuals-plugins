@@ -1,5 +1,6 @@
 // Lens & Diffusion as a vv::Effect for the shared Premiere Pro and OpenFX adapters.
-// STATUS: CPU path; GPU renderers (Metal / CUDA) are the next milestone.
+// GPU: Metal (macOS) and CUDA (builds with the CUDA toolkit) renderers, CPU otherwise.
+#include "LensGpu.h"
 #include "LensParamsTable.h"
 #include "lens.h"
 #include "vv/effect.h"
@@ -45,6 +46,25 @@ class LensEffect : public vv::Effect {
     });
     w.setPopup(menu, 1);
     return true;
+  }
+
+  bool hasGpu(vv::GpuApi api) const override {
+#if defined(LD_NO_GPU_RENDERERS)  // core tests: CPU only
+    (void)api;
+    return false;
+#elif defined(__APPLE__)
+    return api == vv::GpuApi::Metal;
+#elif defined(LD_WITH_CUDA_RENDERER)
+    return api == vv::GpuApi::Cuda;
+#else
+    (void)api;
+    return false;
+#endif
+  }
+
+  std::unique_ptr<vv::GpuRenderer> makeGpuRenderer(vv::GpuApi api) const override {
+    if (!hasGpu(api)) return nullptr;
+    return api == vv::GpuApi::Metal ? makeMetalRenderer() : makeCudaRenderer();
   }
 };
 

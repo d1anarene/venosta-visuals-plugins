@@ -13,11 +13,12 @@ switch, plus presets:
 Global: Master Enable, Global Mix, Working Space (Rec.709 gamma 2.4 / sRGB / Linear). Presets:
 *Subtle Mist, Strong Mist, Highlight Mist, Vintage Lens, Anamorphic Night, Natural Vignette, Off*.
 
-> **Status: new, experimental — CPU rendering only.** CPU reference with tests (energy
-> conservation, symmetry, fringes, streak direction, bypass exactness, alpha). Built for Premiere
+> **Status: new, experimental.** CPU reference with tests (energy conservation, symmetry,
+> fringes, streak direction, bypass exactness, alpha); GPU rendering with **Metal** (macOS) and
+> **NVIDIA CUDA** (Windows), whose pass sequence is checked against the CPU reference. Built for Premiere
 > Pro (macOS, Windows x64 and Windows on Arm) and DaVinci Resolve (macOS, Windows, Linux) on the
 > shared engine; loaded and installer-tested in CI. **Not yet tested inside Premiere or Resolve.**
-> GPU acceleration (Metal / CUDA) is the next step. Free and provided without warranty — see the
+> Free and provided without warranty — see the
 > [root README](../../README.md#️-no-guarantee).
 
 ## Install

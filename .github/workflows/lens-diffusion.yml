@@ -19,6 +19,8 @@ jobs:
       binary: LensDiffusion
       name: Lens & Diffusion
       cmake_flags: -DLD_BUILD_PLUGIN=ON
+      cuda: true
+      metal: true
       mac_pkg_id: com.venostavisuals.lensdiffusion
       iss: plugins/lens-diffusion/installer/windows/LensDiffusion.iss
   resolve:
@@ -29,5 +31,7 @@ jobs:
       name: Lens & Diffusion
       ofx_id: com.venostavisuals.LensDiffusion
       cmake_flags: -DLD_BUILD_OFX=ON
+      cuda: true
+      metal: true
       mac_pkg_id: com.venostavisuals.lensdiffusion.resolve
       iss: plugins/lens-diffusion/installer/windows/LensDiffusionResolve.iss

@@ -146,6 +146,26 @@ VV_HD void pxAxpy(F4* acc, const F4* v, float w, PlaneInfo p, uint32_t x, uint32
 }
 VV_HD void pxClear(F4* dst, PlaneInfo p, uint32_t x, uint32_t y) { dst[y * p.width + x] = F4{0, 0, 0, 0}; }
 
+// Horizontal-only pyramid (vv::gaussianBlurHorizontal): [1 3 3 1]/8 downsample in x, linear
+// upsample in x; rows are untouched.
+VV_HD void pxDownsampleX(const F4* src, F4* dst, PlaneInfo s, PlaneInfo d, uint32_t x, uint32_t y) {
+  const float k[4] = {0.125f, 0.375f, 0.375f, 0.125f};
+  F4 acc{0, 0, 0, 0};
+  for (int t = 0; t < 4; ++t) {
+    F4 v = src[y * s.width + clampi(int(x) * 2 - 1 + t, 0, int(s.width) - 1)];
+    acc.x += k[t] * v.x; acc.y += k[t] * v.y; acc.z += k[t] * v.z; acc.w += k[t] * v.w;
+  }
+  dst[y * d.width + x] = acc;
+}
+VV_HD void pxUpsampleX(const F4* src, F4* dst, PlaneInfo s, PlaneInfo d, uint32_t x, uint32_t y) {
+  float fx = vv_clamp((float(x) + 0.5f) * 0.5f - 0.5f, 0.0f, float(s.width - 1));
+  int x0 = int(fx);
+  int x1 = x0 + 1 < int(s.width) ? x0 + 1 : int(s.width) - 1;
+  float tx = fx - float(x0);
+  F4 a = src[y * s.width + x0], b = src[y * s.width + x1];
+  dst[y * d.width + x] = F4{a.x + (b.x - a.x) * tx, a.y + (b.y - a.y) * tx, a.z + (b.z - a.z) * tx, a.w + (b.w - a.w) * tx};
+}
+
 
 }  // namespace gpu
 }  // namespace vv

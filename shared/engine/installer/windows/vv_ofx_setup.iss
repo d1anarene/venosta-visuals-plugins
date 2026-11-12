@@ -1,3 +1,5 @@
+[Setup]
+; (Starts with a section header so it can be #included after a plugin's own [Code] section.)
 ; Venosta Visuals engine — Windows installer template for an OpenFX plug-in (DaVinci Resolve),
 ; Inno Setup 6. A plugin's own .iss defines the values below and #includes this file last.
 ; Built in CI by .github/workflows/vv-ofx.yml.
