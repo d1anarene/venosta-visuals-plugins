@@ -28,8 +28,10 @@ macOS, Linux), with the same parameters, presets and rendering code. Releases in
 the **Effects** library under **OpenFX → Venosta Visuals**.
 GPU: **Metal** on macOS and **NVIDIA CUDA** on Windows (GTX 1080 and newer; needs the NVIDIA
 driver, not the CUDA Toolkit), CPU otherwise and on Linux. Status: built and loaded like an OFX
-host in CI; the GPU maths in Resolve's frame layout is checked against the CPU reference;
-**not yet tested inside DaVinci Resolve**. Install locations:
+host in CI; the GPU maths in Resolve's frame layout is checked against the CPU reference.
+**User-tested in DaVinci Resolve on macOS** (v1.0.9); Windows and Linux not yet tested in Resolve.
+The installers are not code-signed: allow them in System Settings → Privacy & Security (Mac) or
+confirm the Windows warning. Install locations:
 `C:\Program Files\Common Files\OFX\Plugins`, `/Library/OFX/Plugins`, `/usr/OFX/Plugins`.
 
 ![before/after](docs/images/night_street_subtle_film.png)

@@ -2,6 +2,15 @@
 
 _Last update: 2026-11-11_
 
+## DaVinci Resolve — first host test on macOS (2026-11-12)
+
+- **User-tested v1.0.9 in DaVinci Resolve on macOS: "works well".** macOS asked to allow the
+  unsigned installer in System Settings → Privacy & Security (expected: ad hoc signed, not
+  notarized). Detailed checks (Metal vs CPU mode, presets, export, comparison with Premiere) were
+  not reported separately.
+- Windows Resolve (CUDA) and Linux: still untested in Resolve. Windows showed the expected
+  unsigned-installer warning.
+
 ## DaVinci Resolve (OpenFX) — milestone 2: GPU rendering (2026-11-11)
 
 - v1.0.8 published the CPU-only Resolve downloads (Windows Setup, macOS pkg, Linux tarball).
