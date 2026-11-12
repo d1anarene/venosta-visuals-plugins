@@ -19,6 +19,8 @@
   VV_FN float vv_fabs(float a) { return fabs(a); }
   VV_FN float vv_sqrt(float a) { return sqrt(a); }
   VV_FN float vv_log2(float a) { return log2(a); }
+  VV_FN float vv_cos(float a) { return cos(a); }
+  VV_FN float vv_sin(float a) { return sin(a); }
 #else
   #include <cmath>
   #include <cstdint>
@@ -31,6 +33,8 @@
     #define VV_FABSF fabsf
     #define VV_SQRTF sqrtf
     #define VV_LOG2F log2f
+    #define VV_COSF cosf
+    #define VV_SINF sinf
   #else
     #define VV_FN inline
     #define VV_POWF std::pow
@@ -39,6 +43,8 @@
     #define VV_FABSF std::fabs
     #define VV_SQRTF std::sqrt
     #define VV_LOG2F std::log2
+    #define VV_COSF std::cos
+    #define VV_SINF std::sin
   #endif
   typedef uint32_t vv_uint;
   struct vv_float3 {
@@ -55,6 +61,8 @@
   VV_FN float vv_fabs(float a) { return VV_FABSF(a); }
   VV_FN float vv_sqrt(float a) { return VV_SQRTF(a); }
   VV_FN float vv_log2(float a) { return VV_LOG2F(a); }
+  VV_FN float vv_cos(float a) { return VV_COSF(a); }
+  VV_FN float vv_sin(float a) { return VV_SINF(a); }
 #endif
 
 VV_FN float vv_clamp(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }

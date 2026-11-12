@@ -116,6 +116,34 @@ jobs:
           cmake --build build-gpu --parallel --target ef_metal_vs_cpu
       - name: Compare GPU with CPU reference
         run: ./build-gpu/ef_metal_vs_cpu build-gpu/metal/ExposureFalseColor.metallib
+  retro-core:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: plugins/retro
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run the core tests (incl. GPU pass emulation)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --parallel
+          ctest --test-dir build -C Release --output-on-failure
+  retro-metal:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: plugins/retro
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Metal kernels, engine and comparison tool
+        run: |
+          cmake -S . -B build-gpu -DCMAKE_BUILD_TYPE=Release -DRT_BUILD_GPU_TESTS=ON
+          cmake --build build-gpu --parallel --target rt_metal_vs_cpu
+      - name: Compare GPU with CPU reference
+        run: ./build-gpu/rt_metal_vs_cpu build-gpu/metal/Retro.metallib
   film-effects-core-windows:
     runs-on: windows-latest
     defaults:
