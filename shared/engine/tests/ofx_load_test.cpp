@@ -35,6 +35,11 @@ int main(int argc, char** argv) {
   auto count = reinterpret_cast<CountFn>(sym(lib, "OfxGetNumberOfPlugins"));
   auto get = reinterpret_cast<GetFn>(sym(lib, "OfxGetPlugin"));
   if (!count || !get) { std::fprintf(stderr, "OFX entry points missing\n"); return 1; }
+  // Only the entry points may be visible: every plug-in contains the same engine and OpenFX
+  // support code, and exported copies get mixed up between plug-ins inside one host process.
+  for (const char* internal : {"_ZN2vv6effectEv", "_ZN3OFX7Private7setHostEP7OfxHost"}) {
+    if (sym(lib, internal)) { std::fprintf(stderr, "internal symbol %s is exported\n", internal); return 1; }
+  }
   const int expectedCount = argc - 2;
   const int n = count();
   if (n != expectedCount) { std::fprintf(stderr, "expected %d plug-in(s), got %d\n", expectedCount, n); return 1; }

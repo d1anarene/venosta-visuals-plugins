@@ -35,3 +35,12 @@ Metal shaders that include `vv/kernels.h` need `-I <repo>/shared/engine/core`.
 
 Rules: no Adobe SDK files here (repository rule 4); every change must keep all plugins' tests
 green; keep the maths deterministic (no RNG state, no wall clock, fixed evaluation order).
+
+## Symbol export rule
+
+Plug-in binaries export **only** their host entry points (OpenFX: `OfxGetNumberOfPlugins`,
+`OfxGetPlugin`; Premiere: `EffectMain`, `PluginDataEntryFunction2`, `xGPUFilterEntry`) via
+`cmake/vv_exports.cmake`. Every plug-in contains the same engine and OpenFX support code; when
+those symbols were exported (up to v1.0.16), a host loading several of our plug-ins could bind one
+plug-in to another's copy (macOS merges exported weak C++ symbols across loaded images), mixing
+code from different releases. `tests/ofx_load_test.cpp` fails if internal symbols are visible.
