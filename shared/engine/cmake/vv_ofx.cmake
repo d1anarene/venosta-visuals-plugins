@@ -42,6 +42,10 @@ if(NOT TARGET vv_ofx_support)
 endif()
 
 if(APPLE)
+  enable_language(OBJCXX)  # directory scope (not allowed inside a function); Metal renderers are .mm
+endif()
+
+if(APPLE)
   set(VV_OFX_ARCH MacOS)
 elseif(WIN32 AND CMAKE_GENERATOR_PLATFORM MATCHES "^[Aa][Rr][Mm]64[Ee][Cc]$")
   set(VV_OFX_ARCH Win-arm64ec)  # OpenFX 1.5: Resolve on Windows-on-Arm is an Arm64EC host
@@ -66,7 +70,6 @@ function(vv_add_ofx_bundle target)
   set_target_properties(${target} PROPERTIES PREFIX "" SUFFIX ".ofx" OUTPUT_NAME ${A_NAME}
                                               CXX_VISIBILITY_PRESET hidden POSITION_INDEPENDENT_CODE ON)
   if(APPLE)
-    enable_language(OBJCXX)
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
   endif()
   set(bundle ${CMAKE_BINARY_DIR}/${A_NAME}.ofx.bundle)
