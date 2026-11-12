@@ -19,13 +19,15 @@ enum class ParamKey : int {
   VigGroup, VigEnable, VigAmount, VigSize, VigRoundness, VigFeather, VigStyle, VigGroupEnd,
   CaGroup, CaEnable, CaAmount, CaEdgeBias, CaGroupEnd,
   StrGroup, StrEnable, StrIntensity, StrThreshold, StrKnee, StrLength, StrColor, StrGroupEnd,
+  CaSmear,  // appended (v1.0.17): disk IDs and host indices of existing controls stay the same
   Count
 };
 
 // Append only: the chosen index is saved in projects.
 #define LD_PRESET_ITEMS \
-  "(choose to apply)|Subtle Mist|Strong Mist|Highlight Mist|Vintage Lens|Anamorphic Night|Natural Vignette|Off"
-#define LD_PRESET_COUNT 8
+  "(choose to apply)|Subtle Mist|Strong Mist|Highlight Mist|Vintage Lens|Anamorphic Night|Natural Vignette|Off|" \
+  "Extreme Fringe"
+#define LD_PRESET_COUNT 9
 
 inline const std::vector<ParamSpec>& allParams() {
   static const std::vector<ParamSpec> specs = [] {
@@ -73,7 +75,9 @@ inline const std::vector<ParamSpec>& allParams() {
 
     group(K::CaGroup, "Chromatic Aberration", 21);
     add(K::CaEnable, T::Checkbox, "Aberration Enable", 22, 0, 0, 0, 0, d.aberration.enabled);
-    add(K::CaAmount, T::Float, "Amount (px at corner @1080)", 23, -10, 10, -5, 5, d.aberration.amount);
+    // Valid range widened from +-10 to +-300 for exaggerated looks (slider +-50, larger values can
+    // be typed); same disk ID, saved values unchanged.
+    add(K::CaAmount, T::Float, "Amount (px at corner @1080)", 23, -300, 300, -50, 50, d.aberration.amount);
     add(K::CaEdgeBias, T::Float, "Edge Bias", 24, 0, 1, 0, 1, d.aberration.edgeBias);
     add(K::CaGroupEnd, T::GroupEnd, "", 25);
 
@@ -85,6 +89,8 @@ inline const std::vector<ParamSpec>& allParams() {
     add(K::StrLength, T::Float, "Length (% of width)", 31, 1, 100, 5, 60, d.streaks.length, 1);
     popup(K::StrColor, "Color", 32, "Blue|Cyan|Neutral|Amber", 4, 1);
     add(K::StrGroupEnd, T::GroupEnd, "", 33);
+    // Appended after the last group so every existing control keeps its host index.
+    add(K::CaSmear, T::Float, "Aberration Spectral Smear", 34, 0, 1, 0, 1, d.aberration.smear);
     return v;
   }();
   return specs;
@@ -106,7 +112,7 @@ inline LensParams readParams(const ParamReader& r) {
                  num(K::DiffWarmth)};
   p.vignette = {flag(K::VigEnable), num(K::VigAmount), num(K::VigSize), num(K::VigRoundness), num(K::VigFeather),
                 static_cast<VignetteStyle>(pop(K::VigStyle) - 1)};
-  p.aberration = {flag(K::CaEnable), num(K::CaAmount), num(K::CaEdgeBias)};
+  p.aberration = {flag(K::CaEnable), num(K::CaAmount), num(K::CaEdgeBias), num(K::CaSmear)};
   p.streaks = {flag(K::StrEnable), num(K::StrIntensity), num(K::StrThreshold), num(K::StrKnee), num(K::StrLength),
                static_cast<StreakColor>(pop(K::StrColor) - 1)};
   return sanitized(p);
@@ -114,7 +120,7 @@ inline LensParams readParams(const ParamReader& r) {
 
 inline const char* presetMenuName(int value1Based) {
   static const char* kNames[] = {nullptr, "Subtle Mist", "Strong Mist", "Highlight Mist", "Vintage Lens",
-                                 "Anamorphic Night", "Natural Vignette", "Off"};
+                                 "Anamorphic Night", "Natural Vignette", "Off", "Extreme Fringe"};
   static_assert(sizeof(kNames) / sizeof(kNames[0]) == LD_PRESET_COUNT, "preset menu and names out of sync");
   return value1Based >= 1 && value1Based <= LD_PRESET_COUNT ? kNames[value1Based - 1] : nullptr;
 }
@@ -138,6 +144,7 @@ inline void forEachPresetValue(const LensParams& p, F&& set) {
   set(K::CaEnable, p.aberration.enabled ? 1.0 : 0.0);
   set(K::CaAmount, p.aberration.amount);
   set(K::CaEdgeBias, p.aberration.edgeBias);
+  set(K::CaSmear, p.aberration.smear);
   set(K::StrEnable, p.streaks.enabled ? 1.0 : 0.0);
   set(K::StrIntensity, p.streaks.intensity);
   set(K::StrThreshold, p.streaks.threshold);

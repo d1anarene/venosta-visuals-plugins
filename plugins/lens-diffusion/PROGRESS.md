@@ -42,6 +42,18 @@ _Last update: 2026-11-12_
   (lit windows) give broad streak bands — physically consistent but worth tuning after host tests.
 - Not tested in Premiere or Resolve.
 
+## Exaggerated chromatic aberration (2026-11-12, owner request)
+
+- Amount range widened from ±10 to ±300 px (slider ±50), same parameter, saved values unchanged.
+- New control **Aberration Spectral Smear** (disk ID 34, appended at the end of the table so all
+  existing controls keep their positions): 0 = the classic two-colour fringe (bit-identical, test),
+  > 0 = weighted gather of up to 65 samples along the radial displacement with Gaussian channel
+  lobes → continuous rainbow smear; sample count grows with the local shift (≤ 1 px spacing until
+  the cap). Same maths on CPU, CUDA and Metal (`ld_kernels.h`); GPU emulation matches the CPU.
+- New preset **Extreme Fringe** (appended to the preset menu).
+- Tests: neutral grey stays neutral, smear spreads light continuously, ±300 px finite, smear 0 is
+  bit-identical to before. **Not tested in a host.**
+
 ## Next
 
 1. CI green with the GPU renderers (Metal vs CPU on a Mac GPU, CUDA compile, host bundles).

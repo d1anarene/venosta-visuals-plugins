@@ -30,8 +30,9 @@ struct VignetteParams {
 
 struct AberrationParams {
   bool enabled = false;
-  float amount = 2.0f;      // -10..10: red/blue separation at the frame corner, px of a 1080 frame
+  float amount = 2.0f;      // -300..300: red/blue separation at the frame corner, px of a 1080 frame
   float edgeBias = 0.5f;    // 0 = grows linearly from the centre, 1 = concentrated at the edges
+  float smear = 0.0f;       // 0..1: 0 = classic two-colour fringe, > 0 = continuous spectral smear
 };
 
 struct StreakParams {

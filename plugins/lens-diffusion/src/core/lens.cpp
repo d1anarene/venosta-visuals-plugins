@@ -35,8 +35,52 @@ Plane linearise(const Image& img, int space) {
   return lin;
 }
 
+// Bilinear sample of all three channels at (sx, sy) (pixel-centre coordinates minus 0.5), clamped.
+// Same formula as caBilinear() on the GPU.
+void bilinear3(const Plane& p, float sx, float sy, float out[3]) {
+  const float fx = std::clamp(sx, 0.f, float(p.width - 1)), fy = std::clamp(sy, 0.f, float(p.height - 1));
+  const int x0 = int(fx), y0 = int(fy), x1 = std::min(x0 + 1, p.width - 1), y1 = std::min(y0 + 1, p.height - 1);
+  const float tx = fx - float(x0), ty = fy - float(y0);
+  for (int c = 0; c < 3; ++c) {
+    const float a = p.at(x0, y0)[c], b = p.at(x1, y0)[c], d = p.at(x0, y1)[c], e = p.at(x1, y1)[c];
+    const float top = a + (b - a) * tx, bot = d + (e - d) * tx;
+    out[c] = top + (bot - top) * ty;
+  }
+}
+
+// Spectral smear (smear > 0, see ld_kernels.h): weighted gather along the radial displacement.
+Plane aberrateSpectral(const Plane& lin, const AberrationParams& a) {
+  const int w = lin.width, h = lin.height;
+  const float cx = w * 0.5f, cy = h * 0.5f;
+  const float rc = std::sqrt(cx * cx + cy * cy);
+  const float cornerPx = a.amount * 0.5f * static_cast<float>(h) / 1080.0f;
+  Plane out(w, h, 3);
+  vv::parallelRows(h, [&](int y) {
+    for (int x = 0; x < w; ++x) {
+      const float vx = x + 0.5f - cx, vy = y + 0.5f - cy;
+      const float r = std::sqrt(vx * vx + vy * vy);
+      const float shift = ld_aberration_shift(r / rc, cornerPx, a.edgeBias);
+      const int k = ld_spectral_count(shift);
+      float acc[3] = {0, 0, 0}, wsum[3] = {0, 0, 0}, v[3];
+      for (int i = 0; i < k; ++i) {
+        const float t = ld_spectral_t(i, k);
+        const float m = r > 1e-6f ? 1.0f - t * shift / r : 1.0f;
+        bilinear3(lin, cx + vx * m - 0.5f, cy + vy * m - 0.5f, v);
+        for (int c = 0; c < 3; ++c) {
+          const float wt = ld_spectral_weight(t, c, a.smear);
+          acc[c] += wt * v[c];
+          wsum[c] += wt;
+        }
+      }
+      for (int c = 0; c < 3; ++c) out.at(x, y)[c] = acc[c] / wsum[c];
+    }
+  });
+  return out;
+}
+
 // Red and blue resampled (Catmull-Rom) at radially displaced positions; green unchanged.
 Plane aberrate(const Plane& lin, const AberrationParams& a) {
+  if (a.smear > 0.f) return aberrateSpectral(lin, a);
   const int w = lin.width, h = lin.height;
   const float cx = w * 0.5f, cy = h * 0.5f;
   const float rc = std::sqrt(cx * cx + cy * cy);

@@ -7,7 +7,7 @@ switch, plus presets:
 | --- | --- | --- |
 | **Diffusion** | The look of a diffusion / mist filter: part of the light is scattered into a soft, wide glow. From "mist" (all tones, lifts shadows a little, lowers contrast) to a black-mist style (mostly highlights, blacks stay deep). Light is redistributed, not added. | Amount, Size, Halo, Highlight Bias, Warmth |
 | **Vignette** | Natural optical light fall-off (cos⁴) or a smooth styled vignette; darken or lighten | Amount, Size, Roundness, Feather, Style |
-| **Chromatic Aberration** | Red/blue colour fringes that grow towards the frame edges, none in the centre | Amount (px at the corner of a 1080 frame), Edge Bias |
+| **Chromatic Aberration** | Colour fringes that grow towards the frame edges, none in the centre — subtle to deliberately extreme | Amount (px at the corner of a 1080 frame; slider ±50, type up to ±300), Edge Bias, **Aberration Spectral Smear** (0 = classic red/blue fringe, higher = continuous rainbow smear; listed at the bottom of the panel) |
 | **Anamorphic Streaks** | Horizontal light streaks from bright highlights, tinted | Intensity, Threshold, Soft Knee, Length, Color |
 
 Global: Master Enable, Global Mix, Working Space (Rec.709 gamma 2.4 / sRGB / Linear). Presets:
