@@ -17,9 +17,9 @@ Plane halationSpill(const Image& img, WorkingSpace space, const HalationParams& 
   parallelRows(h, [&](int y) {
     for (int x = 0; x < w; ++x) {
       const float* e = img.at(x, y);
-      src.at(x, y)[0] = fe_halation_source(fe_make3(std::fmax(fe_to_linear1(e[0], sp), 0.f),
-                                                    std::fmax(fe_to_linear1(e[1], sp), 0.f),
-                                                    std::fmax(fe_to_linear1(e[2], sp), 0.f)),
+      src.at(x, y)[0] = fe_halation_source(vv_make3(std::fmax(vv_to_linear1(e[0], sp), 0.f),
+                                                    std::fmax(vv_to_linear1(e[1], sp), 0.f),
+                                                    std::fmax(vv_to_linear1(e[2], sp), 0.f)),
                                            p.threshold, p.knee);
     }
   });

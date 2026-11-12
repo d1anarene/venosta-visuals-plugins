@@ -12,7 +12,7 @@ Plane linearRGB(const Image& img, WorkingSpace space) {
   Plane lin(img.width, img.height, 3);
   const int sp = static_cast<int>(space);
   for (size_t i = 0; i < static_cast<size_t>(img.width) * img.height; ++i) {
-    for (int c = 0; c < 3; ++c) lin.v[i * 3 + c] = fe_to_linear1(img.px[i * 4 + c], sp);
+    for (int c = 0; c < 3; ++c) lin.v[i * 3 + c] = vv_to_linear1(img.px[i * 4 + c], sp);
   }
   return lin;
 }
@@ -30,7 +30,7 @@ bool process(Image& img, const FilmParams& raw, const RenderContext& ctx, Layers
   // Spatial stages read the unmodified input image.
   Plane bloom = doBloom ? bloomEnergy(img, p.space, p.bloom, p.quality) : Plane();
   Plane spill = doHal ? halationSpill(img, p.space, p.halation) : Plane();
-  const fe_float3 tint = fe_halation_tint(p.halation.warmth);
+  const vv_float3 tint = fe_halation_tint(p.halation.warmth);
 
   const GrainParams& g = p.grain;
   // Amount 1.0 == standard deviation 0.12 in working-space units at full response.
@@ -59,11 +59,11 @@ bool process(Image& img, const FilmParams& raw, const RenderContext& ctx, Layers
         const float tintc[3] = {tint.x, tint.y, tint.z};
         for (int c = 0; c < 3; ++c) {
           float add = (doBloom ? bloom.v[i * 3 + c] : 0.f) + (doHal ? spill.v[i] * tintc[c] : 0.f);
-          if (add != 0.0f) o[c] = fe_from_linear1(fe_to_linear1(orig[c], sp) + add, sp);
+          if (add != 0.0f) o[c] = vv_from_linear1(vv_to_linear1(orig[c], sp) + add, sp);
         }
       }
       if (doGrain) {
-        float lum = fe_luma(fe_make3(o[0], o[1], o[2]));
+        float lum = vv_luma(vv_make3(o[0], o[1], o[2]));
         float a = amp * footprint * fe_grain_response(lum, g.shadows, g.midtones, g.highlights);
         if (a > 0.f) {
           float base = grainSample(x, y, img.height, g, ctx.frameKey, 0);

@@ -34,7 +34,7 @@ inline void disc(Image& im, float cx, float cy, float rad, float r, float g, flo
       }
     }
 }
-inline float hashf(int x, int y) { return (fe_hash3((fe_uint)x, (fe_uint)y, 77u) & 0xffff) / 65535.f; }
+inline float hashf(int x, int y) { return (vv_hash3((vv_uint)x, (vv_uint)y, 77u) & 0xffff) / 65535.f; }
 
 inline Image makeScene(const std::string& name, int w, int h) {
   Image im(w, h);

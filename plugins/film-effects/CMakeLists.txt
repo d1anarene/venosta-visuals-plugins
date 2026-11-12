@@ -12,11 +12,14 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# ---- shared engine (repository shared/engine) -----------------------------------------------------
+if(NOT TARGET vv_core)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../shared/engine ${CMAKE_BINARY_DIR}/vv-engine)
+endif()
+
 # ---- host-agnostic core (always built) --------------------------------------------------------
 add_library(fe_core STATIC
   src/core/params/params.cpp
-  src/core/color/pixel_io.cpp
-  src/core/blur/blur.cpp
   src/core/blur/blur_plan.cpp
   src/core/bloom/bloom.cpp
   src/core/halation/halation.cpp
@@ -24,6 +27,7 @@ add_library(fe_core STATIC
   src/core/gate/gate.cpp
   src/core/pipeline/pipeline.cpp)
 target_include_directories(fe_core PUBLIC src/core)
+target_link_libraries(fe_core PUBLIC vv_core)
 if(NOT MSVC)
   target_compile_options(fe_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
@@ -74,10 +78,10 @@ if(FE_BUILD_GPU_TESTS)
   enable_language(OBJCXX)
   set(FE_METALLIB_TEST ${CMAKE_CURRENT_BINARY_DIR}/FilmEffects.metallib)
   add_custom_command(OUTPUT ${FE_METALLIB_TEST}
-    COMMAND xcrun -sdk macosx metal -fno-fast-math -I ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    COMMAND xcrun -sdk macosx metal -fno-fast-math -I ${CMAKE_CURRENT_SOURCE_DIR}/src/core -I ${VV_ENGINE_DIR}/core
             -c ${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/metal/FilmEffects.metal -o ${CMAKE_CURRENT_BINARY_DIR}/FilmEffects.air
     COMMAND xcrun -sdk macosx metallib ${CMAKE_CURRENT_BINARY_DIR}/FilmEffects.air -o ${FE_METALLIB_TEST}
-    DEPENDS src/gpu/metal/FilmEffects.metal src/core/common/fe_kernels.h)
+    DEPENDS src/gpu/metal/FilmEffects.metal src/core/common/fe_kernels.h ${VV_ENGINE_DIR}/core/vv/kernels.h)
   add_custom_target(fe_metallib ALL DEPENDS ${FE_METALLIB_TEST})
   add_executable(fe_metal_vs_cpu tests/gpu/metal_vs_cpu.mm src/gpu/metal/MetalFilmEngine.mm)
   target_include_directories(fe_metal_vs_cpu PRIVATE src/gpu/metal tools)

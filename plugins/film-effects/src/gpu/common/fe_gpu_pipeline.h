@@ -50,7 +50,7 @@ inline CompositeInfo makeCompositeInfo(const FilmParams& p, uint32_t w, uint32_t
   ci.halNearWeight = hplan.nearWeight;
   ci.halFarWeight = hplan.farWeight;
   ci.halGain = p.halation.intensity * 4.0f;  // same kGain as src/core/halation
-  fe_float3 tint = fe_halation_tint(p.halation.warmth);
+  vv_float3 tint = fe_halation_tint(p.halation.warmth);
   ci.halTint[0] = tint.x;
   ci.halTint[1] = tint.y;
   ci.halTint[2] = tint.z;
@@ -64,7 +64,7 @@ inline CompositeInfo makeCompositeInfo(const FilmParams& p, uint32_t w, uint32_t
   ci.grainColor = p.grain.color == GrainColor::Color ? 1 : 0;
   ci.grainChroma = p.grain.chroma;
   const uint64_t t = p.grain.animate ? uint64_t(frameKey) : 0u;
-  ci.grainKey = fe_hash3(fe_uint(p.grain.seed), fe_uint(t & 0xffffffffu), fe_uint(t >> 32));
+  ci.grainKey = vv_hash3(vv_uint(p.grain.seed), vv_uint(t & 0xffffffffu), vv_uint(t >> 32));
   ci.mix = p.mix;
   return ci;
 }

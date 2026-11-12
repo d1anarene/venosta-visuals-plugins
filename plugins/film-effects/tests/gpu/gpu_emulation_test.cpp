@@ -99,7 +99,7 @@ void testHalfConversion() {
     if (!(a == b || (std::isnan(a) && std::isnan(b)))) ++bad;
   }
   for (uint32_t i = 0; i < 2000000; ++i) {
-    uint32_t bits = fe_hash(i) ;
+    uint32_t bits = vv_hash(i) ;
     float f;
     std::memcpy(&f, &bits, 4);
     if (std::isnan(f)) continue;

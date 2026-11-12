@@ -47,10 +47,10 @@ if(APPLE)
   enable_language(OBJCXX)
   set(FE_OFX_METALLIB ${CMAKE_BINARY_DIR}/ofx/FilmEffects.metallib)
   add_custom_command(OUTPUT ${FE_OFX_METALLIB}
-    COMMAND xcrun -sdk macosx metal -fno-fast-math -I ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    COMMAND xcrun -sdk macosx metal -fno-fast-math -I ${CMAKE_CURRENT_SOURCE_DIR}/src/core -I ${VV_ENGINE_DIR}/core
             -c ${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/metal/FilmEffects.metal -o ${CMAKE_BINARY_DIR}/ofx/FilmEffects.air
     COMMAND xcrun -sdk macosx metallib ${CMAKE_BINARY_DIR}/ofx/FilmEffects.air -o ${FE_OFX_METALLIB}
-    DEPENDS src/gpu/metal/FilmEffects.metal src/core/common/fe_kernels.h)
+    DEPENDS src/gpu/metal/FilmEffects.metal src/core/common/fe_kernels.h ${VV_ENGINE_DIR}/core/vv/kernels.h)
   add_custom_target(fe_ofx_metallib DEPENDS ${FE_OFX_METALLIB})
   add_dependencies(FilmEffectsOFX fe_ofx_metallib)
   target_sources(FilmEffectsOFX PRIVATE src/hosts/ofx/FilmEffectsOFXMetal.mm src/gpu/metal/MetalFilmEngine.mm)

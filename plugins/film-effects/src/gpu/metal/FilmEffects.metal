@@ -13,7 +13,7 @@ struct FrameInfo {
   uint width;
   uint height;
   uint rowPixels;      // host frame row stride in pixels
-  int space;           // FE_SPACE_*
+  int space;           // VV_SPACE_*
   float bloomThreshold;
   float bloomKnee;
   float halThreshold;
@@ -83,10 +83,10 @@ static void prepare_impl(device const T* frame, device float4* lin, device float
   if (gid.x >= fi.width || gid.y >= fi.height) return;
   float4 px = float4(frame[gid.y * fi.rowPixels + gid.x]);
   float3 enc = fi.rgba != 0 ? px.xyz : float3(px.z, px.y, px.x);  // BGRA -> RGB
-  float3 l = fe_to_linear(enc, fi.space);
+  float3 l = vv_to_linear(enc, fi.space);
   uint i = gid.y * fi.width + gid.x;
   lin[i] = float4(l, 0.0f);
-  float w = fe_soft_knee_weight(fe_luma(l), fi.bloomThreshold, fi.bloomKnee);
+  float w = fe_soft_knee_weight(vv_luma(l), fi.bloomThreshold, fi.bloomKnee);
   bright[i] = float4(max(l, float3(0.0f)) * w, 0.0f);
   float h = fe_halation_source(max(l, float3(0.0f)), fi.halThreshold, fi.halKnee);
   halSrc[i] = float4(h, 0.0f, 0.0f, 0.0f);
@@ -185,7 +185,7 @@ kernel void fe_clear(device float4* dst [[buffer(0)]], constant PlaneInfo& p [[b
 // 5. Composite: bloom + halation (linear) -> encoding -> grain -> mix; alpha untouched.
 // ---------------------------------------------------------------------------------------------
 static float grain_sample(uint x, uint y, constant CompositeInfo& ci, int channel) {
-  uint key = fe_hash(ci.grainKey + uint(channel) * 0x632BE5ABu);
+  uint key = vv_hash(ci.grainKey + uint(channel) * 0x632BE5ABu);
   return fe_grain_field(float(x) + 0.5f, float(y) + 0.5f, ci.grainSizePx, ci.grainRoughness, key);
 }
 
@@ -202,12 +202,12 @@ static float3 composite_color(float3 orig, device const float4* lin, device cons
       add += fe_halation_spill(blurred, halSrc[pi].x) * ci.halGain * ci.halTint;
     }
     float3 l = lin[pi].xyz;
-    o.x = add.x != 0.0f ? fe_from_linear1(l.x + add.x, ci.space) : orig.x;
-    o.y = add.y != 0.0f ? fe_from_linear1(l.y + add.y, ci.space) : orig.y;
-    o.z = add.z != 0.0f ? fe_from_linear1(l.z + add.z, ci.space) : orig.z;
+    o.x = add.x != 0.0f ? vv_from_linear1(l.x + add.x, ci.space) : orig.x;
+    o.y = add.y != 0.0f ? vv_from_linear1(l.y + add.y, ci.space) : orig.y;
+    o.z = add.z != 0.0f ? vv_from_linear1(l.z + add.z, ci.space) : orig.z;
   }
   if (ci.doGrain != 0) {
-    float a = ci.grainAmp * fe_grain_response(fe_luma(o), ci.grainShadows, ci.grainMids, ci.grainHighs);
+    float a = ci.grainAmp * fe_grain_response(vv_luma(o), ci.grainShadows, ci.grainMids, ci.grainHighs);
     if (a > 0.0f) {
       float base = grain_sample(x, gy, ci, 0);
       if (ci.grainColor == 0) {
@@ -298,7 +298,7 @@ static float gate_defect(constant GateInfo& g, float fx, float fy) {
   float d = g.dustDensity > 0.0f ? fe_dust(fx, fy, g.dustCellPx, g.dustDensity, g.dustSizePx, g.dustKey, g.look) : 0.0f;
   for (int k = 0; k < g.scratchCount; ++k)
     d += float(g.ssign[k]) * fe_scratch(fx, fy, float(g.height), g.sx0[k], g.sslope[k], g.swidth[k], g.sstrength[k], g.skey[k]);
-  return fe_clamp(d, -1.0f, 1.0f);
+  return vv_clamp(d, -1.0f, 1.0f);
 }
 
 template <typename T>
@@ -320,10 +320,10 @@ static void gate_impl(device const T* src, device T* dst, device const float4* f
       for (int j = 0; j < 4; ++j) {
         int r = clamp(int(by) - 1 + j, 0, H - 1);
         if (g.bottomUp != 0) r = H - 1 - r;
-        float wy = fe_catmull_rom(tyf, j);
+        float wy = vv_catmull_rom(tyf, j);
         for (int i = 0; i < 4; ++i) {
           int c = clamp(int(bx) - 1 + i, 0, W - 1);
-          col += (wy * fe_catmull_rom(tx, i)) * film[uint(r) * g.width + uint(c)].xyz;
+          col += (wy * vv_catmull_rom(tx, i)) * film[uint(r) * g.width + uint(c)].xyz;
         }
       }
     } else {

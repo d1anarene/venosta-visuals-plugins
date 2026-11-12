@@ -291,10 +291,10 @@ TEST(halation_is_warm_and_concentrated_at_edges) {
   CHECK_NEAR(im.at(2, 2)[0], ref.at(2, 2)[0], 1e-6f);
 }
 TEST(halation_warmth_moves_towards_orange) {
-  fe_float3 red = fe_halation_tint(0.f), orange = fe_halation_tint(1.f);
+  vv_float3 red = fe_halation_tint(0.f), orange = fe_halation_tint(1.f);
   CHECK(orange.y / orange.x > red.y / red.x);
-  CHECK_NEAR(fe_luma(red), 0.3f, 1e-4f);
-  CHECK_NEAR(fe_luma(orange), 0.3f, 1e-4f);
+  CHECK_NEAR(vv_luma(red), 0.3f, 1e-4f);
+  CHECK_NEAR(vv_luma(orange), 0.3f, 1e-4f);
 }
 TEST(halation_responds_to_cyan_less_than_white) {
   auto edgeRed = [](float r, float g, float b) {

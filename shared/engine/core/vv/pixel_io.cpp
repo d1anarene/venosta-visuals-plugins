@@ -4,7 +4,7 @@
 #include <cmath>
 #include <cstring>
 
-namespace fe {
+namespace vv {
 namespace {
 
 inline const uint8_t* row(const void* base, ptrdiff_t stride, int y) {
@@ -139,4 +139,4 @@ void writePixels(const Image& img, void* base, ptrdiff_t stride, PixelLayout lay
   }
 }
 
-}  // namespace fe
+}  // namespace vv

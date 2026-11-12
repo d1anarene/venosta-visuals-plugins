@@ -1,25 +1,14 @@
-// Blur planning shared by the CPU reference and the GPU backends, so both make identical
-// decisions (pyramid level, per-level sigma, scale weights).
+// Film Effects blur plans (bloom scales, halation steps) on top of the shared engine planner.
 #pragma once
 #include <vector>
 
 #include "../params/params.h"
+#include "vv/blur_plan.h"
 
 namespace fe {
-
-/** A Gaussian of `sigma` full-resolution pixels evaluated at pyramid level `level`
- *  (resolution / 2^level) with `sigmaAtLevel` level pixels, then upsampled `level` times. */
-struct BlurStep {
-  int level = 0;
-  float sigmaAtLevel = 0.f;
-};
-
-/** Variance (full-res px^2) contributed by `level` rounds of [1 3 3 1] downsampling plus
- *  bilinear upsampling. */
-float pyramidVariance(int level);
-
-/** Coarsest level at which `sigma` is still >= 2 level pixels and the level is >= 8x8. */
-BlurStep planGaussian(float sigma, int width, int height);
+using vv::BlurStep;
+using vv::planGaussian;
+using vv::pyramidVariance;
 
 /** Number of bloom scales for a quality mode, and their weights (sum 1). */
 int bloomScaleCount(Quality q);

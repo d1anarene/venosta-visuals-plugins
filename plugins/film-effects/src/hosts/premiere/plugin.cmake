@@ -64,10 +64,10 @@ if(FE_WITH_GPU)
   list(APPEND FE_PLUGIN_SOURCES src/hosts/premiere/FilmEffectsGPU.mm src/gpu/metal/MetalFilmEngine.mm)
   set(FE_METALLIB ${CMAKE_CURRENT_BINARY_DIR}/FilmEffects.metallib)
   add_custom_command(OUTPUT ${FE_METALLIB}
-    COMMAND xcrun -sdk macosx metal -fno-fast-math -I ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    COMMAND xcrun -sdk macosx metal -fno-fast-math -I ${CMAKE_CURRENT_SOURCE_DIR}/src/core -I ${VV_ENGINE_DIR}/core
             -c ${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/metal/FilmEffects.metal -o FilmEffects.air
     COMMAND xcrun -sdk macosx metallib FilmEffects.air -o ${FE_METALLIB}
-    DEPENDS src/gpu/metal/FilmEffects.metal src/core/common/fe_kernels.h)
+    DEPENDS src/gpu/metal/FilmEffects.metal src/core/common/fe_kernels.h ${VV_ENGINE_DIR}/core/vv/kernels.h)
 endif()
 
 set(FE_PIPL_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/hosts/premiere/FilmEffectsPiPL.r)

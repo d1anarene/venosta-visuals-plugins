@@ -4,9 +4,9 @@
 #include <cmath>
 #include <vector>
 
-#include "../common/parallel.h"
+#include "parallel.h"
 
-namespace fe {
+namespace vv {
 namespace {
 // Above this sigma the blur runs on a half-resolution copy (sigma/2) and is upsampled.
 constexpr float kPyramidSigma = 6.0f;
@@ -143,9 +143,9 @@ Plane gaussianBlur(const Plane& src, float sigma) {
   return upsampleTo(gaussianBlur(half, s2), src.width, src.height);
 }
 
-}  // namespace fe
+}  // namespace vv
 
-namespace fe {
+namespace vv {
 Plane blurByPlan(const Plane& src, const BlurStep& step) {
   std::vector<Plane> chain;
   chain.push_back(src);
@@ -154,4 +154,4 @@ Plane blurByPlan(const Plane& src, const BlurStep& step) {
   for (int L = step.level - 1; L >= 0; --L) cur = upsampleTo(cur, chain[L].width, chain[L].height);
   return cur;
 }
-}  // namespace fe
+}  // namespace vv

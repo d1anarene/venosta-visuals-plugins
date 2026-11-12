@@ -6,8 +6,12 @@ Adobe applications later). Each plugin lives in its own folder under `plugins/` 
 
 ## Repository-wide rules
 
-1. **Keep plugins separate.** Each plugin is self-contained in `plugins/<plugin-name>/` with its
-   own build, tests, docs and `PROGRESS.md`. Do not mix code or features between plugins.
+1. **Plugins are separate; common code lives in the shared engine.** Each plugin lives in
+   `plugins/<plugin-name>/` with its own effect code, parameters, tests, docs and `PROGRESS.md`.
+   Do not put one plugin's features into another. Code that several plugins need (image types,
+   blur pyramid, colour/noise maths, GPU framework, Premiere/Resolve adapters, installer and CI
+   templates) belongs in `shared/engine/` (owner decision, 2026-11-12) — never copy it between
+   plugins. A change to the shared engine must keep every plugin's tests green.
 2. **Always update the root `README.md` when a plugin is added** (or renamed, removed, or its
    status changes). The README must list every plugin with a one-line description, its current
    status (e.g. "in development", "host-tested", "released"), and a link to the plugin's own
