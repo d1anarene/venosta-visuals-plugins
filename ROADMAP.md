@@ -9,7 +9,7 @@ Resolve** (macOS Metal, Windows CUDA, CPU fallback) where it is an effect. Order
 | 2 | **Lens & Diffusion** | Diffusion filter (mist looks), vignette, chromatic aberration, anamorphic streaks. On the shared engine. | released with CPU + Metal + CUDA, awaiting host test |
 | 3 | **Exposure & False Color** | False color (stops from middle grey), zebras, clipping, split view, legend — viewing aid. | released (CPU + Metal + CUDA), awaiting host test |
 | 4 | **Retro** | Colour bleed (Y'UV signal model with ringing), tape (jitter, tracking, dropouts, head switching), noise, CRT (scanlines, mask, curvature). | built (CPU + Metal + CUDA), awaiting host test |
-| 5 | **Denoise** | High-quality temporal + spatial noise reduction that preserves detail. **Plan and research first, real maths, no shortcuts.** Fast preview mode for timeline work (switchable), full-quality mode for renders. | planned (research first) |
+| 5 | **Denoise** | High-quality temporal + spatial noise reduction that preserves detail. **Plan and research first, real maths, no shortcuts.** Fast preview mode for timeline work (switchable), full-quality mode for renders. | research (phase D0: plan written, SDK findings in plugins/denoise/docs) |
 | 6 | **Retime** | Optical-flow frame interpolation / slow motion, better than Premiere's Optical Flow. Research-heavy. | planned (research first) |
 
 Rules for every plugin: see [AGENTS.md](AGENTS.md) (honest verification, README updates, no Adobe
