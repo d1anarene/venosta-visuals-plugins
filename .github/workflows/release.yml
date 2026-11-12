@@ -69,39 +69,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag=${{ steps.version.outputs.tag }}
-          cat > notes.md <<NOTES
-          Free plugins for Adobe Premiere Pro by Venosta Visuals — https://venostavisuals.com
-          Provided "as is", without any warranty. Keep backups of your projects.
-
-          ### Track Range Exporter (Windows + macOS)
-          - \`TrackRangeExporter-Premiere-${tag}.ccx\`: **double-click** to install with Creative Cloud Desktop, restart Premiere, then Window → UXP Plugins → Track Range Exporter.
-          - \`TrackRangeExporter-MediaEncoder-${tag}.ccx\`: optional companion panel for Adobe Media Encoder 27+ (only needed for the "no timeline change" queue method).
-          - Uninstall: Creative Cloud Desktop → Plugins → Manage Plugins.
-
-          ### Film Effects for Premiere Pro
-          - \`FilmEffects-Premiere-mac-${tag}.pkg\`: quit Premiere, double-click to install, then restart Premiere. Installs Film Effects under Video Effects → Venosta Visuals (the former standalone Film Bloom / Halation / Grain are part of it now and are removed on upgrade).
-          - Mac: macOS 26+, Apple Silicon + Intel. User-tested in Premiere Pro 27 on an Apple Silicon Mac. Installer is unsigned, bundles are ad hoc signed, and this release is not Apple-notarized.
-          - \`FilmEffects-Premiere-Windows-Setup-${tag}.exe\`: double-click, confirm the admin prompt, finish the wizard, restart Premiere. One build for every PC: renders with NVIDIA CUDA when the project uses Mercury Playback Engine GPU (CUDA), otherwise on the CPU (needs an NVIDIA driver for CUDA, not the CUDA Toolkit; includes GTX 1080 / Pascal code). On Windows on Arm (Premiere 26+) it installs a native ARM64 build instead (CPU only, untested in Premiere). Uninstall via Settings → Apps. Not code-signed: Windows may warn — "More info" → "Run anyway". Windows host behavior is unverified.
-          ### Lens & Diffusion — new, experimental
-          - \`LensDiffusion-Premiere-mac-${tag}.pkg\`, \`LensDiffusion-Premiere-Windows-Setup-${tag}.exe\` (Premiere Pro) and \`LensDiffusion-Resolve-…\` (DaVinci Resolve: Windows, macOS, Linux). One effect, **Lens & Diffusion**, under Venosta Visuals: diffusion filter (mist to black-mist look), vignette, chromatic aberration, anamorphic streaks, presets.
-          - GPU rendering with Metal (macOS) and NVIDIA CUDA (Windows), CPU otherwise. Built, loaded and installer-tested in CI, GPU maths checked against the CPU reference; **not yet tested inside Premiere or Resolve**.
-
-          ### Exposure & False Color — new, experimental (viewing aid)
-          - \`ExposureFalseColor-Premiere-…\` and \`ExposureFalseColor-Resolve-…\` downloads: false color in stops from middle grey (with legend), zebras, clipping, split view. **Turn it off before exporting** — an effect cannot know it is being exported.
-          - Metal / CUDA / CPU. Built, loaded and installer-tested in CI, GPU checked against the CPU reference; **not yet tested inside Premiere or Resolve**.
-
-          ### Retro — new, experimental
-          - \`Retro-Premiere-…\` and \`Retro-Resolve-…\` downloads: analog video look in one effect — color bleed (soft luma with ringing, smeared and shifted chroma), tape (line jitter, rolling tracking band, dropouts, head switching), noise, CRT (scanlines, aperture grille / shadow mask, screen curvature). Presets: Home Video Tape, Worn Tape, Broadcast 80s, CRT Monitor, Subtle Analog.
-          - Metal / CUDA / CPU. Built, loaded and installer-tested in CI, GPU checked against the CPU reference; **not yet tested inside Premiere or Resolve**.
-
-          ### Film Effects for DaVinci Resolve (OpenFX) — experimental
-          - \`FilmEffects-Resolve-Windows-Setup-${tag}.exe\`, \`FilmEffects-Resolve-mac-${tag}.pkg\` (macOS 12+, Apple Silicon + Intel), \`FilmEffects-Resolve-linux-${tag}.tar.gz\` (extract the bundle into /usr/OFX/Plugins). The Windows Setup covers x64 PCs and Windows on Arm (native Arm64EC build, CPU only, untested in Resolve). Film Effects appears in Resolve's Effects library under OpenFX → Venosta Visuals.
-          - GPU rendering: **Metal** on macOS, **NVIDIA CUDA** on Windows (includes GTX 1080 / Pascal code; needs an NVIDIA driver, not the CUDA Toolkit), CPU fallback otherwise and on Linux — one download per system, no separate CUDA/CPU versions. Resolve chooses: CUDA when Preferences → Memory and GPU is set to CUDA, otherwise CPU. Built and load-tested in CI, GPU maths checked against the CPU reference in CI; user-tested in DaVinci Resolve on macOS; Windows and Linux not yet tested in Resolve. Installers are unsigned: allow them in System Settings → Privacy & Security (Mac) / confirm the Windows warning.
-
-          ### Film Effects (all hosts)
-          - CPU tests and Metal GPU comparisons are automated. Export matching, long timeline stability, HDR workflows and measured playback performance remain unverified. No Adobe SDK files are included.
-
-          Status of each plugin: see the README and each plugin's PROGRESS.md.
-          NOTES
+          .github/scripts/release-notes.sh "$tag" out > notes.md
+          cat notes.md
           gh release create "$tag" out/*.ccx out/*.pkg out/*.exe out/*.tar.gz --target "$GITHUB_SHA" --title "$tag" \
             --notes-file notes.md --generate-notes ${{ steps.version.outputs.pre }}
