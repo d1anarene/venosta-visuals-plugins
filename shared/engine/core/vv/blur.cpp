@@ -23,6 +23,9 @@ std::vector<float> kernelImpl(float sigma) {
 
 std::vector<float> gaussianKernel(float sigma) { return kernelImpl(sigma); }
 
+// Channels are processed kChunk at a time, so planes may have any number of channels.
+constexpr int kChunk = 4;
+
 Plane gaussianBlurDirect(const Plane& src, float sigma) {
   if (sigma < 0.05f) return src;
   const auto k = gaussianKernel(sigma);
@@ -30,14 +33,16 @@ Plane gaussianBlurDirect(const Plane& src, float sigma) {
   const int w = src.width, h = src.height, c = src.channels;
   Plane tmp(w, h, c), dst(w, h, c);
   parallelRows(h, [&](int y) {
-    for (int x = 0; x < w; ++x) {
-      float acc[3] = {0, 0, 0};
-      for (int i = -r; i <= r; ++i) {
-        const float* s = src.at(std::clamp(x + i, 0, w - 1), y);
-        for (int ch = 0; ch < c; ++ch) acc[ch] += s[ch] * k[i + r];
+    for (int x = 0; x < w; ++x)
+      for (int c0 = 0; c0 < c; c0 += kChunk) {  // any channel count, kChunk at a time
+        const int cn = std::min(kChunk, c - c0);
+        float acc[kChunk] = {};
+        for (int i = -r; i <= r; ++i) {
+          const float* s = src.at(std::clamp(x + i, 0, w - 1), y) + c0;
+          for (int ch = 0; ch < cn; ++ch) acc[ch] += s[ch] * k[i + r];
+        }
+        for (int ch = 0; ch < cn; ++ch) tmp.at(x, y)[c0 + ch] = acc[ch];
       }
-      for (int ch = 0; ch < c; ++ch) tmp.at(x, y)[ch] = acc[ch];
-    }
   });
   // Vertical pass, row-oriented: each output row is a weighted sum of whole input rows
   // (contiguous memory, auto-vectorisable). Same arithmetic order per pixel -> deterministic.
@@ -67,14 +72,16 @@ void gaussianBlurAccumulate(const Plane& src, float sigma, float weight, Plane& 
   const int w = src.width, h = src.height, c = src.channels;
   Plane tmp(w, h, c);
   parallelRows(h, [&](int y) {
-    for (int x = 0; x < w; ++x) {
-      float a[3] = {0, 0, 0};
-      for (int i = -r; i <= r; ++i) {
-        const float* s = src.at(std::clamp(x + i, 0, w - 1), y);
-        for (int ch = 0; ch < c; ++ch) a[ch] += s[ch] * k[i + r];
+    for (int x = 0; x < w; ++x)
+      for (int c0 = 0; c0 < c; c0 += kChunk) {
+        const int cn = std::min(kChunk, c - c0);
+        float a[kChunk] = {};
+        for (int i = -r; i <= r; ++i) {
+          const float* s = src.at(std::clamp(x + i, 0, w - 1), y) + c0;
+          for (int ch = 0; ch < cn; ++ch) a[ch] += s[ch] * k[i + r];
+        }
+        for (int ch = 0; ch < cn; ++ch) tmp.at(x, y)[c0 + ch] = a[ch];
       }
-      for (int ch = 0; ch < c; ++ch) tmp.at(x, y)[ch] = a[ch];
-    }
   });
   parallelRows(h, [&](int y) {
     std::vector<float> row(rowLen, 0.0f);

@@ -144,6 +144,21 @@ jobs:
           cmake --build build-gpu --parallel --target rt_metal_vs_cpu
       - name: Compare GPU with CPU reference
         run: ./build-gpu/rt_metal_vs_cpu build-gpu/metal/Retro.metallib
+  denoise-core:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: plugins/denoise
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run the research-phase tests
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --parallel
+          ctest --test-dir build -C Release --output-on-failure
   film-effects-core-windows:
     runs-on: windows-latest
     defaults:
