@@ -24,9 +24,12 @@ _Last update: 2026-11-12_
   keys × Premiere 32f/16f and OpenFX layouts): **32f and OpenFX identical to the CPU, 16f within
   0.125/255**; a sabotaged kernel is detected.
 - Metal-vs-CPU test for CI: `tests/gpu/rt_metal_vs_cpu.mm`.
+- CI (commits 138594e / e6bb34f): green on the first run — core tests on Linux, macOS and
+  Windows; `retro.yml` Premiere (macOS Metal, Windows CUDA, Windows on Arm) with installers and
+  installer tests, Resolve on all four platforms; **Metal vs CPU on a Mac GPU: 120 cases, worst
+  2.4e-7 (32f), 0.125/255 (16f), 2.4e-7 (OpenFX layout), no pixels outside tolerance**.
 - **Not tested in Premiere or Resolve.**
 
 ## Next
 
-- CI results (Metal vs CPU on a Mac GPU, CUDA compile, installers).
 - Host tests by the user.
