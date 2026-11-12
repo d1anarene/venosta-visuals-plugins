@@ -27,11 +27,14 @@ macOS, Linux), with the same parameters, presets and rendering code. Releases in
 `FilmEffects-Resolve-linux-<version>.tar.gz`. After installing, restart Resolve. The effects are in
 the **Effects** library under **OpenFX → Venosta Visuals**.
 GPU: **Metal** on macOS and **NVIDIA CUDA** on Windows (GTX 1080 and newer; needs the NVIDIA
-driver, not the CUDA Toolkit), CPU otherwise and on Linux. Status: built and loaded like an OFX
+driver, not the CUDA Toolkit), CPU otherwise and on Linux. One download per system contains both
+paths; Resolve uses CUDA when Preferences → Memory and GPU → GPU processing mode is CUDA, and
+the CPU otherwise. Status: built and loaded like an OFX
 host in CI; the GPU maths in Resolve's frame layout is checked against the CPU reference.
 **User-tested in DaVinci Resolve on macOS** (v1.0.9); Windows and Linux not yet tested in Resolve.
-The installers are not code-signed: allow them in System Settings → Privacy & Security (Mac) or
-confirm the Windows warning. Install locations:
+The installers are not code-signed (a free hobby project, deliberately without paid signing
+certificates; the full source is public): allow them in System Settings → Privacy & Security
+(Mac) or confirm the Windows warning ("Install anyway"). Install locations:
 `C:\Program Files\Common Files\OFX\Plugins`, `/Library/OFX/Plugins`, `/usr/OFX/Plugins`.
 
 ![before/after](docs/images/night_street_subtle_film.png)
@@ -52,7 +55,7 @@ and keyframe.
 
 ## Install
 
-Download `FilmEffects-mac-v*.pkg` from the repository's
+Download `FilmEffects-Premiere-mac-v*.pkg` from the repository's
 [Releases page](https://github.com/d1anarene/venosta-visuals-plugins/releases).
 Quit Premiere, double-click the `.pkg`, then restart Premiere. It installs Film Effects,
 Film Bloom, Film Halation and Film Grain for Apple Silicon and Intel. Requires **macOS 26+**.
@@ -61,7 +64,7 @@ The installer is unsigned, its bundles are ad hoc signed, and it is not Apple-no
 blocks it, use System Settings → Privacy & Security to review and allow this installer.
 
 Film Effects is a native effect; its installer is `.pkg`, rather than a UXP `.ccx`.
-Windows: download **`FilmEffects-Windows-Setup-<version>.exe`** from Releases, double-click it,
+Windows: download **`FilmEffects-Premiere-Windows-Setup-<version>.exe`** from Releases, double-click it,
 confirm the admin prompt and restart Premiere. The installer contains both experimental builds —
 **CUDA + CPU fallback** and **CPU-only** — and pre-selects CUDA when an NVIDIA driver is installed.
 Uninstall via Settings → Apps. The installer is not code-signed, so SmartScreen may warn

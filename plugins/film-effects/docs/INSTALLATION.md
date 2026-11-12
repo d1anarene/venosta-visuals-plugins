@@ -48,7 +48,7 @@ CMake prints "CUDA GPU path enabled" when it found the CUDA toolkit. In Premiere
 
 ## 3. Install (macOS)
 
-Download `FilmEffects-mac-v*.pkg` from the Releases page. Quit Premiere, double-click the installer, then restart
+Download `FilmEffects-Premiere-mac-v*.pkg` from the Releases page. Quit Premiere, double-click the installer, then restart
 Premiere and look in **Effects → Video Effects → Venosta Visuals**. The destination is
 `/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/` (**with a hyphen**).
 Premiere 27.0's actual loading log confirms it scans this folder. The initial installer used
@@ -66,7 +66,7 @@ some with e.g. `./scripts/install-dev-macos.sh FilmEffects FilmGrain`.
 Restart Premiere Pro. The effects are in **Effects → Video Effects → Venosta Visuals**.
 
 ## 3b. Install (Windows)
-**Recommended:** run `FilmEffects-Windows-Setup-<version>.exe` from Releases (Inno Setup wizard,
+**Recommended:** run `FilmEffects-Premiere-Windows-Setup-<version>.exe` from Releases (Inno Setup wizard,
 needs admin rights). It installs the four `.aex` files into Premiere's
 shared plug-in folder (registry value `Plug-InsDir`, normally
 `C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore` — with a hyphen), pre-selects the CUDA build when
