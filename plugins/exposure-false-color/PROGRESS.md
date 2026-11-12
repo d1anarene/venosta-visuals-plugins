@@ -16,4 +16,8 @@ _Last update: 2026-11-12_
   alpha/transparency, **GPU pass in Premiere and OpenFX layouts bit-identical to the CPU**, parameter
   table/presets/effect interface. Metal-vs-CPU test for CI (`tests/gpu/ef_metal_vs_cpu.mm`).
 - Visual check (CPU render of the synthetic night scene with split view): plausible.
-- **Not yet built in CI at the time of writing; not tested in Premiere or Resolve.**
+- CI (commit 625988e): `exposure-false-color.yml` green on the first run — Premiere (macOS Metal,
+  Windows CUDA, Windows on Arm) with installers and installer tests, Resolve on all four
+  platforms; **Metal vs CPU on a Mac GPU: 120 cases, worst 8.9e-8 (32f), 0.059/255 (16f), no
+  band-boundary pixels**.
+- **Not tested in Premiere or Resolve.**
