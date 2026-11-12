@@ -9,7 +9,8 @@ add_library(vv_core STATIC
   ${CMAKE_CURRENT_LIST_DIR}/core/vv/blur.cpp
   ${CMAKE_CURRENT_LIST_DIR}/core/vv/blur_plan.cpp
   ${CMAKE_CURRENT_LIST_DIR}/core/vv/pixel_io.cpp)
-target_include_directories(vv_core PUBLIC ${CMAKE_CURRENT_LIST_DIR}/core)
+# core/ for vv/*.h; the engine root for gpu/*.h (GPU framework headers).
+target_include_directories(vv_core PUBLIC ${CMAKE_CURRENT_LIST_DIR}/core ${CMAKE_CURRENT_LIST_DIR})
 target_compile_features(vv_core PUBLIC cxx_std_17)
 # Plugins are shared libraries / bundles: always position independent.
 set_target_properties(vv_core PROPERTIES POSITION_INDEPENDENT_CODE ON)

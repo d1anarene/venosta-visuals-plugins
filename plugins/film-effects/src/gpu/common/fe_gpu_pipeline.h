@@ -27,13 +27,13 @@
 #include "blur/blur_plan.h"
 #include "common/fe_kernels.h"
 #include "fe_gpu_pixels.h"
+#include "gpu/vv_gpu_pyramid.h"
 #include "gate/gate.h"
 #include "params/params.h"
 
 namespace fe {
 namespace gpu {
 
-inline PlaneInfo halfPlane(PlaneInfo p) { return {std::max(1u, (p.width + 1) / 2), std::max(1u, (p.height + 1) / 2)}; }
 
 /** Values for the composite pass, computed exactly like the CPU pipeline and the Metal engine. */
 inline CompositeInfo makeCompositeInfo(const FilmParams& p, uint32_t w, uint32_t h, uint32_t rowPixels,
@@ -152,11 +152,15 @@ class Pipeline {
 
  private:
   Backend& B;
+  vv::gpu::Pyramid<Backend> pyr{B};
   uint32_t cachedW = 0, cachedH = 0;
   Buf lin{}, halSrc{}, halNear{}, halFar{}, film{};
   bool filmAllocated = false;  // allocated on first use (Film Gate), released with the others
-  std::vector<Buf> levels, accA, accB, tmpA, tmpB;
-  std::vector<PlaneInfo> dims;
+  std::vector<Buf>& levels = pyr.levels;
+  std::vector<Buf>& accB = pyr.accB;
+  std::vector<Buf>& tmpA = pyr.tmpA;
+  std::vector<Buf>& tmpB = pyr.tmpB;
+  std::vector<PlaneInfo>& dims = pyr.dims;
 
   void ensure(uint32_t w, uint32_t h) {
     if (w == cachedW && h == cachedH) return;
@@ -169,49 +173,11 @@ class Pipeline {
     halSrc = B.alloc(full);
     halNear = B.alloc(full);
     halFar = B.alloc(full);
-    dims.clear();
-    levels.clear(); accA.clear(); accB.clear(); tmpA.clear(); tmpB.clear();
-    PlaneInfo p{w, h};
-    for (int L = 0; L < 14; ++L) {
-      dims.push_back(p);
-      const size_t n = size_t(p.width) * p.height;
-      levels.push_back(B.alloc(n));
-      accA.push_back(B.alloc(n));
-      accB.push_back(B.alloc(n));
-      tmpA.push_back(B.alloc(n));
-      tmpB.push_back(B.alloc(n));
-      if (p.width == 1 && p.height == 1) break;
-      p = halfPlane(p);
-    }
+    pyr.allocate(w, h);
   }
 
-  // Separable Gaussian src -> dst via tmp; sigma < 0.05 copies (same rule as the CPU core).
-  void blur(Buf src, Buf tmp, Buf dst, PlaneInfo p, float sigma) {
-    if (sigma < 0.05f) {
-      B.clear(dst, p);
-      B.axpy(dst, src, 1.0f, p);
-      return;
-    }
-    const std::vector<float> k = gaussianKernel(sigma);
-    B.blurH(src, tmp, p, k);
-    B.blurV(tmp, dst, p, k);
-  }
-
-  // Equivalent of the CPU blurByPlan: downsample `level` times, blur, upsample back into `out`.
-  void blurByPlan(Buf src, Buf out, const BlurStep& step) {
-    Buf cur = src;
-    for (int L = 1; L <= step.level; ++L) {
-      B.downsample(cur, tmpA[L], dims[L - 1], dims[L]);
-      cur = tmpA[L];
-    }
-    Buf blurred = step.level == 0 ? out : accA[step.level];
-    blur(cur, tmpB[step.level], blurred, dims[step.level], step.sigmaAtLevel);
-    for (int L = step.level - 1; L >= 0; --L) {
-      Buf d = L == 0 ? out : accA[L];
-      B.upsample(blurred, d, dims[L + 1], dims[L]);
-      blurred = d;
-    }
-  }
+  void blur(Buf src, Buf tmp, Buf dst, PlaneInfo p, float sigma) { pyr.blur(src, tmp, dst, p, sigma); }
+  void blurByPlan(Buf src, Buf out, const BlurStep& step) { pyr.blurByPlan(src, out, step); }
 };
 
 }  // namespace gpu
