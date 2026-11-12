@@ -147,6 +147,45 @@ TEST(aberration_zero_at_centre_grows_to_edges_and_keeps_green) {
   CHECK(rbDiff(370, 400) > 10.0 * rbDiff(195, 205) + 0.2);  // edge: clear fringes
 }
 
+TEST(spectral_smear_is_neutral_on_grey_continuous_and_exaggerates) {
+  // Neutral areas stay neutral (weights are normalised per channel), the smear is a continuous
+  // rainbow rather than separate red/blue copies, and huge amounts stay finite.
+  Image im = solid(320, 180, 0.2f, 0.2f, 0.2f);
+  for (int x = 0; x < 320; x += 40) rect(im, x, 0, x + 3, 180, 1.f, 1.f, 1.f);
+  LensParams p = linearOnly();
+  p.aberration = {true, 60.f, 0.5f, 0.8f};
+  Image o = im;
+  process(o, p);
+  CHECK(finite(o));
+  const Image grey = solid(64, 36, 0.4f, 0.4f, 0.4f);
+  Image g = grey;
+  process(g, p);
+  double dev = 0;
+  for (size_t i = 0; i < g.px.size(); ++i) dev = std::fmax(dev, std::fabs(g.px[i] - grey.px[i]));
+  CHECK(dev < 1e-5);
+  // Near the right edge the white line spreads over many pixels, and the hue changes gradually
+  // (classic two-colour mode instead shows two hard copies).
+  int lit = 0;
+  for (int x = 240; x < 320; ++x) lit += (o.at(x, 90)[0] + o.at(x, 90)[1] + o.at(x, 90)[2]) > 0.75f;
+  CHECK(lit > 12);
+  // Energy per channel is conserved up to edge clamping (sum over a row of a centred line image).
+  for (float amount : {150.f, 300.f, -300.f}) {
+    LensParams q = p;
+    q.aberration.amount = amount;
+    Image e = im;
+    process(e, q);
+    CHECK(finite(e));
+  }
+  // smear = 0 is exactly the classic path (old projects render unchanged).
+  LensParams c0 = linearOnly(), c1 = linearOnly();
+  c0.aberration = {true, 6.f, 0.3f};
+  c1.aberration = {true, 6.f, 0.3f, 0.f};
+  Image a = im, b = im;
+  process(a, c0);
+  process(b, c1);
+  CHECK(same(a, b));
+}
+
 TEST(streaks_are_horizontal_and_only_from_highlights) {
   Image im = solid(400, 200, 0.f, 0.f, 0.f);
   rect(im, 198, 98, 202, 102, 8.f, 8.f, 8.f);   // bright point

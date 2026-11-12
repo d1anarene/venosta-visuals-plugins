@@ -32,6 +32,8 @@ if(WIN32 AND NOT TARGET vv_aex_load_test)
   add_executable(vv_aex_load_test ${VV_ENGINE_DIR}/tests/aex_load_test.cpp)
 endif()
 
+include(${CMAKE_CURRENT_LIST_DIR}/vv_exports.cmake)
+
 function(vv_add_premiere_effect target)
   cmake_parse_arguments(A "GPU_METAL;GPU_CUDA" "PIPL;BUNDLE_ID;METALLIB;METALLIB_TARGET" "SOURCES;LINK;INCLUDES" ${ARGN})
   set(srcs ${VV_PREMIERE_DIR}/vv_premiere_effect.cpp ${AE_SDK_UTIL}/AEFX_SuiteHelper.c ${A_SOURCES})
@@ -43,6 +45,12 @@ function(vv_add_premiere_effect target)
   endif()
   add_library(${target} MODULE ${srcs})
   target_link_libraries(${target} PRIVATE vv_core ${A_LINK})
+  # Only the host entry points are exported (vv_exports.cmake).
+  set(exports EffectMain PluginDataEntryFunction2)
+  if(A_GPU_METAL OR A_GPU_CUDA)
+    list(APPEND exports xGPUFilterEntry)
+  endif()
+  vv_export_only(${target} ${exports})
   target_include_directories(${target} PRIVATE ${A_INCLUDES} ${VV_PREMIERE_DIR}
     ${AE_SDK_HEADERS} ${AE_SDK_HEADERS}/SP ${AE_SDK_HEADERS}/adobesdk ${AE_SDK_UTIL}
     ${PR_SDK_HEADERS} ${PR_SDK_UTILS} ${PR_GPU_UTILS})

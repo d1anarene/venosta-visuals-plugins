@@ -26,7 +26,8 @@ LensParams sanitized(const LensParams& in) {
   p.vignette.roundness = clampf(p.vignette.roundness, 0.f, 1.f, d.vignette.roundness);
   p.vignette.feather = clampf(p.vignette.feather, 0.05f, 1.f, d.vignette.feather);
   if (static_cast<int>(p.vignette.style) < 0 || static_cast<int>(p.vignette.style) > 1) p.vignette.style = d.vignette.style;
-  p.aberration.amount = clampf(p.aberration.amount, -10.f, 10.f, d.aberration.amount);
+  p.aberration.amount = clampf(p.aberration.amount, -300.f, 300.f, d.aberration.amount);
+  p.aberration.smear = clampf(p.aberration.smear, 0.f, 1.f, d.aberration.smear);
   p.aberration.edgeBias = clampf(p.aberration.edgeBias, 0.f, 1.f, d.aberration.edgeBias);
   p.streaks.intensity = clampf(p.streaks.intensity, 0.f, 1.f, d.streaks.intensity);
   p.streaks.threshold = clampf(p.streaks.threshold, 0.f, 16.f, d.streaks.threshold);
@@ -70,6 +71,11 @@ const std::vector<Preset>& builtinPresets() {
       p.vignette.amount = 0.5f;
     });
     add("Off", [](LensParams&) {});
+    add("Extreme Fringe", [](LensParams& p) {  // deliberately exaggerated: rainbow smear at the edges
+      p.aberration = {true, 80.0f, 0.7f, 0.8f};
+      p.vignette.enabled = true;
+      p.vignette.amount = 0.25f;
+    });
     return v;
   }();
   return presets;

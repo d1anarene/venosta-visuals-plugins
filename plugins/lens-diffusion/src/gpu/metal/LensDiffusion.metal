@@ -9,7 +9,7 @@ using namespace metal;
 
 // Must match ld::gpu::FrameInfo / AberrationInfo / WeightInfo / CompositeInfo (4-byte members).
 struct FrameInfo { uint width, height, rowPixels; int space, rgba; };
-struct AberrationInfo { uint width, height; float cornerPx, bias; };
+struct AberrationInfo { uint width, height; float cornerPx, bias, smear; };
 struct WeightInfo { uint width, height; int doDiffusion, doStreaks; float bias, threshold, knee; };
 struct CompositeInfo {
   uint width, height, rowPixels;
@@ -51,6 +51,16 @@ static float ca_sample(device const float4* lin, uint w, uint h, float sx, float
   }
   return acc;
 }
+static float3 ca_bilinear(device const float4* lin, uint w, uint h, float sx, float sy) {
+  float fx = clamp(sx, 0.0f, float(w - 1)), fy = clamp(sy, 0.0f, float(h - 1));
+  int x0 = int(fx), y0 = int(fy);
+  int x1 = min(x0 + 1, int(w) - 1), y1 = min(y0 + 1, int(h) - 1);
+  float tx = fx - float(x0), ty = fy - float(y0);
+  float3 a = lin[uint(y0) * w + uint(x0)].xyz, b = lin[uint(y0) * w + uint(x1)].xyz;
+  float3 c = lin[uint(y1) * w + uint(x0)].xyz, e = lin[uint(y1) * w + uint(x1)].xyz;
+  float3 top = a + (b - a) * tx, bot = c + (e - c) * tx;
+  return top + (bot - top) * ty;
+}
 kernel void ld_aberrate(device const float4* lin [[buffer(0)]], device float4* out [[buffer(1)]],
                         constant AberrationInfo& a [[buffer(2)]], uint2 gid [[thread_position_in_grid]]) {
   if (gid.x >= a.width || gid.y >= a.height) return;
@@ -59,6 +69,21 @@ kernel void ld_aberrate(device const float4* lin [[buffer(0)]], device float4* o
   float vx = float(gid.x) + 0.5f - cx, vy = float(gid.y) + 0.5f - cy;
   float r = sqrt(vx * vx + vy * vy);
   float4 g = lin[gid.y * a.width + gid.x];
+  if (a.smear > 0.0f) {  // spectral smear (ld_kernels.h); same formulas as ld_gpu_pixels.h
+    float shift = ld_aberration_shift(r / rc, a.cornerPx, a.bias);
+    int k = ld_spectral_count(shift);
+    float3 acc = float3(0.0f), wsum = float3(0.0f);
+    for (int i = 0; i < k; ++i) {
+      float t = ld_spectral_t(i, k);
+      float m = r > 1e-6f ? 1.0f - t * shift / r : 1.0f;
+      float3 v = ca_bilinear(lin, a.width, a.height, cx + vx * m - 0.5f, cy + vy * m - 0.5f);
+      float3 wt = float3(ld_spectral_weight(t, 0, a.smear), ld_spectral_weight(t, 1, a.smear), ld_spectral_weight(t, 2, a.smear));
+      acc += wt * v;
+      wsum += wt;
+    }
+    out[gid.y * a.width + gid.x] = float4(acc / wsum, g.w);
+    return;
+  }
   float rb[2];
   for (int k = 0; k < 2; ++k) {
     float sgn = k == 0 ? 1.0f : -1.0f;

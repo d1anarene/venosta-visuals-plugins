@@ -38,7 +38,8 @@ class Pipeline {
     B.ldPrepare(src, half, linA, FrameInfo{w, h, rowPixels, int32_t(p.space), rgba ? 1 : 0});
     Buf lin = linA;
     if (doCa) {
-      B.ldAberrate(linA, linB, AberrationInfo{w, h, p.aberration.amount * 0.5f * float(h) / 1080.0f, p.aberration.edgeBias});
+      B.ldAberrate(linA, linB, AberrationInfo{w, h, p.aberration.amount * 0.5f * float(h) / 1080.0f, p.aberration.edgeBias,
+                                                 p.aberration.smear});
       lin = linB;
     }
     if (doDiff || doStreak)

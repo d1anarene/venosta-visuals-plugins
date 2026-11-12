@@ -16,7 +16,7 @@ struct FrameInfo {
 };
 struct AberrationInfo {
   uint32_t width, height;
-  float cornerPx, bias;
+  float cornerPx, bias, smear;
 };
 struct WeightInfo {
   uint32_t width, height;
@@ -56,12 +56,46 @@ VV_HD float caSample(const F4* lin, uint32_t w, uint32_t h, float sx, float sy, 
   }
   return acc;
 }
+// Bilinear sample of a pixel (all channels), clamped; same formula as bilinear3() in lens.cpp.
+VV_HD F4 caBilinear(const F4* lin, uint32_t w, uint32_t h, float sx, float sy) {
+  const float fx = vv_clamp(sx, 0.0f, float(w - 1)), fy = vv_clamp(sy, 0.0f, float(h - 1));
+  const int x0 = int(fx), y0 = int(fy);
+  const int x1 = x0 + 1 < int(w) ? x0 + 1 : int(w) - 1, y1 = y0 + 1 < int(h) ? y0 + 1 : int(h) - 1;
+  const float tx = fx - float(x0), ty = fy - float(y0);
+  const F4 a = lin[uint32_t(y0) * w + uint32_t(x0)], b = lin[uint32_t(y0) * w + uint32_t(x1)];
+  const F4 c = lin[uint32_t(y1) * w + uint32_t(x0)], e = lin[uint32_t(y1) * w + uint32_t(x1)];
+  F4 o;
+  float top, bot;
+  top = a.x + (b.x - a.x) * tx; bot = c.x + (e.x - c.x) * tx; o.x = top + (bot - top) * ty;
+  top = a.y + (b.y - a.y) * tx; bot = c.y + (e.y - c.y) * tx; o.y = top + (bot - top) * ty;
+  top = a.z + (b.z - a.z) * tx; bot = c.z + (e.z - c.z) * tx; o.z = top + (bot - top) * ty;
+  o.w = 0.0f;
+  return o;
+}
 VV_HD void pxLdAberrate(const F4* lin, F4* out, const AberrationInfo& a, uint32_t x, uint32_t y) {
   const float cx = float(a.width) * 0.5f, cy = float(a.height) * 0.5f;
   const float rc = vv_sqrt(cx * cx + cy * cy);
   const float vx = float(x) + 0.5f - cx, vy = float(y) + 0.5f - cy;
   const float r = vv_sqrt(vx * vx + vy * vy);
   const F4 g = lin[y * a.width + x];
+  if (a.smear > 0.0f) {  // spectral smear (ld_kernels.h)
+    const float shift = ld_aberration_shift(r / rc, a.cornerPx, a.bias);
+    const int k = ld_spectral_count(shift);
+    float acc[3] = {0.0f, 0.0f, 0.0f}, wsum[3] = {0.0f, 0.0f, 0.0f};
+    for (int i = 0; i < k; ++i) {
+      const float t = ld_spectral_t(i, k);
+      const float m = r > 1e-6f ? 1.0f - t * shift / r : 1.0f;
+      const F4 v = caBilinear(lin, a.width, a.height, cx + vx * m - 0.5f, cy + vy * m - 0.5f);
+      const float vc[3] = {v.x, v.y, v.z};
+      for (int c = 0; c < 3; ++c) {
+        const float wt = ld_spectral_weight(t, c, a.smear);
+        acc[c] += wt * vc[c];
+        wsum[c] += wt;
+      }
+    }
+    out[y * a.width + x] = F4{acc[0] / wsum[0], acc[1] / wsum[1], acc[2] / wsum[2], g.w};
+    return;
+  }
   float rb[2];
   for (int k = 0; k < 2; ++k) {
     const float sgn = k == 0 ? 1.0f : -1.0f;  // red outward, blue inward
