@@ -16,6 +16,8 @@ _Last update: 2026-11-12_
   RGBA bottom-up): worst 0/255 (32f), 0.125/255 (16f), 0.015/255 (OpenFX layout). Deliberately
   swapping the red/blue aberration direction fails 20 cases.
 - `tests/gpu/ld_metal_vs_cpu.mm` (Metal on a Mac GPU vs CPU) and a CUDA compile job added to CI.
+  CI run 43207704948: **Metal vs CPU 96 cases, worst 0.0001/255 (32f), 0.125/255 (16f)**; CUDA
+  engine compiles with nvcc; `lens-diffusion.yml` (43207704935) green with Metal + CUDA builds.
 - Renderers for both hosts (`LensMetal.mm`, `LensCuda.cpp`) with up-front `prepare()` so a missing
   metallib / CUDA failure falls back to the CPU in Premiere.
 - **Not yet run on a GPU inside a host.**
