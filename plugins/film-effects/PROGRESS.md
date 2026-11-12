@@ -9,7 +9,12 @@ _Last update: 2026-11-11_
   `IsArm64`, the x64 CUDA build otherwise. `fe_aex_load_test` loads every `.aex` with LoadLibrary
   on its own architecture; an extra CI job installs the Setup on an Arm machine and checks that
   the ARM64 files were installed. The CI step "Show Windows-on-Arm hints in the Adobe SDKs" prints
-  whether the SDK samples target ARM64 or ARM64EC (to confirm the native ARM64 choice).
+  whether the SDK samples target ARM64 or ARM64EC. Result (CI run 43190167072): AE SDK 69
+  project files with `Release|ARM64`, Premiere 27.0 SDK 7, **none with ARM64EC** — native ARM64 is
+  Adobe's choice too.
+- CI run 43190167072 / 43190167237: all four `.aex` load on the Arm runner; Premiere Setup installs
+  the ARM64 files there and the x64 CUDA files on x64; Resolve Setup installs both architecture
+  folders, and the installed Arm64EC / x64 binaries load on their machines.
 - Resolve: OpenFX 1.5 packaging says Resolve on Windows on Arm is an Arm64EC host and defines
   `Contents/Win-arm64ec`. New CI build with `-A ARM64EC` on an Arm runner; the Resolve Setup ships
   one bundle with `Win64` (x64 + CUDA) and `Win-arm64ec`; tested by installing on x64 and Arm
