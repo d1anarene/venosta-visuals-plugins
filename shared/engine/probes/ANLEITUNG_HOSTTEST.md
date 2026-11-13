@@ -21,29 +21,61 @@ Dauer: etwa 30–45 Minuten pro Programm.
 | --- | --- | --- |
 | `research-premiere-temporal-probes-macOS` | Premiere, Mac | `TemporalProbeCPU.plugin`, `TemporalProbeMetal.plugin` |
 | `research-premiere-temporal-probes-Windows` | Premiere, Windows | `TemporalProbeCPU.aex` |
-| `research-openfx-temporal-probe-macOS` | Resolve, Mac | `VVTemporalProbe.ofx.bundle` |
-| `research-openfx-temporal-probe-Windows` | Resolve, Windows | `VVTemporalProbe.ofx.bundle` |
+| `research-openfx-temporal-probe-macOS` | Resolve, Mac | Ordner `Contents` (Inhalt von `VVTemporalProbe.ofx.bundle`) |
+| `research-openfx-temporal-probe-Windows` | Resolve, Windows | Ordner `Contents` (Inhalt von `VVTemporalProbe.ofx.bundle`) |
 
-3. ZIPs entpacken.
+3. Die Dateien in deinem **Downloads**-Ordner lassen, egal ob als ZIP oder schon entpackt. Die
+   Befehle in Schritt 2 holen sie von dort.
 
 ## 2. Installieren
 
-Das Programm vorher **beenden**. Unsere normalen Plugins bleiben, wo sie sind, und werden nicht ersetzt.
+Premiere und Resolve vorher **beenden**. Unsere normalen Plugins bleiben, wo sie sind. Die Befehle
+kopieren die Probes aus deinem Downloads-Ordner in die Plugin-Ordner der Programme. Achtung: Im
+Resolve-Download fehlt der äußere Ordner `VVTemporalProbe.ofx.bundle`, die Befehle legen ihn selbst an.
 
-**Mac**
-- Premiere: beide `.plugin` nach `/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/`.
-- Resolve: `VVTemporalProbe.ofx.bundle` nach `/Library/OFX/Plugins/`.
-- Die Dateien sind nicht signiert und aus dem Internet geladen. Damit macOS sie lädt, im Terminal
-  einmal die Download-Markierung entfernen:
+**Mac:** Programm **Terminal** öffnen (Spotlight: "Terminal"), den ganzen Block einfügen, Enter.
+Danach fragt es nach deinem Mac-Passwort. Beim Tippen siehst du nichts, das ist normal.
 
-  ```bash
-  sudo xattr -dr com.apple.quarantine "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/TemporalProbeCPU.plugin" "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/TemporalProbeMetal.plugin" /Library/OFX/Plugins/VVTemporalProbe.ofx.bundle
-  ```
+```bash
+cd ~/Downloads
+for n in research-premiere-temporal-probes-macOS research-openfx-temporal-probe-macOS; do
+  [ -d "$n" ] || unzip -q -o "$n.zip" -d "$n"
+done
+P="/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore"
+B=/Library/OFX/Plugins/VVTemporalProbe.ofx.bundle
+sudo mkdir -p "$P" "$B"
+sudo cp -R research-premiere-temporal-probes-macOS/*.plugin "$P/"
+sudo cp -R research-openfx-temporal-probe-macOS/Contents "$B/"
+sudo chmod -R a+rX "$P"/TemporalProbe*.plugin "$B"
+sudo chmod +x "$P"/TemporalProbe*.plugin/Contents/MacOS/* "$B"/Contents/MacOS/*
+sudo xattr -dr com.apple.quarantine "$P"/TemporalProbe*.plugin "$B"
+ls "$P" | grep TemporalProbe; ls "$B/Contents"
+```
 
-**Windows**
-- Premiere: `TemporalProbeCPU.aex` nach `C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\`.
-- Resolve: den Ordner `VVTemporalProbe.ofx.bundle` nach `C:\Program Files\Common Files\OFX\Plugins\`.
-- Beim Kopieren nach Administrator-Rechten gefragt werden ist normal.
+Am Ende sollten `TemporalProbeCPU.plugin`, `TemporalProbeMetal.plugin` sowie `Info.plist` und
+`MacOS` aufgelistet werden.
+
+**Windows:** Startmenü → "PowerShell" → Rechtsklick → **Als Administrator ausführen**, Block
+einfügen, Enter:
+
+```powershell
+cd "$env:USERPROFILE\Downloads"
+foreach ($n in "research-premiere-temporal-probes-Windows", "research-openfx-temporal-probe-Windows") {
+  if (-not (Test-Path $n)) { Expand-Archive "$n.zip" -DestinationPath $n -Force }
+}
+$P = "C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore"
+$B = "C:\Program Files\Common Files\OFX\Plugins\VVTemporalProbe.ofx.bundle"
+New-Item -ItemType Directory -Force $P, $B | Out-Null
+Get-ChildItem "research-premiere-temporal-probes-Windows" -Recurse -Filter *.aex | Copy-Item -Destination $P -Force
+Copy-Item "research-openfx-temporal-probe-Windows\Contents" $B -Recurse -Force
+Get-ChildItem $P\TemporalProbe*, $B -Recurse | Unblock-File
+Get-ChildItem $P\TemporalProbe*; Get-ChildItem $B\Contents -Recurse | Select-Object FullName
+```
+
+Am Ende sollten `TemporalProbeCPU.aex` und eine Datei `...\Contents\Win64\VVTemporalProbe.ofx`
+aufgelistet werden.
+
+Wenn eine Fehlermeldung kommt, schick mir den Text, dann passe ich die Befehle an.
 
 Danach das Programm starten. Die Probes stehen in einer eigenen Gruppe **Venosta Visuals Research**:
 - Premiere: **Temporal Probe CPU (research)** und, nur auf dem Mac, **Temporal Probe Metal (research)**.
@@ -144,6 +176,7 @@ Für jedes Programm und jeden Probe bitte kurz:
 
 ## 7. Aufräumen
 
-Programm beenden und die Probe-Dateien aus den Ordnern unter Punkt 2 wieder löschen. Projekte, in
+Programm beenden und die Probe-Dateien wieder löschen: `TemporalProbe…` im Premiere-Ordner und
+den Ordner `VVTemporalProbe.ofx.bundle` im OFX-Ordner (Pfade siehe Punkt 2). Projekte, in
 denen ein Probe steckt, zeigen danach eine Meldung über einen fehlenden Effekt. Deshalb nur das
 Wegwerf-Projekt verwenden.
