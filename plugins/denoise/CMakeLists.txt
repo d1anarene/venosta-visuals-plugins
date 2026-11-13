@@ -75,3 +75,24 @@ if(Python3_Interpreter_FOUND)
 else()
   message(STATUS "Denoise sequence CLI test NOT RUN: Python 3 interpreter unavailable")
 endif()
+
+# ---- Research prototype effect (CPU only; not part of releases) ---------------------------------
+option(DN_BUILD_PLUGIN "Build the Premiere research prototype (requires Adobe SDKs)" OFF)
+option(DN_BUILD_OFX "Build the OpenFX research prototype (downloads the BSD OpenFX SDK)" OFF)
+set(VV_VERSION "0.1.0" CACHE STRING "Version written to bundles (CI sets it)")
+add_executable(dn_effect_tests tests/core/test_effect.cpp src/effect/DnEffect.cpp)
+target_include_directories(dn_effect_tests PRIVATE src/effect)
+target_link_libraries(dn_effect_tests PRIVATE dn_eval)
+add_test(NAME effect COMMAND dn_effect_tests)
+if(DN_BUILD_PLUGIN)
+  include(${VV_ENGINE_DIR}/cmake/vv_premiere.cmake)
+  vv_add_premiere_effect(Denoise PIPL src/effect/DnPiPL.r BUNDLE_ID com.venostavisuals.Denoise
+                         SOURCES src/effect/DnEffect.cpp LINK dn_core INCLUDES src/effect src/core)
+endif()
+if(DN_BUILD_OFX)
+  include(${VV_ENGINE_DIR}/cmake/vv_ofx.cmake)
+  vv_add_ofx_bundle(DenoiseOFX NAME Denoise DISPLAY_NAME "Denoise (research prototype)"
+                    BUNDLE_ID com.venostavisuals.Denoise.ofx VERSION ${VV_VERSION}
+                    SOURCES src/effect/DnEffect.cpp LINK dn_core EXPECT_ID com.venostavisuals.Denoise)
+  target_include_directories(DenoiseOFX PRIVATE src/effect src/core)
+endif()

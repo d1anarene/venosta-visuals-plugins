@@ -399,6 +399,20 @@ NoiseProfile estimateImpl(const vv::Plane& signal, const vv::Plane& values, Esti
       prof.corr[b][k] = va > 0 && vb > 0 ? float(std::clamp(cv / std::sqrt(va * vb), -1.0, 1.0)) : 0.f;
     }
   }
+  // Across bands (not for the single pixel band): camera noise falls off smoothly towards coarser
+  // bands, while coarse bands of real pictures are full of structure (texture only ever raises an
+  // estimate). The ratio band1/band0 is measured reliably (many blocks); bands 2+ are capped at
+  // the previous band times that ratio (x1.15, clamped 0.3..0.8). Measured on skin at 192x108:
+  // band 4 was 18x over the truth before, within 0.7x after.
+  if (domain != Domain::Pixel && int(bands.size()) >= 3)
+    for (int c = 0; c < 3; ++c)
+      for (int k = 0; k < kBins; ++k) {
+        const float s0 = prof.sigma[0][c][k], s1 = prof.sigma[1][c][k];
+        if (s0 <= 0.f) continue;
+        const float cap = std::clamp(s1 / s0 * 1.15f, 0.3f, 0.8f);
+        for (int b = 2; b < kBands && b < int(bands.size()); ++b)
+          prof.sigma[b][c][k] = std::min(prof.sigma[b][c][k], prof.sigma[b - 1][c][k] * cap);
+      }
   return prof;
 }
 

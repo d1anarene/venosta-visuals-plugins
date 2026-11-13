@@ -1,0 +1,38 @@
+name: denoise
+# Denoise RESEARCH PROTOTYPE (CPU only): builds installers as workflow artifacts for testing.
+# Deliberately NOT part of release.yml: nothing is published until the plugin is ready.
+on:
+  push:
+    branches: [dev]
+    paths: ['plugins/denoise/**', 'shared/engine/**', '.github/workflows/denoise.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  premiere:
+    uses: ./.github/workflows/vv-premiere.yml
+    secrets: inherit
+    with:
+      plugin: denoise
+      binary: Denoise
+      name: Denoise (research prototype)
+      cmake_flags: -DDN_BUILD_PLUGIN=ON
+      cuda: false
+      metal: false
+      mac_pkg_id: com.venostavisuals.denoise.prototype
+      iss: plugins/denoise/installer/windows/Denoise.iss
+  resolve:
+    uses: ./.github/workflows/vv-ofx.yml
+    with:
+      plugin: denoise
+      bundle: Denoise
+      name: Denoise (research prototype)
+      ofx_id: com.venostavisuals.Denoise
+      cmake_flags: -DDN_BUILD_OFX=ON
+      cuda: false
+      metal: false
+      mac_pkg_id: com.venostavisuals.denoise.prototype.resolve
+      iss: plugins/denoise/installer/windows/DenoiseResolve.iss

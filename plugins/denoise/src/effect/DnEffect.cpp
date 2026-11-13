@@ -1,0 +1,116 @@
+// Denoise as a vv::Effect (RESEARCH PROTOTYPE, CPU only, not released).
+// Noise profile: estimated every frame (two-frame temporal estimate when a neighbour exists,
+// otherwise the single-frame spatial estimate), scaled by Noise Level. Temporal fusion where the
+// host supplies neighbours (OpenFX temporal clip access); spatial only otherwise (Premiere CPU).
+#include <cmath>
+
+#include "DnParamsTable.h"
+#include "dn_profile.h"
+#include "dn_spatial.h"
+#include "dn_temporal.h"
+#include "vv/effect.h"
+
+namespace dn {
+namespace {
+
+struct Profiles {
+  NoiseProfile starlet;
+  PixelSigma pixel;
+};
+
+Profiles estimate(const vv::Image& cur, const vv::Image* other, float level) {
+  const vv::Plane a = toRgbPlane(cur);
+  Profiles p;
+  if (other && other->width == cur.width && other->height == cur.height) {
+    const vv::Plane b = toRgbPlane(*other);
+    p.starlet = estimateProfileTemporal(a, b, nullptr, Domain::Starlet);
+    p.pixel = pixelSigmaFrom(estimateProfileTemporal(a, b, nullptr, Domain::Pixel));
+  } else {
+    p.starlet = estimateProfile(a, nullptr, Domain::Starlet);
+    p.pixel = pixelSigmaFrom(estimateProfile(a, nullptr, Domain::Pixel));
+  }
+  p.starlet = p.starlet.scaled(level);
+  for (auto& row : p.pixel.sigma)
+    for (float& v : row) v *= level;
+  return p;
+}
+
+void finish(vv::Image& img, const vv::Image& input, const vv::Image& result, const EffectParams& ep) {
+  for (size_t i = 0; i < img.px.size(); ++i) {
+    if (i % 4 == 3) continue;  // alpha unchanged
+    const float in = input.px[i], r = result.px[i];
+    float o = ep.view == 1 ? 0.5f + 4.f * (in - r) : (ep.view == 2 ? in : r);
+    if (ep.view == 0 && ep.mix < 1.f) o = in + (o - in) * ep.mix;
+    img.px[i] = std::isfinite(o) ? o : in;
+  }
+}
+
+class DnEffect : public vv::Effect {
+ public:
+  const vv::EffectInfo& info() const override {
+    static const vv::EffectInfo i = [] {
+      vv::EffectInfo e{};
+      e.name = "Denoise (research prototype)";
+      e.matchName = "VVIS Denoise";
+      e.ofxId = "com.venostavisuals.Denoise";
+      e.category = "Venosta Visuals";
+      e.description = "Research prototype: temporal + spatial noise reduction, CPU only.";
+      e.versionMajor = 1;
+      e.versionMinor = 0;
+      e.ofxParamPrefix = "dn";
+      return e;
+    }();
+    return i;
+  }
+  const std::vector<vv::ParamSpec>& params() const override { return allParams(); }
+  bool active(const vv::ParamReader& r) const override {
+    const EffectParams p = readParams(r);
+    return p.masterEnable && (p.mix > 0.f || p.view != 0);
+  }
+  int maxTemporalRadius() const override { return 3; }
+  int temporalRadius(const vv::ParamReader& r) const override { return readParams(r).radius; }
+
+  bool render(vv::Image& img, const vv::ParamReader& r, int64_t) const override {
+    const EffectParams ep = readParams(r);
+    const Profiles pr = estimate(img, nullptr, ep.noiseLevel);
+    SpatialParams sp;
+    sp.lumaStrength = ep.lumaStrength;
+    sp.chromaStrength = ep.chromaStrength;
+    const vv::Image input = img;
+    finish(img, input, denoiseSpatial(input, pr.starlet, sp), ep);
+    return true;
+  }
+
+  bool renderTemporal(vv::Image& img, const std::vector<const vv::Image*>& window, int radius, const vv::ParamReader& r,
+                      int64_t key) const override {
+    const EffectParams ep = readParams(r);
+    std::vector<const vv::Image*> frames;
+    int centre = 0;
+    for (int k = -radius; k <= radius; ++k) {
+      const vv::Image* f = window[size_t(k + radius)];
+      if (k == 0) { centre = int(frames.size()); frames.push_back(f); continue; }
+      if (f && f->width == img.width && f->height == img.height) frames.push_back(f);
+    }
+    if (frames.size() < 2) return render(img, r, key);
+    const vv::Image* other = frames[size_t(centre == 0 ? 1 : centre - 1)];  // nearest earlier (or later) frame
+    const Profiles pr = estimate(img, other, ep.noiseLevel);
+    SpatialParams sp;
+    sp.lumaStrength = ep.lumaStrength;
+    sp.chromaStrength = ep.chromaStrength;
+    TemporalParams tp;
+    tp.postStrength = 1.f - ep.detail;
+    const vv::Image input = img;
+    finish(img, input, denoiseTemporal(frames, centre, pr.starlet, pr.pixel, sp, tp), ep);
+    return true;
+  }
+};
+
+}  // namespace
+}  // namespace dn
+
+namespace vv {
+const Effect& effect() {
+  static const dn::DnEffect e;
+  return e;
+}
+}  // namespace vv

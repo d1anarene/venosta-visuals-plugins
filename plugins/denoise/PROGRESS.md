@@ -105,3 +105,19 @@ Historical findings below are limited by the current review in `docs/RESEARCH.md
   at the same processing stage (host test 2026-11-13, see docs/RESEARCH.md).
 - Tests: motion estimation (integer and sub-pixel shifts), temporal better than spatial on a static
   shot, cut rejected. Not in a plugin yet.
+
+## Research prototype effect (2026-11-13) — not released
+
+- `src/effect/DnEffect.cpp`: Denoise as a vv::Effect, CPU only. Premiere's CPU path is spatial only:
+  it gets no neighbour frames, and the CPU checkout probe disturbed Premiere. OpenFX does temporal
+  fusion through the new engine interface (`maxTemporalRadius` / `renderTemporal`, temporal clip
+  access). Profile estimated every frame: two-frame temporal estimate when a neighbour exists,
+  otherwise the spatial estimate. Controls: Mix, View (result / removed noise / input), Temporal
+  Frames, Luma / Chroma Strength, Detail, Noise Level.
+- Spatial blind estimate in the a trous domain: coarse bands were overestimated (up to 18x, image
+  structure). They are now capped by the measured band1/band0 noise ratio. On skin the blind result
+  went from 32.6 to 37.3 dB (oracle 38.4).
+- CI builds installers as workflow artifacts (`.github/workflows/denoise.yml`); it is **not in
+  release.yml**. Slow (CPU) and untested in any host. Profile estimation per frame can flicker.
+- Tests: effect through the vv::Effect interface (spatial, temporal window, missing neighbours,
+  bypass, views, alpha); OFX bundle load test (exports only the entry points).
