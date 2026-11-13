@@ -85,6 +85,9 @@ certification. Current frames at the requested neighbour times must be included 
 
 ## Manual host protocol (not yet performed)
 
+Short first-round guide for the owner (German): [ANLEITUNG_HOSTTEST.md](ANLEITUNG_HOSTTEST.md).
+The full matrix below follows once that round is understood.
+
 1. Use a disposable project and numbered float test frames with known motion and colour bars.
    Back up any existing test project before changing it. Record app/build, OS/GPU/driver,
    renderer, project/input colour settings, sequence/source rate and probe build commit.
