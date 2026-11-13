@@ -1,6 +1,15 @@
 # PROGRESS — Lens & Diffusion
 
-_Last update: 2026-11-12_
+_Last update: 2026-11-13_
+
+## Host testing confirmed by the owner (2026-11-13)
+
+- Owner confirms the same host-testing status as Film Effects: **user-tested in Premiere Pro 27
+  and DaVinci Resolve on macOS (Apple Silicon)**. No longer marked experimental on macOS.
+- Existing CPU tests, GPU comparisons and CI build/installer checks remain documented below.
+- Windows (including Windows on Arm) and Linux host operation remain unverified. Export matching,
+  long timeline stability, HDR workflows and performance measurements remain unverified.
+- Earlier entries below retain their verification status at the time; this section is current.
 
 ## Milestone 2: GPU renderers (2026-11-12)
 
@@ -57,4 +66,5 @@ _Last update: 2026-11-12_
 ## Next
 
 1. CI green with the GPU renderers (Metal vs CPU on a Mac GPU, CUDA compile, host bundles).
-2. Host tests by the owner; tune streaks / diffusion looks.
+2. Windows/Linux host tests; detailed export, stability, HDR and performance checks.
+3. Tune streaks / diffusion looks based on owner feedback.

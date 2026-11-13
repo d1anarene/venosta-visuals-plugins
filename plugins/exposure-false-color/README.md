@@ -29,11 +29,13 @@ False-colour scale (stops relative to middle grey; our own layout):
 
 Presets: *False Color, Zebras 95%, Skin Zebras 70-80%, Clipping Check, Split False Color*.
 
-> **Status: new, experimental.** CPU reference with tests (band boundaries, zebra coverage and
-> direction, split geometry, clipping, legend, bypass, alpha) and the GPU pass checked against it;
-> Metal (macOS) and CUDA (Windows) rendering. Built and installer-tested in CI for Premiere Pro and
-> DaVinci Resolve on the shared engine. **Not yet tested inside Premiere or Resolve.** Free and
-> without warranty — see the [root README](../../README.md#️-no-guarantee).
+> **Status: host-tested on macOS — user-tested in Premiere Pro 27 and DaVinci Resolve on Apple
+> Silicon.** CPU reference with tests (band boundaries, zebra coverage and direction, split
+> geometry, clipping, legend, bypass, alpha) and the GPU pass checked against it; Metal (macOS) and
+> CUDA (Windows) rendering. Built and installer-tested in CI for Premiere Pro and DaVinci Resolve on
+> the shared engine. Windows (including Windows on Arm) and Linux host operation remain unverified.
+> Export matching, long timeline stability, HDR workflows and performance measurements remain
+> unverified. Free and without warranty — see the [root README](../../README.md#️-no-guarantee).
 
 ## Install
 

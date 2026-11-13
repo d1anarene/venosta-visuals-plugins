@@ -1,6 +1,15 @@
 # PROGRESS — Film Effects
 
-_Last update: 2026-11-11_
+_Last update: 2026-11-13_
+
+## Product description and focus (2026-11-13)
+
+- Owner chose **free film finishing effects** as the product description: Bloom, Halation, Film
+  Grain, and optional Film Gate, applied to an existing grade in Premiere Pro or DaVinci Resolve.
+- Keep the current feature scope; prioritize image quality, usability, performance, and reliability.
+  Film-stock models and negative/print pipelines are outside the current scope.
+- Updated the plugin README, root listing, roadmap, release-note template, and agent specification.
+  Documentation only; rendering and verification status unchanged.
 
 ## Shared engine, phases A + B (2026-11-12)
 
