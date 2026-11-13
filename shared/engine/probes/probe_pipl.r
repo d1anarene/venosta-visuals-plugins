@@ -3,6 +3,9 @@
 // its vv::EffectInfo) and then #includes this file. Version and flags must agree with GlobalSetup()
 // in vv_premiere_effect.cpp. Compiled with Rez (macOS) or cl + PiPLtool (Windows); see
 // cmake/vv_premiere.cmake.
+#ifndef VV_PIPL_OUTFLAGS
+  #define VV_PIPL_OUTFLAGS 0x02000002
+#endif
 #include "AEConfig.h"
 #include "AE_EffectVers.h"
 
@@ -30,8 +33,9 @@ resource 'PiPL' (16000) {
     /* PF_VERSION(1, 0, 0, PF_Stage_DEVELOP, 1) = (1 << 19) | 1 */
     AE_Effect_Version { 524289 },
     AE_Effect_Info_Flags { 0 },
-    /* DEEP_COLOR_AWARE | WIDE_TIME_INPUT; must match probe GlobalSetup. */
-    AE_Effect_Global_OutFlags { 0x02000002 },
+    /* Default DEEP_COLOR_AWARE | WIDE_TIME_INPUT (CPU/Metal probes); a probe's .r may define
+       VV_PIPL_OUTFLAGS (CUDA probe: 0x02000000, no WIDE_TIME_INPUT). Must match its GlobalSetup. */
+    AE_Effect_Global_OutFlags { VV_PIPL_OUTFLAGS },
     /* PF_OutFlag2_FLOAT_COLOR_AWARE (1 << 12) | PF_OutFlag2_SUPPORTS_THREADED_RENDERING (1 << 27) */
     AE_Effect_Global_OutFlags_2 { 0x08001000 },
     AE_Effect_Match_Name { VV_PIPL_MATCH },

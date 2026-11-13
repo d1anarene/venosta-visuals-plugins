@@ -80,11 +80,11 @@ jobs:
           cmake -S shared/engine/probes -B build-probes -DCMAKE_BUILD_TYPE=Release -DVV_PROBE_PREMIERE=ON -DVV_PROBE_METAL=ON -DAE_SDK_DIR="$AE_SDK" -DPR_SDK_DIR="$PR_SDK"
           cmake --build build-probes --parallel
           ctest --test-dir build-probes --output-on-failure
-      - name: Build and load Premiere probe (Windows CPU)
+      - name: Build and load Premiere probes (Windows CPU + CUDA)
         if: steps.sdk.outputs.available == 'true' && runner.os == 'Windows'
         shell: pwsh
         run: |
-          cmake -S shared/engine/probes -B build-probes -A x64 -DVV_PROBE_PREMIERE=ON "-DAE_SDK_DIR=$env:AE_SDK" "-DPR_SDK_DIR=$env:PR_SDK"
+          cmake -S shared/engine/probes -B build-probes -A x64 -DVV_PROBE_PREMIERE=ON -DVV_PROBE_CUDA=ON "-DAE_SDK_DIR=$env:AE_SDK" "-DPR_SDK_DIR=$env:PR_SDK"
           if ($LASTEXITCODE -ne 0) { throw 'Probe configuration failed' }
           cmake --build build-probes --config Release --parallel
           if ($LASTEXITCODE -ne 0) { throw 'Probe build failed' }
