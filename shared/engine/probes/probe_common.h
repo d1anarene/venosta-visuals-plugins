@@ -39,13 +39,28 @@ inline Image display(const Image& current, const Image* neighbour, int mode, dou
     output.px[i] = mode == 1 ? neighbour->px[i] : static_cast<float>(std::fabs(current.px[i] - neighbour->px[i]) * gain);
   return output;
 }
-// Enable explicitly via the probe's Log parameter. Defaults to stderr. Set an explicit path in
-// VV_TEMPORAL_PROBE_LOG to append JSONL there; each invocation writes one bounded complete record.
+// Enable explicitly via the probe's Log parameter. Appends JSONL to the path in
+// VV_TEMPORAL_PROBE_LOG if set, otherwise to VVTemporalProbe-log.jsonl in the user's home folder
+// (%USERPROFILE% on Windows, $HOME elsewhere): hosts are often started by launchers that do not
+// pass environment variables on. stderr only if no home folder is known.
+inline std::string logPath() {
+  const char* path = std::getenv("VV_TEMPORAL_PROBE_LOG");
+  if (path && *path) return path;
+#ifdef _WIN32
+  const char* home = std::getenv("USERPROFILE");
+  const char sep = '\\';
+#else
+  const char* home = std::getenv("HOME");
+  const char sep = '/';
+#endif
+  if (home && *home) return std::string(home) + sep + "VVTemporalProbe-log.jsonl";
+  return std::string();
+}
 inline void log(const std::string& record) {
   static std::mutex mutex;
   std::lock_guard<std::mutex> lock(mutex);
-  const char* path = std::getenv("VV_TEMPORAL_PROBE_LOG");
-  FILE* file = path && *path ? std::fopen(path, "ab") : stderr;
+  const std::string path = logPath();
+  FILE* file = !path.empty() ? std::fopen(path.c_str(), "ab") : stderr;
   if (!file) return;
   // Bound files at 16 MiB; never remove/truncate user files or alter rendered pixels.
   bool write = true;

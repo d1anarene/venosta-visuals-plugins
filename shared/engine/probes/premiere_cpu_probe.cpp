@@ -73,8 +73,17 @@ PF_Err parameters(PF_InData* in_data,PF_OutData* out_data) {
 PF_Err user(PF_InData* in_data,PF_OutData* out_data,PF_ParamDef* p[],void* extra) {
   if(static_cast<PF_UserChangedParamExtra*>(extra)->param_index!=Analyse) return PF_Err_NONE;
   Checkout checkout(in_data);
-  PF_Err err=checkout.get(in_data->current_time); if(err) return err;
-  if(!checkout.value.u.ld.data) return PF_Err_INVALID_CALLBACK;
+  PF_Err err=checkout.get(in_data->current_time);
+  if(err || !checkout.value.u.ld.data){
+    // Record why the action could not measure (Premiere may not hand out pixels during a UI action).
+    if(p[Logging]->u.bd.value){
+      std::ostringstream s;
+      s << "{\"schema\":\"" << vv::probe::kSchema << "\",\"host_path\":\"premiere-cpu\",\"action\":\"user-analysis-failed\",\"time_ticks\":"
+        << in_data->current_time << ",\"checkout_error\":" << err << ",\"data_present\":" << (checkout.value.u.ld.data ? "true" : "false") << '}';
+      vv::probe::log(s.str());
+    }
+    return err ? err : PF_Err_INVALID_CALLBACK;
+  }
   const vv::Image image=read(in_data,out_data,&checkout.value.u.ld);
   const double measured=vv::probe::mean(image);
   p[MeasuredMean]->u.fs_d.value=measured;

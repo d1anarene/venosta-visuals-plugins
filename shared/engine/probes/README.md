@@ -54,8 +54,10 @@ OpenFX revision: `4249fe1b590a7e65caf4b1e4693b6b53220703f5`.
   preserved. Current view requests the neighbour too, but can display current if the host provides
   none; missing data is logged. Neighbour/difference views fail rather than silently substituting
   the current input. Size/format/bounds discrepancies also fail those modes.
-- **Log diagnostics**: off by default. Writes one JSONL record per action/render to stderr, or
-  appends to an explicitly configured `VV_TEMPORAL_PROBE_LOG` path. No source pixels are written;
+- **Log diagnostics**: off by default. Appends one JSONL record per action/render to
+  `VV_TEMPORAL_PROBE_LOG` if set, otherwise to `VVTemporalProbe-log.jsonl` in the user's home folder
+  (environment variables often do not reach hosts started by launchers). A failed Premiere CPU
+  analysis action is logged too (`user-analysis-failed`, with the checkout error). No source pixels are written;
   logs contain input hashes, times, sizes, quality/scale and path. Files stop receiving records at
   16 MiB; use a fresh log for each case. Logging can be expensive and is not a performance test.
 - **Measure current input**: fetches source during a user action and persists a simple finite-RGB
