@@ -126,6 +126,23 @@ If CPU checkout supplies raw neighbours while the centre includes upstream effec
 workflow unsupported for temporal filtering or constrain placement based on verified evidence.
 No denoising should be built on a failing stage contract.
 
+## Host results so far
+
+**Premiere Pro 2027, Windows, NVIDIA GPU, `TemporalProbeCPU.aex` (owner, 2026-11-13): FAIL — do not install.**
+
+- The probe loaded and appeared under Venosta Visuals Research.
+- Measure (button) left the saved mean at 0.00 on an adjustment layer and on a clip.
+- The clip with the probe froze; View 1/2 showed nothing; no log file was written (env variable and
+  home-folder default both tried).
+- With the probe merely **installed** (not applied anywhere) Premiere 2027 stopped refreshing the
+  Program Monitor while scrubbing, stretched the video when the monitor was resized and showed the
+  project renderer greyed out. Removing the `.aex` restored normal behaviour (production plugins
+  installed alongside were unaffected and work).
+- Not yet determined why. Differences from the working production plugins: `PF_OutFlag_WIDE_TIME_INPUT`
+  (PiPL and GlobalSetup) and no GPU entry point. The overlay build (`OVERLAY BUILD 1`) was not
+  tested because of this. Next: a bisection build without WIDE_TIME_INPUT, tested only once the owner
+  agrees; the Premiere GPU path (`GetFrameDependencies`, CUDA probe) remains untested on Windows.
+
 ## Result record
 
 Store host results outside source control unless all media permissions permit sharing. A result

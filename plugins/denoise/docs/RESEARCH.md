@@ -252,3 +252,19 @@ the second frame containing a moving block (16 % of the frame shifted by 9 px). 
 The temporal estimate becomes the primary method once neighbouring frames are available (Final
 mode), with motion compensation from D4 so that panning shots work too. Single-frame spatial
 estimation remains the fallback (Preview, first frame, hosts without temporal access).
+
+## Host evidence: Premiere CPU probe on Windows (owner, 2026-11-13)
+
+Premiere Pro 2027, Windows, NVIDIA GPU, `TemporalProbeCPU.aex`: **fail**.
+
+- **Measure:** the analysis action got no pixels; the saved value stayed 0.00. This fits R3: a UI
+  action cannot read the frame on this path.
+- **Rendering:** the clip with the probe froze.
+- **Installed only:** with the probe merely installed, Premiere's Program Monitor stopped refreshing.
+
+No neighbour-frame evidence was obtained. Consequences until the cause is known:
+- The AE-API CPU checkout path is not a basis for temporal Denoise in Premiere on Windows.
+- "Auto Profile" must not depend on a UI-action frame read in Premiere (use the render-time
+  measurement + "lock" fallback from R3).
+- The Premiere GPU path (`GetFrameDependencies`; a CUDA probe does not exist yet) and the Mac
+  probes remain untested. Details: `shared/engine/probes/README.md`.

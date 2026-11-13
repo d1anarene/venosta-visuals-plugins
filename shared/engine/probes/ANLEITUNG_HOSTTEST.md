@@ -1,5 +1,10 @@
 # Anleitung: Probe-Test in Premiere Pro und DaVinci Resolve
 
+> **Achtung, Stand 2026-11-13: den Premiere-Probe unter Windows (`TemporalProbeCPU.aex`) NICHT
+> installieren.** Schon installiert, ohne Anwendung, stört er Premiere Pro 2027: Das Bild
+> aktualisiert sich nicht mehr, und das Programmfenster streckt das Video. Entfernen der `.aex`
+> behebt das. Die Ursache wird untersucht (siehe README.md, "Host results so far").
+
 Ziel: herausfinden, ob ein Effekt in Premiere und Resolve **die Nachbarbilder** (Frame davor und
 danach) bekommt, und zwar **in derselben Verarbeitungsstufe** wie das aktuelle Bild. Davon hängt
 ab, ob der Denoiser über mehrere Frames arbeiten kann.
