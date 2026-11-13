@@ -1,0 +1,99 @@
+name: temporal-probes
+# Research binaries only. Never added to release.yml or installed by CI.
+on:
+  push:
+    paths: ['shared/engine/probes/**', 'shared/engine/core/**', '.github/workflows/temporal-probes.yml']
+  pull_request:
+    paths: ['shared/engine/probes/**', 'shared/engine/core/**', '.github/workflows/temporal-probes.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  openfx:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Build and test research contracts and OpenFX probe
+        run: |
+          cmake -S shared/engine/probes -B build-probes -DCMAKE_BUILD_TYPE=Release -DVV_PROBE_OFX=ON
+          cmake --build build-probes --config Release --parallel
+          ctest --test-dir build-probes -C Release --output-on-failure
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-openfx-temporal-probe-${{ runner.os }}
+          path: build-probes/VVTemporalProbe.ofx.bundle
+  premiere:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-2022]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Check private SDK availability
+        id: sdk
+        env:
+          TOKEN: ${{ secrets.ADOBE_SDK_TOKEN || secrets.ADBE_SDK_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo 'Premiere probe build NOT RUN: private Adobe SDK secret unavailable.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.sdk.outputs.available == 'true'
+        with:
+          repository: d1anarene/vvp-sdk
+          ref: 77fc9bbae16487a2921fd969f7a2329b8a1b6e9f
+          token: ${{ secrets.ADOBE_SDK_TOKEN || secrets.ADBE_SDK_TOKEN }}
+          path: _probe_sdk_zips
+      - name: Unpack private SDKs outside source tree
+        if: steps.sdk.outputs.available == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/probe-sdk/ae" "$RUNNER_TEMP/probe-sdk/pr"
+          if [ '${{ runner.os }}' = macOS ]; then ae='*AfterEffects*mac*.zip'; pr='*Premiere*Mac*.zip'; else ae='*AfterEffects*win*.zip'; pr='*Premiere*Windows*.zip'; fi
+          unzip -q _probe_sdk_zips/$ae -d "$RUNNER_TEMP/probe-sdk/ae"
+          unzip -q _probe_sdk_zips/$pr -d "$RUNNER_TEMP/probe-sdk/pr"
+          rm -rf _probe_sdk_zips
+          AE=$(dirname "$(dirname "$(find "$RUNNER_TEMP/probe-sdk/ae" -name AE_Effect.h -path '*Examples/Headers/*' | head -1)")")
+          PR=$(dirname "$(dirname "$(dirname "$(find "$RUNNER_TEMP/probe-sdk/pr" -name PrSDKAESupport.h -path '*Examples/Headers/*' | head -1)")")")
+          [ -d "$AE/Headers" ] && [ -d "$PR/Examples/Headers" ] || exit 1
+          if [ '${{ runner.os }}' = Windows ]; then AE=$(cygpath -m "$AE"); PR=$(cygpath -m "$PR"); fi
+          echo "AE_SDK=$AE" >> "$GITHUB_ENV"
+          echo "PR_SDK=$PR" >> "$GITHUB_ENV"
+      - name: Build and load Premiere probes (macOS CPU + Metal)
+        if: steps.sdk.outputs.available == 'true' && runner.os == 'macOS'
+        run: |
+          cmake -S shared/engine/probes -B build-probes -DCMAKE_BUILD_TYPE=Release -DVV_PROBE_PREMIERE=ON -DVV_PROBE_METAL=ON -DAE_SDK_DIR="$AE_SDK" -DPR_SDK_DIR="$PR_SDK"
+          cmake --build build-probes --parallel
+          ctest --test-dir build-probes --output-on-failure
+      - name: Build and load Premiere probe (Windows CPU)
+        if: steps.sdk.outputs.available == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S shared/engine/probes -B build-probes -A x64 -DVV_PROBE_PREMIERE=ON "-DAE_SDK_DIR=$env:AE_SDK" "-DPR_SDK_DIR=$env:PR_SDK"
+          if ($LASTEXITCODE -ne 0) { throw 'Probe configuration failed' }
+          cmake --build build-probes --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'Probe build failed' }
+          ctest --test-dir build-probes -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw 'Probe tests failed' }
+      - uses: actions/upload-artifact@v4
+        if: steps.sdk.outputs.available == 'true'
+        with:
+          name: research-premiere-temporal-probes-${{ runner.os }}
+          path: |
+            build-probes/*.plugin
+            build-probes/Release/*.aex

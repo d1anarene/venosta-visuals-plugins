@@ -154,6 +154,9 @@ jobs:
         working-directory: plugins/denoise
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
       - name: Build and run the research-phase tests
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
