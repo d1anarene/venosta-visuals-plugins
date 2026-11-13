@@ -2,6 +2,15 @@
 
 _Last update: 2026-11-13_
 
+
+## Host test: macOS and Windows (2026-11-13, owner)
+
+- v1.0.17, Windows PC with NVIDIA GPU: Premiere Pro 2027 and DaVinci Resolve 21; Apple Silicon Mac:
+  Premiere Pro 2027 and DaVinci Resolve 21.2. Reported: everything worked (installers, effect in
+  the effects list, rendering, controls, presets).
+- Not yet tested: exports; Windows on Arm; Linux. Windows GPU renderer: the project was presumably
+  set to CUDA, not confirmed.
+
 ## Host testing confirmed by the owner (2026-11-13)
 
 - Owner confirms the same host-testing status as Film Effects: **user-tested in Premiere Pro 27

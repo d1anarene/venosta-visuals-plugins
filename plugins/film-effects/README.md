@@ -12,10 +12,13 @@ Bloom / Film Halation / Film Grain effects; they are now part of Film Effects, a
 remove the old files. Projects that used the standalone effects show them as missing — replace
 them with Film Effects.)
 
-> **Status: first Mac release — user-tested in Premiere Pro 27 on Apple Silicon.**
-> The effects appeared in Premiere and the user reports satisfactory operation. CPU tests on
-> Linux/macOS/Windows and the Metal GPU comparison pass in CI. Export matching, long timeline
-> stability, HDR workflows, performance measurements and Windows host operation remain unverified.
+> **Status: host-tested on macOS and Windows — user-tested with v1.0.17 in Premiere Pro 2027 and
+> DaVinci Resolve 21 on Windows (NVIDIA GPU) and in Premiere Pro 2027 and DaVinci Resolve 21.2
+> on an Apple Silicon Mac.** Installation, the effect in the effects list, rendering, controls
+> and presets work (reported by the owner, 2026-11-13). Not yet tested: exports, Windows on Arm
+> and Linux; on Windows the GPU renderer (CUDA) was not confirmed separately.
+> CPU tests on Linux/macOS/Windows and the Metal GPU comparison pass in CI. Export matching, long
+> timeline stability, HDR workflows and performance measurements remain unverified.
 > Free and provided without warranty — see the [root README](../../README.md#️-no-guarantee).
 
 Downloads will also be available at [venostavisuals.com](https://venostavisuals.com).
@@ -34,7 +37,7 @@ Resolve there; CPU only, untested in Resolve). One download per system contains 
 paths; Resolve uses CUDA when Preferences → Memory and GPU → GPU processing mode is CUDA, and
 the CPU otherwise. Status: built and loaded like an OFX
 host in CI; the GPU maths in Resolve's frame layout is checked against the CPU reference.
-**User-tested in DaVinci Resolve on macOS** (v1.0.9); Windows and Linux not yet tested in Resolve.
+**User-tested in DaVinci Resolve on macOS (21.2) and Windows (21)** with v1.0.17; Linux and Windows on Arm not yet tested in Resolve.
 The installers are not code-signed (a free hobby project, deliberately without paid signing
 certificates; the full source is public): allow them in System Settings → Privacy & Security
 (Mac) or confirm the Windows warning ("Install anyway"). Install locations:
@@ -76,8 +79,9 @@ native ARM64 build instead, CPU only (CUDA does not exist on Arm); built and loa
 Arm machine in CI, not yet tested in Premiere. Uninstall via Settings → Apps. The installer is
 not code-signed, so SmartScreen may warn ("More info" → "Run anyway"). The CUDA build uses CUDA 12.9 and includes Pascal (`sm_61`) code for GTX 1080,
 plus targets for newer NVIDIA GPUs. It links the CUDA runtime statically: a compatible NVIDIA
-driver is required, but the CUDA Toolkit is not. Windows Premiere behavior and NVIDIA GPU
-execution remain unverified until hardware testing.
+driver is required, but the CUDA Toolkit is not. User-tested in Premiere Pro 2027 on a Windows PC
+with an NVIDIA GPU (v1.0.17); that the CUDA path (rather than the CPU) rendered was not confirmed
+separately.
 Build, installation and removal details: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 After installing and restarting Premiere: **Effects → Video Effects → Venosta Visuals**.
 

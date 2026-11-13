@@ -16,12 +16,15 @@ control the randomness (the same frame always renders the same, in any order).
 Sizes are given in pixels of a 1080-line frame and the scanline count per frame height, so HD, 4K
 and reduced-resolution previews look alike.
 
-> **Status: host-tested on macOS — user-tested in Premiere Pro 27 and DaVinci Resolve on Apple
-> Silicon.** CPU reference with tests (signal maths, bleed direction, ringing, jitter, noise
+> **Status: host-tested on macOS and Windows — user-tested with v1.0.17 in Premiere Pro 2027 and
+> DaVinci Resolve 21 on Windows (NVIDIA GPU) and in Premiere Pro 2027 and DaVinci Resolve 21.2
+> on an Apple Silicon Mac.** Installation, the effect in the effects list, rendering, controls
+> and presets work (reported by the owner, 2026-11-13). Not yet tested: exports, Windows on Arm
+> and Linux; on Windows the GPU renderer (CUDA) was not confirmed separately.
+> CPU reference with tests (signal maths, bleed direction, ringing, jitter, noise
 > statistics, scanline anti-aliasing, mask energy, curvature, determinism, bypass, alpha); the GPU
 > passes are checked against it. Metal (macOS) and CUDA (Windows) rendering. Built and installer-
-> tested in CI for Premiere Pro and DaVinci Resolve on the shared engine. Windows (including Windows
-> on Arm) and Linux host operation remain unverified. Export matching, long timeline stability, HDR
+> tested in CI for Premiere Pro and DaVinci Resolve on the shared engine. Export matching, long timeline stability, HDR
 > workflows and performance measurements remain unverified. Free and without warranty — see the
 > [root README](../../README.md#️-no-guarantee).
 
