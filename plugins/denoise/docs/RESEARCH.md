@@ -302,3 +302,13 @@ Next: candidate (b), patch-based (NL-Bayes style), for texture; then temporal fu
 compensated areas temporal filtering removes noise without touching texture, which is the real fix
 for the texture limit above. Estimation in the starlet domain (blind/temporal) is still to do;
 these numbers use the oracle profile.
+
+## R1 answered for Premiere GPU on Windows (owner host test, 2026-11-13)
+
+`TemporalProbeCUDA` build 2: Premiere Pro 2027 delivers the requested neighbour frame on the CUDA
+GPU path, through `GetFrameDependencies` (one `PrGPUDependency_InputFrame` at sequence time ± k
+frames). The protocol follows Adobe's SDK_CrossDissolve_GPU sample: return NoError and **do not
+increment ioQueryIndex**; build 1, which incremented it, got only the current frame. The difference
+view shows correct alignment (static areas cancel). **The temporal Final mode in Premiere is built
+on this GPU path.** Open: upstream-effect stage consistency, cuts and edges, export, Mac/Metal (the
+Metal probe has the same protocol fix), Resolve.

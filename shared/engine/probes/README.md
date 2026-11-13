@@ -151,6 +151,15 @@ for offset −1 in views 0/1/2: only the current frame arrived. Likely cause: bu
 second query then returned NotImplemented, and Premiere may discard the request. Build 2 follows the
 sample and shows the query count in the banner (the Metal probe had the same increment, now fixed).
 
+**Premiere Pro 2027, Windows, NVIDIA, `TemporalProbeCUDA.aex` CUDA BUILD 2 (owner, 2026-11-13):
+PASS for neighbour delivery (offset −1).** `FRAMES DELIVERED: 2`. Dependency requested at sequence
+frame 8592 for current sequence frame 8593 (clip frame 1285). Premiere queried the dependency on
+every render (>1000 queries, last index 0, result NoError). View 1 showed the previous frame (the
+hand position differs). View 2 (difference, gain 1) was black except for the moving hands, so the
+neighbour is aligned and differs only where there is motion. Premiere stayed normal. 4K, float32,
+quality 3. Still untested on this path: same processing stage with an upstream effect (Test B),
+cuts and clip edges, offsets ±2/±3, export, Metal on macOS.
+
 ## Result record
 
 Store host results outside source control unless all media permissions permit sharing. A result
