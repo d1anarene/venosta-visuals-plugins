@@ -10,7 +10,12 @@
 #include "entry.h"
 #include "vv/pixel_io.h"
 #include "probe_common.h"
+#include "probe_overlay.h"
+#include <chrono>
 #include <limits>
+#include <mutex>
+#include <string>
+#include <vector>
 
 namespace {
 #ifdef VV_PROBE_GPU
@@ -21,6 +26,14 @@ constexpr const char* kName="Temporal Probe CPU (research)";
 constexpr const char* kMatch="VVIS Research TemporalProbeCPU";
 #endif
 enum { Input, Offset, View, Gain, Logging, Analyse, MeasuredMean, ParamCount };
+// Shown in the on-screen banner so a host test can see which build is loaded.
+constexpr const char* kBuild="OVERLAY BUILD 1";
+// Result of the last Measure action in this process, shown in the banner of later renders.
+std::mutex gMeasureMutex;
+std::string gMeasure="MEASURE: NOT PRESSED";
+void setMeasure(const std::string& m){ std::lock_guard<std::mutex> l(gMeasureMutex); gMeasure=m; }
+std::string getMeasure(){ std::lock_guard<std::mutex> l(gMeasureMutex); return gMeasure; }
+std::string num(double v){ std::ostringstream s; s.precision(4); s<<std::fixed<<v; return s.str(); }
 vv::PixelLayout layout(PF_InData* in_data, PF_OutData* out_data, PF_EffectWorld* world) {
   if (in_data->appl_id=='PrMr') {
     AEFX_SuiteScoper<PF_PixelFormatSuite1> suite(in_data,kPFPixelFormatSuite,kPFPixelFormatSuiteVersion1,out_data);
@@ -72,59 +85,119 @@ PF_Err parameters(PF_InData* in_data,PF_OutData* out_data) {
 }
 PF_Err user(PF_InData* in_data,PF_OutData* out_data,PF_ParamDef* p[],void* extra) {
   if(static_cast<PF_UserChangedParamExtra*>(extra)->param_index!=Analyse) return PF_Err_NONE;
+  out_data->out_flags|=PF_OutFlag_FORCE_RERENDER|PF_OutFlag_REFRESH_UI;  // banner shows the outcome
   Checkout checkout(in_data);
-  PF_Err err=checkout.get(in_data->current_time);
-  if(err || !checkout.value.u.ld.data){
-    // Record why the action could not measure (Premiere may not hand out pixels during a UI action).
+  PF_Err err=PF_Err_NONE;
+  try { err=checkout.get(in_data->current_time); } catch(...) { setMeasure("MEASURE: CHECKOUT EXCEPTION"); return PF_Err_NONE; }
+  const bool data=checkout.value.u.ld.data!=nullptr;
+  if(err || !data){
+    setMeasure("MEASURE: FAILED - CHECKOUT ERR "+std::to_string(err)+" DATA "+(data?"YES":"NO"));
     if(p[Logging]->u.bd.value){
       std::ostringstream s;
       s << "{\"schema\":\"" << vv::probe::kSchema << "\",\"host_path\":\"premiere-cpu\",\"action\":\"user-analysis-failed\",\"time_ticks\":"
-        << in_data->current_time << ",\"checkout_error\":" << err << ",\"data_present\":" << (checkout.value.u.ld.data ? "true" : "false") << '}';
+        << in_data->current_time << ",\"checkout_error\":" << err << ",\"data_present\":" << (data ? "true" : "false") << '}';
       vv::probe::log(s.str());
     }
-    return err ? err : PF_Err_INVALID_CALLBACK;
+    return PF_Err_NONE;
   }
-  const vv::Image image=read(in_data,out_data,&checkout.value.u.ld);
-  const double measured=vv::probe::mean(image);
-  p[MeasuredMean]->u.fs_d.value=measured;
-  p[MeasuredMean]->uu.change_flags=PF_ChangeFlag_CHANGED_VALUE;
-  out_data->out_flags|=PF_OutFlag_REFRESH_UI;
-  if(p[Logging]->u.bd.value){
-    std::ostringstream s; s.precision(17);
-    s << "{\"schema\":\"" << vv::probe::kSchema << "\",\"host_path\":\"premiere-cpu\",\"action\":\"user-analysis\",\"time_ticks\":"
-      << in_data->current_time << ",\"time_scale\":" << in_data->time_scale << ",\"measured_mean\":" << measured
-      << ',' << vv::probe::imageFields(image,nullptr) << '}'; vv::probe::log(s.str());
+  double measured=0;
+  try {
+    const vv::Image image=read(in_data,out_data,&checkout.value.u.ld);
+    measured=vv::probe::mean(image);
+    p[MeasuredMean]->u.fs_d.value=measured;
+    p[MeasuredMean]->uu.change_flags=PF_ChangeFlag_CHANGED_VALUE;
+    setMeasure("MEASURE: OK MEAN "+num(measured)+" "+std::to_string(image.width)+"X"+std::to_string(image.height));
+    if(p[Logging]->u.bd.value){
+      std::ostringstream s; s.precision(17);
+      s << "{\"schema\":\"" << vv::probe::kSchema << "\",\"host_path\":\"premiere-cpu\",\"action\":\"user-analysis\",\"time_ticks\":"
+        << in_data->current_time << ",\"time_scale\":" << in_data->time_scale << ",\"measured_mean\":" << measured
+        << ',' << vv::probe::imageFields(image,nullptr) << '}'; vv::probe::log(s.str());
+    }
+  } catch(const std::exception& e) {
+    setMeasure(std::string("MEASURE: READ ERROR ")+e.what());
   }
   return PF_Err_NONE;
 }
+// Never fails once an output buffer exists: every step is checked separately and its outcome is
+// written into the frame (banner), so a screenshot shows what the host delivered.
 PF_Err render(PF_InData* in_data,PF_OutData* out_data,PF_ParamDef* p[],PF_LayerDef* output) {
+  if(!output || !output->data) return PF_Err_INVALID_CALLBACK;
   PF_EffectWorld* input=&p[0]->u.ld;
-  if(!input->data || !output || !output->data || input->width!=output->width || input->height!=output->height ||
-     layout(in_data,out_data,input)!=layout(in_data,out_data,output)) return PF_Err_INVALID_CALLBACK;
+  std::vector<std::string> lines;
+  lines.push_back(std::string(kName)+" "+kBuild);
   const int offset=p[Offset]->u.sd.value, mode=p[View]->u.sd.value;
-  if(offset < -3 || offset > 3 || mode < 0 || mode > 2 || in_data->time_step <= 0 || in_data->time_scale <= 0)
-    return PF_Err_INVALID_CALLBACK;
+  const double gain=p[Gain]->u.fs_d.value;
+  const long long frame=in_data->time_step>0 ? (long long)(in_data->current_time/in_data->time_step) : -1;
+  lines.push_back("VIEW "+std::to_string(mode)+"  OFFSET "+std::to_string(offset)+"  FRAME "+std::to_string(frame)+
+                  "  TIME "+std::to_string(in_data->current_time)+"/"+std::to_string(in_data->time_scale)+
+                  "  STEP "+std::to_string(in_data->time_step));
+  vv::PixelLayout outLayout=vv::PixelLayout::BGRA_8u, inLayout=vv::PixelLayout::BGRA_8u;
+  try { outLayout=layout(in_data,out_data,output); } catch(const std::exception& e) {
+    // Without the output format nothing can be drawn: pass the input through.
+    return PF_COPY(input,output,nullptr,nullptr);
+  }
+  vv::Image current;
+  bool haveCurrent=false;
+  try {
+    if(!input->data) throw std::runtime_error("NO INPUT DATA");
+    inLayout=layout(in_data,out_data,input);
+    vv::readPixels(input->data,input->rowbytes,input->width,input->height,inLayout,current);
+    haveCurrent=true;
+  } catch(const std::exception& e) { lines.push_back(std::string("INPUT ERROR: ")+e.what()); }
+  if(!haveCurrent){ current=vv::Image(output->width,output->height); }
+  // Neighbour checkout, timed.
   const int64_t requested=int64_t(in_data->current_time)+int64_t(offset)*in_data->time_step;
-  if(requested<std::numeric_limits<A_long>::min() || requested>std::numeric_limits<A_long>::max()) return PF_Err_INVALID_CALLBACK;
-  Checkout checkout(in_data); PF_Err err=checkout.get(static_cast<A_long>(requested));
-  const vv::Image current=read(in_data,out_data,input);
-  vv::Image neighbour; const vv::Image* other=nullptr;
-  if(!err && checkout.value.u.ld.data){ neighbour=read(in_data,out_data,&checkout.value.u.ld); other=&neighbour; }
+  Checkout checkout(in_data);
+  PF_Err err=PF_Err_NONE;
+  vv::Image neighbour;
+  bool haveNeighbour=false;
+  const auto t0=std::chrono::steady_clock::now();
+  try {
+    if(requested<std::numeric_limits<A_long>::min() || requested>std::numeric_limits<A_long>::max()) throw std::runtime_error("TIME OUT OF RANGE");
+    err=checkout.get(static_cast<A_long>(requested));
+  } catch(const std::exception& e) { lines.push_back(std::string("CHECKOUT EXCEPTION: ")+e.what()); err=-1; }
+  const long long ms=(long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-t0).count();
+  const bool data=checkout.value.u.ld.data!=nullptr;
+  lines.push_back("NEIGHBOUR CHECKOUT: ERR "+std::to_string(err)+"  DATA "+(data?"YES":"NO")+"  "+std::to_string(ms)+" MS"+
+                  "  REQUESTED TIME "+std::to_string((long long)requested));
+  if(!err && data){
+    try {
+      PF_EffectWorld* nw=&checkout.value.u.ld;
+      vv::readPixels(nw->data,nw->rowbytes,nw->width,nw->height,layout(in_data,out_data,nw),neighbour);
+      haveNeighbour=true;
+      lines.push_back("NEIGHBOUR "+std::to_string(neighbour.width)+"X"+std::to_string(neighbour.height)+
+                      "  IDENTICAL TO CURRENT: "+(haveCurrent && vv::probe::hash(neighbour)==vv::probe::hash(current)?"YES":"NO"));
+    } catch(const std::exception& e) { lines.push_back(std::string("NEIGHBOUR READ ERROR: ")+e.what()); }
+  }
   if(p[Logging]->u.bd.value){
     std::ostringstream s; s.precision(17);
     s << "{\"schema\":\"" << vv::probe::kSchema << "\",\"host_path\":\"premiere-cpu\",\"action\":\"render\",\"time_ticks\":" << in_data->current_time
       << ",\"requested_neighbour_ticks\":" << requested << ",\"time_step\":" << in_data->time_step << ",\"time_scale\":" << in_data->time_scale
       << ",\"returned_time_verified\":false,\"offset_frames\":" << offset << ",\"view\":" << mode << ",\"quality\":" << in_data->quality
-      << ",\"downsample_x_num\":" << in_data->downsample_x.num << ",\"downsample_x_den\":" << in_data->downsample_x.den
-      << ",\"downsample_y_num\":" << in_data->downsample_y.num << ",\"downsample_y_den\":" << in_data->downsample_y.den
-      << ",\"layout\":" << int(layout(in_data,out_data,input)) << ",\"checkout_error\":" << err
-      << ',' << vv::probe::imageFields(current,other) << '}'; vv::probe::log(s.str());
+      << ",\"checkout_error\":" << err << ",\"checkout_ms\":" << ms;
+    if(haveCurrent) s << ',' << vv::probe::imageFields(current,haveNeighbour?&neighbour:nullptr);
+    s << '}'; vv::probe::log(s.str());
   }
-  if(mode==0) return PF_COPY(input,output,nullptr,nullptr);
-  if(err) return err;
-  const vv::Image result=vv::probe::display(current,other,mode,p[Gain]->u.fs_d.value);
-  if(result.width!=output->width || result.height!=output->height) return PF_Err_INVALID_CALLBACK;
-  vv::writePixels(result,output->data,output->rowbytes,layout(in_data,out_data,output),input->data,input->rowbytes);
+  vv::Image result=current;
+  if(mode!=0){
+    if(haveNeighbour && neighbour.width==current.width && neighbour.height==current.height){
+      try { result=vv::probe::display(current,&neighbour,mode,gain); }
+      catch(const std::exception& e){ lines.push_back(std::string("DISPLAY ERROR: ")+e.what()); }
+    } else {
+      lines.push_back("NO USABLE NEIGHBOUR - SHOWING CURRENT FRAME");
+    }
+  }
+  lines.push_back(getMeasure());
+  if(result.width!=output->width || result.height!=output->height){
+    lines.push_back("SIZE: INPUT "+std::to_string(result.width)+"X"+std::to_string(result.height)+" OUTPUT "+
+                    std::to_string(output->width)+"X"+std::to_string(output->height));
+    result=vv::Image(output->width,output->height);
+    for(size_t i=3;i<result.px.size();i+=4) result.px[i]=1.0f;
+  }
+  vv::probe::drawBanner(result,lines);
+  try {
+    vv::writePixels(result,output->data,output->rowbytes,outLayout);  // alpha from the image (opaque banner box)
+  } catch(...) { return PF_COPY(input,output,nullptr,nullptr); }
   return PF_Err_NONE;
 }
 }
