@@ -126,7 +126,8 @@ std::string filename(const std::string& prefix,int t) {
   std::ostringstream s; s<<prefix<<'-'<<std::setfill('0')<<std::setw(4)<<t<<".pfm"; return s.str();
 }
 void checkedFile(const fs::path& path,const std::string& data) {
-  std::ofstream f(path); if(!f) throw std::runtime_error("cannot write "+path.string());
+  // Binary mode: identical bytes (and fingerprints) on every OS; no CRLF translation on Windows.
+  std::ofstream f(path,std::ios::binary); if(!f) throw std::runtime_error("cannot write "+path.string());
   f<<data; if(!f) throw std::runtime_error("write failed: "+path.string());
 }
 vv::Image planeImage(const vv::Plane& p) {
