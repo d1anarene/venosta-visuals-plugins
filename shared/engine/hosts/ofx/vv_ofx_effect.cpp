@@ -90,6 +90,15 @@ class Instance : public OFX::ImageEffect {
     Instance& fx_;
   };
 
+  // Temporal effects: frames t-r..t+r of the source.
+  void getFramesNeeded(const OFX::FramesNeededArguments& args, OFX::FramesNeededSetter& frames) override {
+    const int r = radiusAt(args.time);
+    OfxRangeD range;
+    range.min = args.time - r;
+    range.max = args.time + r;
+    frames.setFramesNeeded(*src_, range);
+  }
+
   bool isIdentity(const OFX::IsIdentityArguments& args, OFX::Clip*& identityClip, double& identityTime) override {
     if (E().active(Reader(*this, args.time))) return false;
     identityClip = src_;  // bypass: the host passes the source through untouched
@@ -135,7 +144,33 @@ class Instance : public OFX::ImageEffect {
       const float* s = static_cast<const float*>(src->getPixelAddress(sb.x1, sb.y2 - 1 - r));
       if (s) std::memcpy(img.at(0, r), s, sizeof(float) * 4 * size_t(w));
     }
-    if (!img.empty() && E().active(reader)) E().render(img, reader, frameKey);  // alpha never modified
+    if (!img.empty() && E().active(reader)) {
+      const int radius = radiusAt(args.time);
+      if (radius > 0) {
+        // Neighbour frames, converted like the source; nullptr where the host has none.
+        std::vector<vv::Image> nbImages(size_t(2 * radius + 1));
+        std::vector<const vv::Image*> window(size_t(2 * radius + 1), nullptr);
+        const vv::Image current = img;
+        window[size_t(radius)] = &current;
+        for (int k = -radius; k <= radius; ++k) {
+          if (k == 0) continue;
+          std::unique_ptr<OFX::Image> nb(src_->fetchImage(args.time + k));
+          if (!nb || nb->getPixelDepth() != OFX::eBitDepthFloat || nb->getPixelComponents() != OFX::ePixelComponentRGBA) continue;
+          const OfxRectI b = nb->getBounds();
+          if (b.x1 != sb.x1 || b.x2 != sb.x2 || b.y1 != sb.y1 || b.y2 != sb.y2) continue;
+          vv::Image& n = nbImages[size_t(k + radius)];
+          n = vv::Image(w, h);
+          for (int r = 0; r < h; ++r) {
+            const float* s = static_cast<const float*>(nb->getPixelAddress(sb.x1, sb.y2 - 1 - r));
+            if (s) std::memcpy(n.at(0, r), s, sizeof(float) * 4 * size_t(w));
+          }
+          window[size_t(k + radius)] = &n;
+        }
+        E().renderTemporal(img, window, radius, reader, frameKey);
+      } else {
+        E().render(img, reader, frameKey);  // alpha never modified
+      }
+    }
 
     const OfxRectI rw = args.renderWindow;
     for (int y = rw.y1; y < rw.y2; ++y) {
@@ -181,7 +216,26 @@ class Instance : public OFX::ImageEffect {
     f.rgba = true;
     f.bottomUp = true;
     f.queue = api == vv::GpuApi::Metal ? args.pMetalCmdQ : args.pCudaStream;
+    // Temporal effects: neighbour frames on the GPU (kept alive until the render returns).
+    std::vector<std::unique_ptr<OFX::Image>> neighbours;
+    f.radius = std::min(radiusAt(args.time), vv::GpuFrame::kMaxRadius);
+    f.window[f.radius] = f.src;
+    for (int k = -f.radius; k <= f.radius && f.radius > 0; ++k) {
+      if (k == 0) continue;
+      std::unique_ptr<OFX::Image> nb(src_->fetchImage(args.time + k));
+      if (!nb) continue;
+      const OfxRectI b = nb->getBounds();
+      if (b.x1 != sb.x1 || b.x2 != sb.x2 || b.y1 != sb.y1 || b.y2 != sb.y2 || nb->getRowBytes() != rowBytes) continue;
+      f.window[k + f.radius] = nb->getPixelData();
+      neighbours.push_back(std::move(nb));
+    }
     if (!r || !r->render(f, reader, frameKey)) OFX::throwSuiteStatusException(kOfxStatFailed);
+  }
+
+  int radiusAt(double time) const {
+    if (E().maxTemporalRadius() <= 0) return 0;
+    const int r = E().temporalRadius(Reader(*this, time));
+    return std::clamp(r, 0, std::min(E().maxTemporalRadius(), vv::GpuFrame::kMaxRadius));
   }
 
   std::vector<OFX::Param*> params_;
@@ -209,7 +263,7 @@ class Factory : public OFX::PluginFactoryHelper<Factory> {
     desc.setHostFrameThreading(false);
     desc.setSupportsMultiResolution(false);
     desc.setSupportsTiles(false);  // effects may need the whole frame (blurs)
-    desc.setTemporalClipAccess(false);
+    desc.setTemporalClipAccess(E().maxTemporalRadius() > 0);
     desc.setRenderTwiceAlways(false);
     desc.setSupportsMultipleClipPARs(false);
     desc.setRenderThreadSafety(OFX::eRenderFullySafe);  // GPU renderers are guarded per instance
@@ -224,7 +278,7 @@ class Factory : public OFX::PluginFactoryHelper<Factory> {
   void describeInContext(OFX::ImageEffectDescriptor& desc, OFX::ContextEnum) override {
     OFX::ClipDescriptor* src = desc.defineClip(kOfxImageEffectSimpleSourceClipName);
     src->addSupportedComponent(OFX::ePixelComponentRGBA);
-    src->setTemporalClipAccess(false);
+    src->setTemporalClipAccess(E().maxTemporalRadius() > 0);
     src->setSupportsTiles(false);
     src->setIsMask(false);
     OFX::ClipDescriptor* dst = desc.defineClip(kOfxImageEffectOutputClipName);

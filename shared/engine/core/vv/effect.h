@@ -36,6 +36,11 @@ struct GpuFrame {
   bool rgba = false;          // channel order RGBA (OpenFX) instead of BGRA (Premiere)
   bool bottomUp = false;      // row 0 is the bottom row (OpenFX)
   void* queue = nullptr;      // Metal: id<MTLCommandQueue>; CUDA: host stream (may be null)
+  /** Temporal effects only: window[k + radius] is the source at offset k frames (-radius..radius),
+   *  same size and format as src; window[radius] == src; nullptr where the host gave no frame. */
+  static constexpr int kMaxRadius = 3;
+  int radius = 0;
+  const void* window[2 * kMaxRadius + 1] = {};
 };
 
 /** Per-instance GPU renderer. Must have finished the frame when render() returns. */
@@ -62,6 +67,18 @@ class Effect {
   /** A supervised parameter changed (e.g. a preset menu). Return true if values were written. */
   virtual bool paramChanged(int /*hostIndex*/, const ParamReader& /*params*/, ParamWriter& /*out*/) const {
     return false;
+  }
+  /** Temporal effects: the largest radius (frames on each side) the effect can ever ask for, at
+   *  most GpuFrame::kMaxRadius. 0 (default): not temporal; the adapters declare nothing. */
+  virtual int maxTemporalRadius() const { return 0; }
+  /** Frames needed on each side of the current one for these settings (<= maxTemporalRadius). */
+  virtual int temporalRadius(const ParamReader& /*params*/) const { return 0; }
+  /** CPU render with neighbours: window[k + radius] = source at offset k (window[radius] = the
+   *  unprocessed current frame; img is the same frame to render into); nullptr where the host gave
+   *  none (clip edges, hosts without temporal access). Default: the ordinary render(). */
+  virtual bool renderTemporal(Image& img, const std::vector<const Image*>& /*window*/, int /*radius*/,
+                              const ParamReader& params, int64_t frameKey) const {
+    return render(img, params, frameKey);
   }
   /** Whether this build has a GPU renderer for `api` (decides what the adapters declare). */
   virtual bool hasGpu(GpuApi) const { return false; }
