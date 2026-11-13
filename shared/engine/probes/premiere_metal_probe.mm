@@ -58,7 +58,7 @@ class Probe : public PrGPUFilterBase {
     const int offset=int(vv::prParamNumber(GetParam(1,p->inClipTime)));
     PrTime requested=0; if(!request(*p,offset,requested)) return suiteError_Fail;
     *out={}; out->outDependencyType=PrGPUDependency_InputFrame; out->outTrackID=0;
-    out->outSequenceTime=requested; out->outNeedsFieldSeparation=false; ++*index;
+    out->outSequenceTime=requested; out->outNeedsFieldSeparation=false;  // no ++*index (SDK_CrossDissolve_GPU protocol)
     return suiteError_NoError;
   }
   prSuiteError renderImpl(const PrGPUFilterRenderParams* p,const PPixHand* images,csSDK_size_t count,PPixHand* output) {

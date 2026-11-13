@@ -26,6 +26,7 @@
 
 #include <windows.h>
 
+#include <atomic>
 #include <limits>
 #include <mutex>
 #include <string>
@@ -41,7 +42,7 @@ namespace {
 
 constexpr const char* kName = "Temporal Probe CUDA (research)";
 constexpr const char* kMatch = "VVIS Research TemporalProbeCUDA";
-constexpr const char* kBuild = "CUDA BUILD 1";
+constexpr const char* kBuild = "CUDA BUILD 2";
 enum { Input, Offset, View, Gain, ParamCount };
 
 // ---- Minimal CUDA driver API, loaded from nvcuda.dll (declarations as in cuda.h, 64-bit) --------
@@ -104,6 +105,9 @@ struct CudaDriver {
 
 std::string n(long long v) { return std::to_string(v); }
 
+// Process-wide record of the dependency queries, shown in the banner: proves whether Premiere asks.
+std::atomic<long long> gDepCalls{0}, gDepLastIndex{-1}, gDepLastResult{-1}, gDepLastRequested{0};
+
 // ---- GPU path ------------------------------------------------------------------------------------
 class Probe : public PrGPUFilterBase {
  public:
@@ -120,22 +124,30 @@ class Probe : public PrGPUFilterBase {
     }
   }
 
+  // Same protocol as Adobe's SDK_CrossDissolve_GPU sample: fill one dependency and return
+  // NoError WITHOUT incrementing ioQueryIndex (build 1 incremented it; Premiere then delivered only
+  // the current frame).
   prSuiteError GetFrameDependencies(const PrGPUFilterRenderParams* p, csSDK_int32* index,
                                     PrGPUFilterFrameDependency* out) override {
+    ++gDepCalls;
+    prSuiteError r = suiteError_NotImplemented;
     try {
-      if (!p || !index || !out || *index != 0) return suiteError_NotImplemented;  // one dependency
-      PrTime requested = 0;
-      if (!request(*p, offset(p), requested)) return suiteError_NotImplemented;
-      *out = {};
-      out->outDependencyType = PrGPUDependency_InputFrame;
-      out->outTrackID = 0;
-      out->outSequenceTime = requested;
-      out->outNeedsFieldSeparation = false;
-      ++*index;
-      return suiteError_NoError;
+      if (p && index && out) {
+        gDepLastIndex = *index;
+        PrTime requested = 0;
+        if (*index == 0 && request(*p, offset(p), requested)) {
+          out->outDependencyType = PrGPUDependency_InputFrame;
+          out->outTrackID = 0;  // current track (PrSDKGPUFilter.h)
+          out->outSequenceTime = requested;
+          gDepLastRequested = requested;
+          r = suiteError_NoError;
+        }
+      }
     } catch (...) {
-      return suiteError_NotImplemented;
+      r = suiteError_NotImplemented;
     }
+    gDepLastResult = r;
+    return r;
   }
 
   prSuiteError Render(const PrGPUFilterRenderParams* p, const PPixHand* frames, csSDK_size_t count,
@@ -212,6 +224,8 @@ class Probe : public PrGPUFilterBase {
     lines.push_back("FRAMES DELIVERED: " + n((long long)count) + "  FORMAT " + (half ? "16F" : "32F") + "  " +
                     n(cur.width()) + "X" + n(cur.height()) + "  QUALITY " + n(p->inQuality) + "  DOWNSAMPLE " +
                     std::to_string(p->inDownsampleFactorX).substr(0, 4));
+    lines.push_back("DEPENDENCY QUERIES: " + n(gDepCalls.load()) + "  LAST INDEX " + n(gDepLastIndex.load()) + "  RESULT " +
+                    n(gDepLastResult.load()) + "  REQUESTED SEQ FRAME " + n(tpf > 0 ? gDepLastRequested.load() / tpf : -1));
     CUcontext ctx = nullptr;
     cuda_.ctxGetCurrent(&ctx);
     if (!ctx) lines.push_back("NO CURRENT CUDA CONTEXT");

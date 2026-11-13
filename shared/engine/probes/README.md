@@ -143,6 +143,14 @@ No denoising should be built on a failing stage contract.
   tested because of this. Next: a bisection build without WIDE_TIME_INPUT, tested only once the owner
   agrees; the Premiere GPU path (`GetFrameDependencies`, CUDA probe) remains untested on Windows.
 
+**Premiere Pro 2027, Windows, NVIDIA, `TemporalProbeCUDA.aex` CUDA BUILD 1 (owner, 2026-11-13):
+GPU path works, no neighbour.** Premiere stayed normal with the probe installed and applied. 4K,
+float32, quality 3, downsample 1.0. The banner showed the CUDA path active, but `FRAMES DELIVERED: 1`
+for offset −1 in views 0/1/2: only the current frame arrived. Likely cause: build 1 incremented
+`ioQueryIndex` after filling the dependency, and Adobe's `SDK_CrossDissolve_GPU` sample does not. The
+second query then returned NotImplemented, and Premiere may discard the request. Build 2 follows the
+sample and shows the query count in the banner (the Metal probe had the same increment, now fixed).
+
 ## Result record
 
 Store host results outside source control unless all media permissions permit sharing. A result
