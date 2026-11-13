@@ -157,8 +157,11 @@ frame 8592 for current sequence frame 8593 (clip frame 1285). Premiere queried t
 every render (>1000 queries, last index 0, result NoError). View 1 showed the previous frame (the
 hand position differs). View 2 (difference, gain 1) was black except for the moving hands, so the
 neighbour is aligned and differs only where there is motion. Premiere stayed normal. 4K, float32,
-quality 3. Still untested on this path: same processing stage with an upstream effect (Test B),
-cuts and clip edges, offsets ±2/±3, export, Metal on macOS.
+quality 3. **Test B (same stage), pass:** with Lumetri saturation 0 on the clip before the probe, View 1
+(offset −1, sequence frame 8219 for 8220) showed the neighbour in black and white too, so it arrives
+after the upstream effects, like the current frame. This was a visual check, not a hash comparison.
+Still untested on this path: upstream geometric transforms, cuts and clip edges, offsets ±2/±3,
+export, Metal on macOS.
 
 ## Result record
 

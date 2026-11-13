@@ -309,6 +309,7 @@ these numbers use the oracle profile.
 GPU path, through `GetFrameDependencies` (one `PrGPUDependency_InputFrame` at sequence time ± k
 frames). The protocol follows Adobe's SDK_CrossDissolve_GPU sample: return NoError and **do not
 increment ioQueryIndex**; build 1, which incremented it, got only the current frame. The difference
-view shows correct alignment (static areas cancel). **The temporal Final mode in Premiere is built
-on this GPU path.** Open: upstream-effect stage consistency, cuts and edges, export, Mac/Metal (the
+view shows correct alignment (static areas cancel). With Lumetri (saturation 0) before the probe,
+the neighbour arrives black and white too, so it is at the same stage as the current frame. **The
+temporal Final mode in Premiere is built on this GPU path.** Open: upstream transforms, cuts and edges, export, Mac/Metal (the
 Metal probe has the same protocol fix), Resolve.
