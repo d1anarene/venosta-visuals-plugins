@@ -268,3 +268,37 @@ No neighbour-frame evidence was obtained. Consequences until the cause is known:
   measurement + "lock" fallback from R3).
 - The Premiere GPU path (`GetFrameDependencies`; a CUDA probe does not exist yet) and the Mac
   probes remain untested. Details: `shared/engine/probes/README.md`.
+
+## D2: spatial candidate (a) — profile-aware two-stage Wiener in the a trous domain (2026-11-13)
+
+Code: `src/core/dn_starlet.*` (undecimated B3-spline wavelet, exact reconstruction, shift invariant),
+`src/core/dn_spatial.*`, `measureProfileStarlet`. Evaluation: `dn_eval_tool spatial w h luma chroma
+window seed [quiet] [recovery]`, **oracle profile** (noise measured from ground truth, so filter quality
+is separated from estimation error). Five bands, opponent channels, noise per pixel from the profile
+at the local colour (W S Wᵀ).
+
+Tuning set: 960×540 and 480×270, seed 7. Held-out check: 1280×720, seed 11 (not used for tuning).
+Defaults chosen: luma 1.0, chroma 1.5, window 1.0, pilot τ 1.0, detail recovery 0.
+
+| Set | Mean gain over the better of noisy / best Gaussian | Worst vs noisy | SSIM vs noisy (mean / worst) |
+| --- | --- | --- | --- |
+| tuning (960×540, seed 7) | +2.12 dB (20 of 21 cases better) | +0.32 dB | +0.23 / −0.20 |
+| held-out (1280×720, seed 11) | +2.26 dB | +0.75 dB | +0.26 / −0.13 |
+
+Per image (held-out, medium noise): text +3.1 dB, chart +4.1, night street +3.6, skin +3.2, ramp +2.7,
+weave +1.2, foliage +0.5.
+
+Findings:
+- Never below the noisy input, including fine text and weave, where Gaussian blur loses 5–15 dB.
+- **Texture limit:** on foliage and weave, SSIM drops below the noisy input (foliage 0.90 → 0.82).
+  Texture at the noise amplitude is indistinguishable from noise for a local-energy filter. Window,
+  luma strength and detail recovery only move along the trade-off (sweeps in the eval tool).
+- A stricter pilot (τ > 1) raises the mean but loses detail, up to −3 dB vs the noisy input at τ 2.
+  Rejected (detail first).
+- Skin with sharpened noise: 0.8–1 dB behind a strong Gaussian blur (residual low-frequency noise).
+  Five instead of four bands helped only marginally.
+
+Next: candidate (b), patch-based (NL-Bayes style), for texture; then temporal fusion. In static or
+compensated areas temporal filtering removes noise without touching texture, which is the real fix
+for the texture limit above. Estimation in the starlet domain (blind/temporal) is still to do;
+these numbers use the oracle profile.

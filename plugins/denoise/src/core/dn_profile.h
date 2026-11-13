@@ -16,7 +16,7 @@
 
 namespace dn {
 
-constexpr int kBands = 4;  // finest four Laplacian bands
+constexpr int kBands = 5;  // finest five bands
 constexpr int kBins = 16;  // encoded value bins over 0..1 (values outside use the end bins)
 
 struct NoiseProfile {

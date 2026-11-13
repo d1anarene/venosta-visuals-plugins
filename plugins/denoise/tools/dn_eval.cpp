@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -110,7 +111,7 @@ int baselineReport(int w, int h) {
 
 // Spatial candidate (a) with the oracle profile (noise known exactly): separates filter quality
 // from estimation error. Compared with the noisy input and the better of two Gaussian blurs.
-int spatialReport(int w, int h, float luma, float chroma, float window, unsigned seed, bool quiet) {
+int spatialReport(int w, int h, float luma, float chroma, float window, unsigned seed, bool quiet, float recovery) {
   if (!quiet) {
     std::printf("PSNR dB / SSIM vs ground truth (spatial a, oracle profile, luma %.2f chroma %.2f window %.2f seed %u)\n", luma, chroma, window, seed);
     std::printf("%-13s %-15s | %-15s | %-15s | %-15s | gain vs best\n", "image", "noise", "noisy", "best gauss", "spatial a");
@@ -137,6 +138,8 @@ int spatialReport(int w, int h, float luma, float chroma, float window, unsigned
       sp.lumaStrength = luma;
       sp.chromaStrength = chroma;
       sp.window = window;
+      sp.detailRecovery = recovery;
+      if (const char* t = std::getenv("DN_TAU")) sp.pilotTau = float(std::atof(t));
       const vv::Image d = denoiseSpatial(s.noisy, prof, sp);
       const double pd = psnr(d, s.clean), sd = ssim(d, s.clean);
       if (!quiet)
@@ -149,8 +152,8 @@ int spatialReport(int w, int h, float luma, float chroma, float window, unsigned
       ++n;
     }
   }
-  std::printf("luma %.2f chroma %.2f window %.2f | mean gain %+.2f dB, worst vs noisy %+.2f dB | SSIM vs noisy: mean %+.3f, worst %+.3f\n",
-              luma, chroma, window, sumGain / n, worstVsNoisy, sumSsimVsNoisy / n, worstSsimVsNoisy);
+  std::printf("recovery %.2f luma %.2f chroma %.2f window %.2f | mean gain %+.2f dB, worst vs noisy %+.2f dB | SSIM vs noisy: mean %+.3f, worst %+.3f\n",
+              recovery, luma, chroma, window, sumGain / n, worstVsNoisy, sumSsimVsNoisy / n, worstSsimVsNoisy);
   return 0;
 }
 
@@ -165,7 +168,7 @@ int main(int argc, char** argv) {
   if (mode == "spatial")
     return spatialReport(w, h, argc > 4 ? float(std::atof(argv[4])) : 1.f, argc > 5 ? float(std::atof(argv[5])) : 1.5f,
                          argc > 6 ? float(std::atof(argv[6])) : 1.f, argc > 7 ? unsigned(std::atoi(argv[7])) : 7u,
-                         argc > 8 && std::string(argv[8]) == "quiet");
+                         argc > 8 && std::string(argv[8]) == "quiet", argc > 9 ? float(std::atof(argv[9])) : 0.f);
   std::fprintf(stderr, "usage: dn_eval_tool profile|temporal|baseline|spatial [w h]\n");
   return 2;
 }

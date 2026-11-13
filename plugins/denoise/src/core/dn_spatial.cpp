@@ -38,7 +38,7 @@ vv::Image denoiseSpatial(const vv::Image& noisy, const NoiseProfile& prof, const
     const vv::Plane E = vv::gaussianBlur(e, win);
     vv::Plane pilot2(w, h, 3);
     for (size_t i = 0; i < band.v.size(); ++i) {
-      const float En = std::max(E.v[i], 1e-20f), sig = std::max(En - var.v[i], 0.f);
+      const float En = std::max(E.v[i], 1e-20f), sig = std::max(En - sp.pilotTau * sp.pilotTau * var.v[i], 0.f);
       const float p = band.v[i] * sig / En;
       pilot2.v[i] = p * p;
     }

@@ -10,6 +10,8 @@
 #include "dn_metrics.h"
 #include "dn_profile.h"
 #include "dn_pyramid.h"
+#include "dn_spatial.h"
+#include "dn_starlet.h"
 #include "dn_synth.h"
 #include "dn_testimages.h"
 #include "vv/blur.h"
@@ -264,6 +266,53 @@ TEST(temporal_estimate_handles_texture_and_motion) {
 TEST(noise_free_frame_estimates_almost_zero) {
   const NoiseProfile est = estimateProfile(toRgbPlane(makeTestImage("skin", 480, 270)));
   for (int c = 0; c < 3; ++c) CHECK(est.at(0, c, 0.5f) < 0.004f);  // texture floor << typical noise (~0.01)
+}
+
+TEST(starlet_reconstructs_exactly_and_is_shift_invariant) {
+  const vv::Plane o = toOpponent(makeTestImage("foliage", 97, 61));
+  const Starlet st = starletDecompose(o, kBands);
+  const vv::Plane r = starletReconstruct(st);
+  double m = 0;
+  for (size_t i = 0; i < o.v.size(); ++i) m = std::fmax(m, std::fabs(double(r.v[i]) - o.v[i]));
+  CHECK(m < 1e-5);
+  CHECK(int(st.bands.size()) == kBands && st.bands[0].width == 97);  // undecimated: full size
+  // Shifting the input by one pixel shifts every band by one pixel (away from the borders).
+  vv::Plane sh = o;
+  for (int y = 0; y < 61; ++y)
+    for (int x = 1; x < 97; ++x)
+      for (int c = 0; c < 3; ++c) sh.at(x, y)[c] = o.at(x - 1, y)[c];
+  const Starlet ss = starletDecompose(sh, kBands);
+  double d = 0;
+  for (int y = 20; y < 41; ++y)
+    for (int x = 40; x < 60; ++x) d = std::fmax(d, std::fabs(ss.bands[1].at(x, y)[0] - st.bands[1].at(x - 1, y)[0]));
+  CHECK(d < 1e-5);
+}
+
+TEST(spatial_denoiser_removes_noise_keeps_signal_alpha_and_identity) {
+  NoiseSim sim;
+  vv::Image grey(256, 144);
+  for (int i = 0; i < 256 * 144; ++i) { grey.px[size_t(i) * 4] = grey.px[size_t(i) * 4 + 1] = grey.px[size_t(i) * 4 + 2] = 0.45f; grey.px[size_t(i) * 4 + 3] = 0.7f; }
+  const Synth s = synthesize(grey, sim, 3u);
+  const NoiseProfile prof = measureProfileStarlet(toRgbPlane(s.noisy), toRgbPlane(s.clean));
+  const vv::Image d = denoiseSpatial(s.noisy, prof);
+  // Residual noise on a flat field drops to under a third (|error| RMS).
+  CHECK(psnr(d, s.clean) > psnr(s.noisy, s.clean) + 10.0);
+  bool alpha = true, finite = true;
+  for (size_t i = 0; i < d.px.size(); ++i) {
+    if (i % 4 == 3) alpha = alpha && d.px[i] == s.noisy.px[i];
+    finite = finite && std::isfinite(d.px[i]);
+  }
+  CHECK(alpha && finite);
+  // A zero profile (no noise) leaves the image unchanged up to float rounding.
+  const vv::Image src = makeTestImage("text", 160, 90);
+  const vv::Image same = denoiseSpatial(src, NoiseProfile{});
+  double m = 0;
+  for (size_t i = 0; i < src.px.size(); ++i) m = std::fmax(m, std::fabs(double(same.px[i]) - src.px[i]));
+  CHECK(m < 1e-5);
+  // Detail priority: on fine text it never ends below the noisy input (oracle profile).
+  const Synth t = synthesize(makeTestImage("text", 480, 270), sim, 5u);
+  const vv::Image dt = denoiseSpatial(t.noisy, measureProfileStarlet(toRgbPlane(t.noisy), toRgbPlane(t.clean)));
+  CHECK(psnr(dt, t.clean) > psnr(t.noisy, t.clean) + 1.0);
 }
 
 int main() {

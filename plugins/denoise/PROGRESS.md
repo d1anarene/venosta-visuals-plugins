@@ -85,3 +85,13 @@ Historical findings below are limited by the current review in `docs/RESEARCH.md
 - Found and fixed in the shared engine: `vv::gaussianBlurDirect` / `gaussianBlurAccumulate`
   overflowed a 3-entry stack array for planes with 4+ channels (no existing plugin used that).
   Results for 1–3 channels are unchanged; regression test added.
+
+## Phase D2: spatial candidate (a) (2026-11-13)
+
+- Undecimated a trous transform + profile-aware two-stage empirical Wiener, opponent channels.
+- With the oracle profile: +2.1 dB (tuning) / +2.3 dB (held-out) over the better of noisy input
+  and best Gaussian blur; never below the noisy input. Texture limit (foliage/weave SSIM) and
+  sharpened-noise skin limit measured and documented (docs/RESEARCH.md, D2).
+- Tests: exact reconstruction and shift invariance, flat-field noise removal (> 10 dB), identity
+  with a zero profile, alpha unchanged, text above the noisy input.
+- Not in a plugin yet; nothing tested in a host.
