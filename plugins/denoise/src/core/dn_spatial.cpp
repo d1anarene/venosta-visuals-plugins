@@ -10,7 +10,8 @@
 
 namespace dn {
 
-vv::Image denoiseSpatial(const vv::Image& noisy, const NoiseProfile& prof, const SpatialParams& sp) {
+vv::Image denoiseSpatial(const vv::Image& noisy, const NoiseProfile& prof, const SpatialParams& sp,
+                         const vv::Plane* noiseScale) {
   const int w = noisy.width, h = noisy.height;
   if (w <= 0 || h <= 0) return noisy;
   const vv::Plane opp = toOpponent(noisy), rgb = toRgbPlane(noisy);
@@ -27,7 +28,8 @@ vv::Image denoiseSpatial(const vv::Image& noisy, const NoiseProfile& prof, const
         const float* l = low.at(x, y);
         const vv_float3 s = prof.opponentSigma(j, vv_make3(l[0], l[1], l[2]));
         float* v = var.at(x, y);
-        v[0] = s.x * s.x; v[1] = s.y * s.y; v[2] = s.z * s.z;
+        const float k = noiseScale ? noiseScale->at(x, y)[0] : 1.f;
+        v[0] = s.x * s.x * k * k; v[1] = s.y * s.y * k * k; v[2] = s.z * s.z * k * k;
         const float* q = band.at(x, y);
         float* ee = e.at(x, y);
         for (int c = 0; c < 3; ++c) ee[c] = q[c] * q[c];

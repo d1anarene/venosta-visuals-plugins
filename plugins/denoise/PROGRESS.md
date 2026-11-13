@@ -95,3 +95,13 @@ Historical findings below are limited by the current review in `docs/RESEARCH.md
 - Tests: exact reconstruction and shift invariance, flat-field noise removal (> 10 dB), identity
   with a zero profile, alpha unchanged, text above the noisy input.
 - Not in a plugin yet; nothing tested in a host.
+
+## Phase D4 (first pass): temporal candidate T1 (2026-11-13)
+
+- Motion-compensated, reliability-weighted temporal average + spatial stage with a noise-scale map.
+- On Codex's sequences (held-out seed/size) vs spatial (a): RMSE −20–30 %, detail transfer
+  0.61–0.72 → 0.78–0.91, temporal flicker and disocclusion error lower; cuts rejected (no ghosts).
+- Premiere (Windows, CUDA): the neighbour frames needed for this are delivered on the GPU path,
+  at the same processing stage (host test 2026-11-13, see docs/RESEARCH.md).
+- Tests: motion estimation (integer and sub-pixel shifts), temporal better than spatial on a static
+  shot, cut rejected. Not in a plugin yet.

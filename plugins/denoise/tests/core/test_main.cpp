@@ -12,6 +12,7 @@
 #include "dn_pyramid.h"
 #include "dn_spatial.h"
 #include "dn_starlet.h"
+#include "dn_temporal.h"
 #include "dn_synth.h"
 #include "dn_testimages.h"
 #include "vv/blur.h"
@@ -313,6 +314,71 @@ TEST(spatial_denoiser_removes_noise_keeps_signal_alpha_and_identity) {
   const Synth t = synthesize(makeTestImage("text", 480, 270), sim, 5u);
   const vv::Image dt = denoiseSpatial(t.noisy, measureProfileStarlet(toRgbPlane(t.noisy), toRgbPlane(t.clean)));
   CHECK(psnr(dt, t.clean) > psnr(t.noisy, t.clean) + 1.0);
+}
+
+// Shifted copy of an image: out(x, y) = src(x + dx, y + dy), bilinear, clamped.
+static vv::Image shifted(const vv::Image& src, float dx, float dy) {
+  vv::Image o = src;
+  for (int y = 0; y < src.height; ++y)
+    for (int x = 0; x < src.width; ++x) {
+      const float sx = std::clamp(float(x) + dx, 0.f, float(src.width - 1)), sy = std::clamp(float(y) + dy, 0.f, float(src.height - 1));
+      const int x0 = int(sx), y0 = int(sy), x1 = std::min(x0 + 1, src.width - 1), y1 = std::min(y0 + 1, src.height - 1);
+      const float tx = sx - float(x0), ty = sy - float(y0);
+      for (int c = 0; c < 4; ++c) {
+        const float a = src.at(x0, y0)[c] + (src.at(x1, y0)[c] - src.at(x0, y0)[c]) * tx;
+        const float b = src.at(x0, y1)[c] + (src.at(x1, y1)[c] - src.at(x0, y1)[c]) * tx;
+        o.at(x, y)[c] = a + (b - a) * ty;
+      }
+    }
+  return o;
+}
+static vv::Plane lumaPlane(const vv::Image& img) {
+  vv::Plane l(img.width, img.height, 1);
+  for (size_t i = 0, n = size_t(img.width) * img.height; i < n; ++i)
+    l.v[i] = (img.px[i * 4] + img.px[i * 4 + 1] + img.px[i * 4 + 2]) / 3.f;
+  return l;
+}
+
+TEST(motion_estimation_finds_integer_and_subpixel_shifts) {
+  const vv::Image a = makeTestImage("foliage", 192, 108);
+  for (auto [dx, dy] : std::vector<std::pair<float, float>>{{3.f, -2.f}, {1.4f, 0.6f}, {-6.f, 4.f}}) {
+    const vv::Image b = shifted(a, -dx, -dy);  // content moves by (dx, dy): a(x) = b(x + d)
+    const vv::Plane f = estimateMotion(lumaPlane(a), lumaPlane(b), 3);
+    double ex = 0, ey = 0;
+    int n = 0;
+    for (int y = 30; y < 78; ++y)
+      for (int x = 40; x < 152; ++x) { ex += std::fabs(f.at(x, y)[0] - dx); ey += std::fabs(f.at(x, y)[1] - dy); ++n; }
+    if (!(ex / n < 0.25 && ey / n < 0.25)) std::printf("    shift (%.1f, %.1f): mean error %.3f / %.3f px\n", dx, dy, ex / n, ey / n);
+    CHECK(ex / n < 0.25 && ey / n < 0.25);
+  }
+}
+
+TEST(temporal_beats_spatial_on_static_and_rejects_a_cut) {
+  const vv::Image clean = makeTestImage("weave", 256, 144);
+  NoiseSim sim;
+  sim.shot *= 2.f; sim.read *= 2.f;
+  std::vector<Synth> frames;
+  for (int t = 0; t < 5; ++t) frames.push_back(synthesize(clean, sim, 21u, t));
+  const vv::Plane nr = toRgbPlane(frames[2].noisy), cr = toRgbPlane(frames[2].clean);
+  const NoiseProfile prof = measureProfileStarlet(nr, cr);
+  const PixelSigma ps = measurePixelSigma(nr, cr);
+  std::vector<const vv::Image*> win;
+  for (const Synth& s : frames) win.push_back(&s.noisy);
+  const vv::Image spatial = denoiseSpatial(frames[2].noisy, prof);
+  TemporalDebug dbg;
+  const vv::Image temporal = denoiseTemporal(win, 2, prof, ps, {}, {}, &dbg);
+  CHECK(dbg.meanWeight > 0.7f);  // static: neighbours accepted
+  CHECK(psnr(temporal, frames[2].clean) > psnr(spatial, frames[2].clean) + 1.0);
+  // A cut: every neighbour shows another picture. Nothing of it may leak in.
+  const vv::Image other = makeTestImage("text", 256, 144);
+  std::vector<Synth> cut;
+  for (int t = 0; t < 5; ++t) cut.push_back(synthesize(t == 2 ? clean : other, sim, 21u, t));
+  std::vector<const vv::Image*> cwin;
+  for (const Synth& s : cut) cwin.push_back(&s.noisy);
+  TemporalDebug cdbg;
+  const vv::Image afterCut = denoiseTemporal(cwin, 2, prof, ps, {}, {}, &cdbg);
+  CHECK(cdbg.meanWeight < 0.05f);
+  CHECK(psnr(afterCut, cut[2].clean) > psnr(cut[2].noisy, cut[2].clean));  // no ghost of the text
 }
 
 int main() {

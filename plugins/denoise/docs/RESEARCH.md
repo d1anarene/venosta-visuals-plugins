@@ -313,3 +313,34 @@ view shows correct alignment (static areas cancel). With Lumetri (saturation 0) 
 the neighbour arrives black and white too, so it is at the same stage as the current frame. **The
 temporal Final mode in Premiere is built on this GPU path.** Open: upstream transforms, cuts and edges, export, Mac/Metal (the
 Metal probe has the same protocol fix), Resolve.
+
+## D4 (first pass): temporal candidate T1 (2026-11-13)
+
+Code: `src/core/dn_temporal.*`. Pilot = spatial (a) per frame; coarse-to-fine block matching (3 levels,
+8×8 blocks on a 4 px grid, parabolic sub-pixel); bilinear warp of the noisy neighbours; reliability
+z = (centre − warped)² / expected noise variance of that difference (pixel profile, corrected for
+the interpolation), 5×5 window, w = exp(−6·max(z − 1.25, 0)); weighted average; spatial stage with
+a per-pixel noise-scale map (`denoiseSpatial(..., noiseScale)`) at **post strength 0.5**.
+
+Evaluation: `dn_temporal_eval [w h frames noiseScale seed radius]` on Codex's analytic sequences
+(ACEScct curve, noise ×4, oracle profiles from frame 0). Metrics from `dn_sequence_metrics`.
+
+Held-out (480×270, seed 11, radius 2), spatial (a) → T1:
+
+| Scenario | RMSE | Detail transfer | Flat residual | Temporal residual | Disocclusion |
+| --- | --- | --- | --- | --- | --- |
+| static-detail | 0.0082 → 0.0057 | 0.66 → 0.88 | 0.0036 → 0.0030 | 0.0087 → 0.0053 | — |
+| subpixel-pan | 0.0082 → 0.0064 | 0.65 → 0.82 | 0.0037 → 0.0031 | 0.0075 → 0.0063 | — |
+| moving-occluder | 0.0078 → 0.0062 | 0.61 → 0.78 | 0.0037 → 0.0031 | 0.0071 → 0.0058 | 0.0137 → 0.0112 |
+| hard-cut | 0.0082 → 0.0061 | 0.63 → 0.85 | 0.0039 → 0.0036 | 0.0085 → 0.0055 | — |
+| exposure-step | 0.0074 → 0.0053 | 0.72 → 0.91 | 0.0036 → 0.0033 | 0.0083 → 0.0051 | — |
+
+- **Post strength is the detail / noise control.** At 0 the average alone keeps detail 0.96 with
+  flat residual 0.008; at 0.25: 0.91 / 0.0039; at 0.5: 0.88 / 0.0033; at 1.0: 0.84 / 0.0027 (static).
+  This becomes the user's Detail/Strength control.
+- Radius 3 (7 frames) improves every metric by about 7 % over radius 2.
+- **No ghosting:** the cut and occlusion cases keep lower disocclusion error than spatial-only;
+  unit test: a cut to a different picture gives mean weight < 0.05 and no leakage.
+- Limits: oracle noise profiles (estimation still to integrate: temporal estimate R4 in the same
+  domain); synthetic sequences only; block motion fails on large non-rigid motion (falls back to
+  spatial via the weights, by design); CPU only (GPU port after selection, E6).

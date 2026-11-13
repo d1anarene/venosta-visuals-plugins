@@ -11,7 +11,7 @@ if(NOT TARGET vv_core)
 endif()
 
 # Research phase: CPU core + evaluation harness only (no host plug-in yet).
-add_library(dn_core STATIC src/core/dn_pyramid.cpp src/core/dn_profile.cpp src/core/dn_starlet.cpp src/core/dn_spatial.cpp)
+add_library(dn_core STATIC src/core/dn_pyramid.cpp src/core/dn_profile.cpp src/core/dn_starlet.cpp src/core/dn_spatial.cpp src/core/dn_temporal.cpp)
 target_include_directories(dn_core PUBLIC src/core)
 target_link_libraries(dn_core PUBLIC vv_core)
 set_target_properties(dn_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -30,6 +30,8 @@ add_executable(dn_core_tests tests/core/test_main.cpp)
 target_link_libraries(dn_core_tests PRIVATE dn_eval)
 add_executable(dn_eval_tool tools/dn_eval.cpp)
 target_link_libraries(dn_eval_tool PRIVATE dn_eval)
+add_executable(dn_temporal_eval tools/dn_temporal_eval.cpp)
+target_link_libraries(dn_temporal_eval PRIVATE dn_eval)
 add_executable(dn_sequence_tool tools/dn_sequence.cpp)
 target_link_libraries(dn_sequence_tool PRIVATE dn_eval)
 execute_process(COMMAND git rev-parse --short HEAD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}

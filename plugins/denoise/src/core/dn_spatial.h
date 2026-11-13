@@ -24,6 +24,9 @@ struct SpatialParams {
 
 /** RGBA in, RGBA out (alpha untouched). `profile` must be measured in starlet bands
  *  (measureProfileStarlet or an estimator in the same domain). */
-vv::Image denoiseSpatial(const vv::Image& noisy, const NoiseProfile& profile, const SpatialParams& p = {});
+vv::Image denoiseSpatial(const vv::Image& noisy, const NoiseProfile& profile, const SpatialParams& p = {},
+                         const vv::Plane* noiseScale = nullptr);
+/** noiseScale (optional, 1 channel, frame size): per-pixel factor on the noise std, e.g. after a
+ *  temporal average reduced the noise unevenly. */
 
 }  // namespace dn
