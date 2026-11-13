@@ -12,6 +12,8 @@ Owner decision (2026-11-12): shared engine instead of copying code between plugi
 | OpenFX adapter (DaVinci Resolve): parameters, presets, CPU + CUDA/Metal render, bundle layout incl. Win-arm64ec | `hosts/ofx/`, `cmake/vv_ofx.cmake` | in use (Film Effects) |
 | Metal shader compile helper | `cmake/vv_metal.cmake` | in use |
 | Load tests (`.aex` LoadLibrary, `.ofx` dlopen + identifier check) | `tests/` | in use |
+| Scalar ACEScct transfer curve (no gamut conversion), lossless float RGB PFM interchange | `core/vv/log_transfer.h`, `io/pfm.h` | research benchmark support; explicit domain required |
+| Independent temporal input/profile-action research probes and log checker | [`probes/`](probes/README.md) | OFX CPU / Premiere CPU+Metal compiled locally; actual host verification pending; outside release builds |
 | GPU framework: per-pixel pyramid/blur passes and half floats (C++/CUDA), `vv::gpu::Pyramid` | `gpu/` | in use (Film Effects) |
 | CUDA backend base for the generic passes (`vv_cuda_backend.cuh`), Metal backend (`MetalBackend`, `vv_common.metal`), CPU emulation backend for tests (`vv_gpu_emulation.h`), x-only pyramid | `gpu/cuda/`, `gpu/metal/`, `gpu/` | in use (Lens & Diffusion); Film Effects still uses its own Metal engine |
 | Horizontal-only blur pyramid, synthetic test scenes | `core/vv/blur.h`, `core/vv/scenes.h` | in use |

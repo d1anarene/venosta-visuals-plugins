@@ -1,5 +1,134 @@
 # Denoise — research notes (phase D0)
 
+## Sequence benchmark and probe implementation (2026-11-13)
+
+Implemented the first executable sequence benchmark: static detail, subpixel pan, independently
+moving occluder, hard cut and exposure step; known clean/noisy images, analytic backward motion,
+visibility/disocclusion and separate skin/fabric/foliage/hair/foreground masks. Optional visible
+frame numbers support host tests and are excluded from evaluation masks.
+
+The explicit signal is synthetic linear Rec.709 RGB with independent Gaussian shot/read noise,
+encoded with the ACEScct **scalar curve only**, not AP1 ACEScct or a calibrated camera-log model.
+The export/scorer preserves floats and dataset/source identity; no denoising algorithm was added.
+Usage, metrics and limitations: [SEQUENCE_BENCHMARK.md](SEQUENCE_BENCHMARK.md).
+
+### Measured control run
+
+macOS arm64 / AppleClang 21.0.0, Release CPU; five scenarios × three seeds × 12 frames × five
+controls = **900 per-frame records** at 320×180. Exposure −2 stops, shot variance coefficient
+0.00005, read sigma 0.0005; default pan 0.65/0.25 pixels/frame. Command:
+
+```bash
+build-denoise/dn_sequence_tool benchmark --width 320 --height 180 --frames 12 --seeds 7,19,43 --output /tmp/dn-controls-320.json
+```
+
+Runtime source SHA256 reported by the build:
+`02d1f03981ae73479e95fcc517c2433113deb28de968998933d851dc31a2fd69`.
+These are descriptive means over this small synthetic set, not independent-scene confidence
+intervals or a denoiser ranking. All error units below are encoded RGB.
+
+| Case / control | RGB RMSE | Detail transfer | Pooled flat residual std | Disocclusion RMSE |
+| --- | --- | --- | --- | --- |
+| Static / noisy | 0.004881 | 1.000544 | 0.004647 | unavailable |
+| Static / blur 0.8 | 0.009384 | 0.531195 | 0.001664 | unavailable |
+| Pan / frozen clean | 0.034091 | 0.108444 | 0.015655 | unavailable |
+| Moving occluder / noisy | 0.004781 | 1.000422 | 0.004629 | 0.004970 |
+| Moving occluder / unaligned average | 0.009445 | 0.817470 | 0.003385 | 0.033696 |
+
+The controls demonstrate why lower residual variation alone is insufficient: blur removes
+structure and unaligned averaging trails behind the moving object. Frozen clean output at a hard
+cut has temporal residual RMSE **zero** in the valid within-shot regions while full-frame RMSE is
+0.025649; spatial/detail and cut checks must accompany temporal scores. The clean oracle has zero
+error and unit detail transfer where supported. It is a scoring sanity check, not a candidate.
+
+### Host probes and verification boundary
+
+Separate OpenFX CPU, Premiere CPU and Premiere Metal probes live in
+[`shared/engine/probes`](../../../shared/engine/probes/README.md). They request temporal input,
+display current/neighbour/difference, record requested time/hash/quality/scale and test a
+user-action persisted mean. Production adapters are unchanged; diagnostics never denoise.
+
+All three compile and load locally against actual Adobe 27.0 and pinned OpenFX headers. Contract
+and log-checker tests pass; separate Metal float16/32 pixel tests pass six cases. In restricted
+CTest, Metal device access is explicitly skipped, not counted as a GPU pass. Actual Premiere/
+Resolve input-stage, timing, UI persistence and export tests remain **unperformed**. Windows CI is
+configured, not yet run; Premiere CUDA and OFX GPU probes are not implemented. SDK files remain
+outside the repository. See the probe README for the dated SDK revisions and host matrix.
+
+The next evidence is actual same-stage host captures and real-log calibration, followed by spatial
+candidate comparisons. E0/E1 have an initial synthetic foundation, not a completed held-out camera
+benchmark; D0 remains open until host probes are exercised.
+
+## Review before sequence/probe implementation (2026-11-13)
+
+**Primary target confirmed by the owner:** high-quality camera-log footage with visible sensor
+noise. Detailed experiments and gates: [RESEARCH_PLAN.md](RESEARCH_PLAN.md). Primary literature,
+SDK sources and reference-use constraints: [SOURCES.md](SOURCES.md).
+
+### What actually exists
+
+- CPU opponent transform, exactly reconstructing **decimated** Laplacian pyramid, per-band RGB
+  profiles and spatial/two-frame estimators.
+- Camera-like still-image simulation, Gaussian blur baselines, RGB PSNR and luma SSIM.
+  Shot noise uses a Gaussian approximation and one bilinear Bayer pipeline; this is not a
+  calibrated multi-camera log simulator or a validated low-count Poisson experiment.
+- No denoising kernel, motion estimator, temporal image-sequence harness, temporal quality metric,
+  host probe, production adapter or downloadable Denoise plugin.
+- Current shared Premiere GPU rendering reads only `inFrames[0]`; OFX explicitly disables temporal
+  source/effect access. A temporal interface is not already implemented by the shared engine.
+
+### Corrections and unresolved assumptions
+
+1. `(a-b)/sqrt(2)` exposes noise only with cancelled scene content; its variance is
+   `(Var(a)+Var(b)-2 Cov(a,b))/2`. Equal-variance independent noise gives the familiar single-frame
+   variance. Temporal correlation, fixed patterns, varying exposure, interpolation and imperfect
+   registration require additional treatment. R4 below validates mostly static scenes only.
+2. Four detail bands × RGB × 16 bins over 0–1 plus per-band correlations do not establish support
+   for arbitrary log/HDR or colour crosstalk. The lowpass residual is unmodelled. Orthonormal
+   opponent conversion is not full noise whitening; the 5% flat-patch test verifies covariance
+   propagation on measured samples, not blind generalisation to mixed-colour scenes.
+3. The current report selects populated, trusted bins and prints bands 0–1. It does not report
+   full spatial/exposure coverage, all-band errors or confidence intervals. Good medians can
+   coexist with severe regional errors; unsupported bins must be explicit in the next harness.
+4. A chi-square patch test, an unbiased inverse for arbitrary profile-derived stabilization,
+   guaranteed absence of ghosting, and a universally strongest classical method are **not**
+   established. Candidate choices require comparison and calibration.
+5. Running profile smoothing across rendered frames would depend on render order. Use saved
+   locked profiles or deterministic analysis of declared neighbours; never update saved profile
+   parameters during ordinary rendering.
+6. Premiere CPU layer checkout may return raw source while the current input contains preceding
+   effects. Same-stage centre/neighbour pixels, not just successful fetches, are a blocking probe.
+   Quality/draft signals are not yet verified export detectors. These SDK-guide findings are
+   linked in SOURCES.md; actual host behaviour remains untested.
+
+### Local recheck (2026-11-13)
+
+Source revision: `9979ca4` before this documentation update. macOS arm64, AppleClang 21.0.0,
+Release C++17; CPU only. No Premiere, Resolve, Metal or CUDA test was performed.
+
+```bash
+cmake -S plugins/denoise -B /private/tmp/venosta-denoise-research-build -DCMAKE_BUILD_TYPE=Release
+cmake --build /private/tmp/venosta-denoise-research-build -j 4
+ctest --test-dir /private/tmp/venosta-denoise-research-build --output-on-failure
+/private/tmp/venosta-denoise-research-build/dn_core_tests
+/private/tmp/venosta-denoise-research-build/dn_eval_tool temporal 960 540
+/private/tmp/venosta-denoise-research-build/dn_eval_tool baseline 960 540
+```
+
+- Build and CTest pass; **12 named tests, 249 checks, 0 failures** in the current source. This
+  supersedes the earlier progress note's count of 14 tests; no new implementation tests added.
+- Medium-noise baseline reproduced: weave noisy 24.24 dB / 0.9085 SSIM versus Gaussian 0.8
+  19.33 / 0.4846; text 31.49 / 0.8968 versus 19.11 / 0.8466; synthetic skin 29.76 / 0.7386
+  versus 33.75 / 0.9231. These are measurement/blur results, not denoiser results.
+- The temporal report's selected-bin worst estimate/truth ratio is **0.31**; worst per-band
+  channel-correlation error is **0.34**. Those failures remain despite reasonable medians.
+  Reporting only medians would overstate readiness. No new full-motion/log benchmark was run.
+
+## Earlier D0/D1 record (2026-11-12)
+
+The observations below retain their original experimental context. Conclusions are limited by
+the corrections above; future-method descriptions are plans, not implemented capabilities.
+
 ## R1 Temporal frame access
 
 | Host / path | Finding (2026-11-12) | Source | Status |

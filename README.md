@@ -21,7 +21,7 @@ delivery. More plugins (and possibly other Adobe apps) will follow.
 | [Lens & Diffusion](plugins/lens-diffusion/README.md) | Optical finishing in one effect: **diffusion filter** (mist to black-mist look), **vignette**, **chromatic aberration** and **anamorphic streaks**, for Premiere Pro and DaVinci Resolve. | **Host-tested on macOS** — user-tested in Premiere Pro 27 and DaVinci Resolve on Apple Silicon; CPU tests and Metal comparison pass in CI. Windows (including Windows on Arm) and Linux host operation remain unverified |
 | [Exposure & False Color](plugins/exposure-false-color/README.md) | Exposure **viewing aid**: false color in stops from middle grey (with legend), zebras, clipping and a split view — switch it off before export. Premiere Pro and DaVinci Resolve. | **Host-tested on macOS** — user-tested in Premiere Pro 27 and DaVinci Resolve on Apple Silicon; CPU tests and Metal comparison pass in CI. Windows (including Windows on Arm) and Linux host operation remain unverified |
 | [Retro](plugins/retro/README.md) | Analog video look in one effect: **color bleed** (soft luma, ringing, smeared and shifted chroma), **tape** (line jitter, tracking band, dropouts, head switching), **noise** and **CRT** (scanlines, RGB mask, screen curvature). Premiere Pro and DaVinci Resolve. | **Host-tested on macOS** — user-tested in Premiere Pro 27 and DaVinci Resolve on Apple Silicon; CPU tests and Metal comparison pass in CI. Windows (including Windows on Arm) and Linux host operation remain unverified |
-| [Denoise](plugins/denoise/README.md) | Detail-preserving video noise reduction: measured noise profile, motion-compensated temporal + spatial filtering, fast Preview mode for editing and full Final mode for rendering. | **Planning / research** — no build yet |
+| [Denoise](plugins/denoise/README.md) | Planned detail-preserving video noise reduction, focused first on high-quality camera-log footage, with temporal + spatial filtering and Preview / Final modes. | **Research benchmark + host probes** — moving log-curve fixtures, detail/motion metrics and locally compiled research probes; no denoiser or actual host verification yet |
 
 Each plugin folder has its own README with installation steps, usage and known limitations.
 Planned next: Retro, Denoise and Retime — see
@@ -70,6 +70,14 @@ The plugins on the shared engine (Lens & Diffusion, Exposure & False Color, Retr
 
 ```bash
 cd plugins/retro && cmake -S . -B build && cmake --build build && ctest --test-dir build
+```
+
+Denoise's research tools and CPU measurement tests (not a host plugin yet):
+
+```bash
+cmake -S plugins/denoise -B build-denoise -DCMAKE_BUILD_TYPE=Release
+cmake --build build-denoise --config Release --parallel
+ctest --test-dir build-denoise -C Release --output-on-failure
 ```
 
 Build the DaVinci Resolve (OpenFX) plug-in (any OS, no Adobe SDK needed):
