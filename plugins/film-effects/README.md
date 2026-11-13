@@ -1,8 +1,10 @@
-# Film Effects (Premiere Pro)
+# Film Effects — free film finishing effects
 
-Native Premiere Pro video effects with three film-finishing tools — **Bloom**, **Halation** and
-**Film Grain** — made to sit after Lumetri Color on a clip, or on an adjustment layer above your
-graded timeline.
+**Free film finishing effects for Premiere Pro and DaVinci Resolve:** **Bloom**, **Halation**,
+**Film Grain**, and optional **Film Gate** effects (weave, flicker, dust, scratches, and gate edges)
+in one panel. Add highlight glow, warm halation, and grain to your existing grade, with each tool
+independently adjustable. In Premiere, place it after Lumetri Color on a clip or on an adjustment
+layer above your graded timeline.
 
 One effect is installed under **Venosta Visuals**: **Film Effects** — every tool in one panel,
 each with its own on/off switch, plus presets. (Until v1.0.11 there were also standalone Film

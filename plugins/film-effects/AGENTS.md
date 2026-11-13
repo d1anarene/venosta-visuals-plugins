@@ -6,6 +6,17 @@
 
 ## 0. Mission and scope
 
+### Current product scope (owner decision, 2026-11-13)
+
+Describe Film Effects as **free film finishing effects** for Premiere Pro and DaVinci Resolve:
+Bloom, Halation, Film Grain, and optional Film Gate in one panel, applied to an existing grade.
+Keep development focused on the current tools: image quality, usability, performance, and
+reliability. Film-stock models, negative/print pipelines, camera LUT libraries, and printer-light
+controls are outside the current scope. This decision and the shipped one-panel design supersede
+earlier plans below for standalone effects and the original exclusion of Film Gate.
+
+### Original mission
+
 Build a **real, native, installable Premiere Pro video-effects plugin** that gives a colorist three film-finishing tools: **Bloom, Halation, and Film Grain**. The visual result should be competitive with professional film-finishing plugins, but the product is **not** a Dehancer clone and must not depend on or reproduce proprietary Dehancer technology, assets, names, interface, or algorithms.
 
 The user's workflow is to grade individual clips with **Lumetri Color**, then apply a consistent stylistic finishing effect to those clips or, preferably, an **adjustment layer above them**. Film Effects should be the finishing stage: **Lumetri -> Film Effects** when the effects are arranged in that order. It must process the actual rendered Premiere image, respect all clips below it, and work in timeline playback and final exports.

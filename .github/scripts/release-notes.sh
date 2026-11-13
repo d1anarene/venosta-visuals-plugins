@@ -35,7 +35,7 @@ Provided "as is", without any warranty. Keep backups of your projects.
 Effects appear under **Video Effects → Venosta Visuals** in Premiere and under **OpenFX → Venosta Visuals** in Resolve.
 
 ### Film Effects
-Bloom, Halation, Film Grain and Film Gate (weave, flicker, dust, scratches, gate edge) in one effect. The former standalone Film Bloom / Halation / Grain are part of it and are removed on upgrade.
+Free film finishing effects: Bloom, Halation, Film Grain and optional Film Gate (weave, flicker, dust, scratches, gate edge) in one panel, to finish your existing grade. The former standalone Film Bloom / Halation / Grain are part of it and are removed on upgrade.
 
 $(effect_table FilmEffects "Apple Silicon + Intel (Metal), macOS 26+")
 
