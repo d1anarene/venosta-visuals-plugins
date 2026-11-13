@@ -41,26 +41,26 @@ $(effect_table FilmEffects "Apple Silicon + Intel (Metal), macOS 26+")
 
 Status: user-tested in Premiere Pro 27 and in DaVinci Resolve on macOS (Apple Silicon). Windows (Premiere and Resolve), Windows on Arm and Linux not yet tested in the programs. CPU tests and Metal-vs-CPU comparisons pass in CI.
 
-### Lens & Diffusion — experimental
+### Lens & Diffusion
 Diffusion filter (mist to black-mist look), vignette, chromatic aberration, anamorphic streaks, presets.
 
 $(effect_table LensDiffusion "Apple Silicon + Intel (Metal), macOS 13+")
 
-Status: built, loaded and installer-tested in CI, GPU checked against the CPU reference; **not yet tested inside Premiere or Resolve**.
+Status: user-tested in Premiere Pro 27 and in DaVinci Resolve on macOS (Apple Silicon). Windows (Premiere and Resolve), Windows on Arm and Linux not yet tested in the programs. CPU tests and Metal-vs-CPU comparisons pass in CI.
 
-### Exposure & False Color — experimental (viewing aid)
+### Exposure & False Color (viewing aid)
 False color in stops from middle grey (with legend), zebras, clipping, split view. **Turn it off before exporting** — an effect cannot know it is being exported.
 
 $(effect_table ExposureFalseColor "Apple Silicon + Intel (Metal), macOS 13+")
 
-Status: built, loaded and installer-tested in CI, GPU checked against the CPU reference; **not yet tested inside Premiere or Resolve**.
+Status: user-tested in Premiere Pro 27 and in DaVinci Resolve on macOS (Apple Silicon). Windows (Premiere and Resolve), Windows on Arm and Linux not yet tested in the programs. CPU tests and Metal-vs-CPU comparisons pass in CI.
 
-### Retro — experimental
+### Retro
 Analog video look: color bleed (soft luma, ringing, smeared and shifted chroma), tape (line jitter, tracking band, dropouts, head switching), noise, CRT (scanlines, aperture grille / shadow mask, curvature). Presets: Home Video Tape, Worn Tape, Broadcast 80s, CRT Monitor, Subtle Analog.
 
 $(effect_table Retro "Apple Silicon + Intel (Metal), macOS 13+")
 
-Status: built, loaded and installer-tested in CI, GPU checked against the CPU reference; **not yet tested inside Premiere or Resolve**.
+Status: user-tested in Premiere Pro 27 and in DaVinci Resolve on macOS (Apple Silicon). Windows (Premiere and Resolve), Windows on Arm and Linux not yet tested in the programs. CPU tests and Metal-vs-CPU comparisons pass in CI.
 
 ### Track Range Exporter
 Every clip on a guide track becomes its own Media Encoder job, rendering the full graded sequence for exactly that clip's range. Double-click a .ccx to install it with Creative Cloud Desktop (uninstall: Creative Cloud Desktop → Plugins → Manage Plugins); in Premiere open Window → UXP Plugins → Track Range Exporter.
