@@ -4,14 +4,14 @@ Planned video noise reduction that preserves detail, focused first on **high-qua
 footage with visible sensor noise**. The goal is natural skin, fine texture and stable motion,
 with a fast **Preview** mode for editing and a full **Final** mode for rendering.
 
-> **Status: executable research benchmark and host probes.** Noise simulation/profiling, moving
-> test sequences and detail/motion scoring exist. Research probes compile locally; no actual host
-> testing has been performed. There is no denoising algorithm or production Denoise build yet.
-> Free and without warranty — see the
-> [root README](../../README.md#️-no-guarantee).
+> **Status: research.** Noise model and estimators, a spatial filter and a motion-compensated
+> temporal filter exist and are measured against ground truth (docs/RESEARCH.md). A slow CPU
+> research prototype effect is built in CI for testing only (not released, untested in hosts).
+> Premiere on Windows delivers neighbour frames on the CUDA GPU path (host test 2026-11-13).
+> Free and without warranty — see the [root README](../../README.md#️-no-guarantee).
 
-Current work: validate the benchmark on real log footage and exercise the temporal probes in both
-hosts, then compare filtering methods before selecting a design.
+Current work: multi-frame dependency protocol (probe build 3), GPU port of the selected filters,
+validation on real log footage.
 
 - [Research and validation plan](docs/RESEARCH_PLAN.md) — experiments, comparisons and gates
 - [Sequence benchmark](docs/SEQUENCE_BENCHMARK.md) — executable controls, float export and scoring
