@@ -10,11 +10,6 @@ on:
       ADBE_SDK_TOKEN: { required: false }
 permissions:
   contents: read
-# Pushes to dev: a newer push supersedes older runs. Never cancels on main (release builds call this
-# workflow; the group name includes the plugin so plugins do not cancel each other).
-concurrency:
-  group: retro-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   premiere:
     uses: ./.github/workflows/vv-premiere.yml
