@@ -101,7 +101,29 @@ std::vector<Block> blocks(const vv::Plane& band, const vv::Plane& low) {
 struct Calib {
   float q10, q95, truncMean, spread;  // spread: 50 % / 10 % quantile
 };
-std::array<Calib, kBands> computeCalibration() {
+// Bands of `signal` in a domain: Laplacian pyramid, a trous (starlet) or the pixels themselves.
+std::vector<vv::Plane> bandsOf(Domain d, const vv::Plane& signal) {
+  std::vector<vv::Plane> out;
+  if (d == Domain::Pixel) { out.push_back(signal); return out; }
+  if (d == Domain::Starlet) return starletDecompose(signal, kBands).bands;
+  Pyramid p = decompose(signal, kBands);
+  for (int b = 0; b + 1 < int(p.bands.size()) && b < kBands; ++b) out.push_back(std::move(p.bands[size_t(b)]));
+  return out;
+}
+// The lowpass used to bin band b by value, in the same domain.
+std::vector<vv::Plane> lowsOf(Domain d, const vv::Plane& values, int count) {
+  std::vector<vv::Plane> out;
+  if (d == Domain::Pixel) { out.push_back(values); return out; }
+  if (d == Domain::Starlet) {
+    Starlet s = starletDecompose(values, kBands);
+    for (int b = 0; b < count; ++b) out.push_back(std::move(s.smooth[size_t(b)]));
+    return out;
+  }
+  for (int b = 0; b < count; ++b) out.push_back(bandLowpass(values, b));
+  return out;
+}
+
+std::array<Calib, kBands> computeCalibration(Domain d) {
   std::array<Calib, kBands> cal{};
   vv::Plane noise(512, 512, 3);
   for (int y = 0; y < 512; ++y)
@@ -111,9 +133,9 @@ std::array<Calib, kBands> computeCalibration() {
         const float u1 = (float(h1 >> 8) + 0.5f) / 16777216.f, u2 = float(h2 >> 8) / 16777216.f;
         noise.at(x, y)[c] = std::sqrt(-2.f * std::log(u1)) * std::cos(6.2831853f * u2);
       }
-  const Pyramid p = decompose(noise, kBands);
-  for (int b = 0; b < kBands; ++b) {
-    const vv::Plane& band = p.bands[size_t(b)];
+  const std::vector<vv::Plane> bands = bandsOf(d, noise);
+  for (int b = 0; b < int(bands.size()); ++b) {
+    const vv::Plane& band = bands[size_t(b)];
     std::vector<float> v;
     double total = 0;
     for (const Block& bl : blocks(band, band))
@@ -132,9 +154,11 @@ std::array<Calib, kBands> computeCalibration() {
   }
   return cal;
 }
-const Calib* calibration() {
-  static const std::array<Calib, kBands> cal = computeCalibration();  // thread-safe init
-  return cal.data();
+const Calib* calibration(Domain d) {
+  static const std::array<Calib, kBands> lap = computeCalibration(Domain::Laplacian);  // thread-safe init
+  static const std::array<Calib, kBands> sta = computeCalibration(Domain::Starlet);
+  static const std::array<Calib, kBands> pix = computeCalibration(Domain::Pixel);
+  return d == Domain::Starlet ? sta.data() : d == Domain::Pixel ? pix.data() : lap.data();
 }
 
 float centre(int k) { return (float(k) + 0.5f) / kBins; }
@@ -288,12 +312,13 @@ NoiseProfile measureProfile(const vv::Plane& noisy, const vv::Plane& clean) {
 namespace {
 // Shared by the spatial and temporal estimators: band coefficients come from `signal`, the value
 // used for binning from `values`.
-NoiseProfile estimateImpl(const vv::Plane& signal, const vv::Plane& values, EstimateStats* stats) {
-  const Calib* cal = calibration();
-  const Pyramid p = decompose(signal, kBands);
+NoiseProfile estimateImpl(const vv::Plane& signal, const vv::Plane& values, EstimateStats* stats, Domain domain) {
+  const Calib* cal = calibration(domain);
+  const std::vector<vv::Plane> bands = bandsOf(domain, signal);
+  const std::vector<vv::Plane> lows = lowsOf(domain, values, int(bands.size()));
   NoiseProfile prof;
-  for (int b = 0; b < kBands && b + 1 < int(p.bands.size()); ++b) {
-    const std::vector<Block> bl = blocks(p.bands[size_t(b)], bandLowpass(values, b));
+  for (int b = 0; b < kBands && b < int(bands.size()); ++b) {
+    const std::vector<Block> bl = blocks(bands[size_t(b)], lows[size_t(b)]);
     for (int c = 0; c < 3; ++c) {
       // Start: low quantile per bin (texture only adds variance).
       std::vector<float> perBin[kBins], all;
@@ -379,9 +404,11 @@ NoiseProfile estimateImpl(const vv::Plane& signal, const vv::Plane& values, Esti
 
 }  // namespace
 
-NoiseProfile estimateProfile(const vv::Plane& noisy, EstimateStats* stats) { return estimateImpl(noisy, noisy, stats); }
+NoiseProfile estimateProfile(const vv::Plane& noisy, EstimateStats* stats, Domain domain) {
+  return estimateImpl(noisy, noisy, stats, domain);
+}
 
-NoiseProfile estimateProfileTemporal(const vv::Plane& a, const vv::Plane& b, EstimateStats* stats) {
+NoiseProfile estimateProfileTemporal(const vv::Plane& a, const vv::Plane& b, EstimateStats* stats, Domain domain) {
   // (a - b) / sqrt2 has the noise of one frame wherever the scene is static; the picture itself
   // cancels, so texture no longer looks like noise. Moving areas look like strong "texture" and are
   // rejected by the same robust statistics. Values for binning: (a + b) / 2.
@@ -390,7 +417,7 @@ NoiseProfile estimateProfileTemporal(const vv::Plane& a, const vv::Plane& b, Est
     d.v[i] = (a.v[i] - b.v[i]) * 0.70710678f;
     m.v[i] = (a.v[i] + b.v[i]) * 0.5f;
   }
-  return estimateImpl(d, m, stats);
+  return estimateImpl(d, m, stats, domain);
 }
 
 }  // namespace dn

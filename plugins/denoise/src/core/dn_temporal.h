@@ -8,7 +8,8 @@
 //  3. Reliability per pixel: z = mean over a 5x5 window and RGB of (centre - warped neighbour)^2 /
 //     expected noise variance of that difference (pixel noise from the profile, reduced by the
 //     bilinear interpolation of the warped frame). z ~ 1 when aligned; occlusions, cuts and
-//     misalignment give z >> 1. Weight w = exp(-gain * max(z - slack, 0)).
+//     misalignment give z >> 1. z is self-calibrated once per frame from the best-aligned
+//     neighbour (median over its aligned pixels; robust to a profile that is somewhat off). Weight w = exp(-gain * max(z / g - slack, 0)).
 //  4. Fusion: (centre + sum w * warped) / (1 + sum w); the noise reduction it achieved per pixel is
 //     passed to the spatial stage as a noise scale map.
 #pragma once
@@ -27,6 +28,8 @@ struct PixelSigma {
 };
 /** Ground truth from a noisy/clean pair (RGB planes), binned by the clean value. */
 PixelSigma measurePixelSigma(const vv::Plane& noisyRgb, const vv::Plane& cleanRgb);
+/** From a profile estimated in Domain::Pixel (band 0). */
+PixelSigma pixelSigmaFrom(const NoiseProfile& pixelDomainProfile);
 
 struct TemporalParams {
   float slack = 1.25f;  // z below this counts as aligned
@@ -37,6 +40,7 @@ struct TemporalParams {
 
 struct TemporalDebug {
   float meanWeight = 0;  // mean neighbour weight (0..1), averaged over neighbours and pixels
+  float zScale = 1;      // self-calibration factor of the reliability test (1 = profile exact)
 };
 
 /** frames: the window (any order of time, centre given by `centre`); all the same size.

@@ -69,6 +69,13 @@ PixelSigma measurePixelSigma(const vv::Plane& noisy, const vv::Plane& clean) {
   return ps;
 }
 
+PixelSigma pixelSigmaFrom(const NoiseProfile& p) {
+  PixelSigma ps;
+  for (int c = 0; c < 3; ++c)
+    for (int k = 0; k < kBins; ++k) ps.sigma[c][k] = p.sigma[0][c][k];
+  return ps;
+}
+
 vv::Plane estimateMotion(const vv::Plane& from, const vv::Plane& to, int radius) {
   constexpr int kLevels = 3, kStep = 4;
   std::vector<vv::Plane> pf{from}, pt{to};
@@ -149,6 +156,11 @@ vv::Image denoiseTemporal(const std::vector<const vv::Image*>& frames, int centr
   }
   double weightAcc = 0;
   int neighbours = 0;
+  struct Neighbour {
+    vv::Plane warped, interp, z;
+    float alignedFraction = 0, medianZ = 1;
+  };
+  std::vector<Neighbour> nbs;
   for (size_t f = 0; f < frames.size(); ++f) {
     if (int(f) == centre) continue;
     const vv::Image& nb = *frames[f];
@@ -177,16 +189,43 @@ vv::Image denoiseTemporal(const std::vector<const vv::Image*>& frames, int centr
         z.at(x, y)[0] = e / 3.f;
       }
     });
-    const vv::Plane zs = vv::gaussianBlurDirect(z, 1.2f);  // ~5x5 window
-    for (size_t i = 0, n = size_t(w) * h; i < n; ++i) {
-      const float wt = std::exp(-tp.gain * std::max(zs.v[i] - tp.slack, 0.f));
-      for (int k = 0; k < 3; ++k) sum.v[i * 3 + k] += wt * warped.v[i * 3 + k];
+    Neighbour n;
+    n.warped = std::move(warped);
+    n.interp = std::move(interp);
+    n.z = vv::gaussianBlurDirect(z, 1.2f);  // ~5x5 window
+    std::vector<float> cand;
+    for (size_t i = 0; i < n.z.v.size(); i += 4)
+      if (n.z.v[i] < 2.5f) cand.push_back(n.z.v[i]);
+    n.alignedFraction = float(cand.size()) / float((n.z.v.size() + 3) / 4);
+    if (!cand.empty()) {
+      std::nth_element(cand.begin(), cand.begin() + long(cand.size() / 2), cand.end());
+      n.medianZ = cand[cand.size() / 2];
+    }
+    nbs.push_back(std::move(n));
+  }
+  // Self-calibration of the reliability test: the noise profile is the same for every neighbour,
+  // so it is calibrated once, from the best-aligned neighbour, if at least 40 % of its pixels look
+  // aligned (z < 2.5). With an exact profile the median of z there is about kMedianZ (measured on
+  // static synthetic sequences); clamped to [0.8, 2].
+  constexpr float kMedianZ = 0.94f;
+  float g = 1.f;
+  {
+    const Neighbour* best = nullptr;
+    for (const Neighbour& n : nbs)
+      if (!best || n.alignedFraction > best->alignedFraction) best = &n;
+    if (best && best->alignedFraction >= 0.4f) g = std::clamp(best->medianZ / kMedianZ, 0.8f, 2.f);
+  }
+  for (const Neighbour& n : nbs) {
+    for (size_t i = 0, m = size_t(w) * h; i < m; ++i) {
+      const float wt = std::exp(-tp.gain * std::max(n.z.v[i] / g - tp.slack, 0.f));
+      for (int k = 0; k < 3; ++k) sum.v[i * 3 + k] += wt * n.warped.v[i * 3 + k];
       wsum.v[i] += wt;
-      wsq.v[i] += wt * wt * interp.v[i];
+      wsq.v[i] += wt * wt * n.interp.v[i];
       weightAcc += wt;
     }
     ++neighbours;
   }
+  if (dbg) dbg->zScale = g;
   vv::Image fused = c;
   vv::Plane scale(w, h, 1);
   for (size_t i = 0, n = size_t(w) * h; i < n; ++i) {

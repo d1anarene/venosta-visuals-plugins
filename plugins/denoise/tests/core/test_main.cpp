@@ -368,6 +368,14 @@ TEST(temporal_beats_spatial_on_static_and_rejects_a_cut) {
   TemporalDebug dbg;
   const vv::Image temporal = denoiseTemporal(win, 2, prof, ps, {}, {}, &dbg);
   CHECK(dbg.meanWeight > 0.7f);  // static: neighbours accepted
+  // A pixel profile 30 % too low would make every neighbour look misaligned; the self-calibration
+  // of the reliability test keeps them.
+  PixelSigma low = ps;
+  for (auto& row : low.sigma)
+    for (float& v : row) v *= 0.7f;
+  TemporalDebug ldbg;
+  (void)denoiseTemporal(win, 2, prof, low, {}, {}, &ldbg);
+  CHECK(ldbg.meanWeight > 0.7f && ldbg.zScale > 1.5f);
   CHECK(psnr(temporal, frames[2].clean) > psnr(spatial, frames[2].clean) + 1.0);
   // A cut: every neighbour shows another picture. Nothing of it may leak in.
   const vv::Image other = makeTestImage("text", 256, 144);

@@ -344,3 +344,18 @@ Held-out (480×270, seed 11, radius 2), spatial (a) → T1:
 - Limits: oracle noise profiles (estimation still to integrate: temporal estimate R4 in the same
   domain); synthetic sequences only; block motion fails on large non-rigid motion (falls back to
   spatial via the weights, by design); CPU only (GPU port after selection, E6).
+
+### D4: estimated instead of oracle profiles; self-calibrated reliability test
+
+The estimator is now generic over the domain (`Domain::Laplacian | Starlet | Pixel`, separate white-
+noise calibrations). End to end with **estimated** profiles (two-frame temporal estimate from frames
+0/1 in the starlet domain for the spatial stages, pixel domain for the reliability test):
+
+- The reliability test was very sensitive to an underestimated pixel profile: about 15 % too low
+  dropped the mean neighbour weight from 0.9 to 0.4, and the result fell back towards spatial-only.
+- Fix: self-calibration once per frame from the best-aligned neighbour (median z over pixels with
+  z < 2.5, only if ≥ 40 % qualify; normalised by the median for an exact profile, 0.94; clamped
+  0.8–2). Per-neighbour calibration was polluted across cuts; one calibration per frame is not.
+- Held-out (480×270, seed 11): oracle results unchanged (calibration ≈ 1). Estimated profiles are
+  within 5–13 % of oracle RMSE, weights 0.73–0.89, detail transfer 0.82–0.94. Unit test: a pixel
+  profile 30 % too low keeps weight > 0.7 (scale > 1.5).

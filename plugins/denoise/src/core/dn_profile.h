@@ -19,6 +19,10 @@ namespace dn {
 constexpr int kBands = 5;  // finest five bands
 constexpr int kBins = 16;  // encoded value bins over 0..1 (values outside use the end bins)
 
+/** Where a profile's 'bands' live: Laplacian pyramid (dn_pyramid.h), a trous bands (dn_starlet.h,
+ *  used by the denoiser) or the pixels themselves (band 0 only). */
+enum class Domain { Laplacian, Starlet, Pixel };
+
 struct NoiseProfile {
   float sigma[kBands][3][kBins] = {};  // RGB channel noise std per band and value bin
   float corr[kBands][3] = {};          // channel correlation per band: RG, RB, GB
@@ -50,10 +54,11 @@ struct EstimateStats {
 };
 
 /** Blind estimate from a noisy frame alone (see dn_profile.cpp for the method). */
-NoiseProfile estimateProfile(const vv::Plane& noisyRgb, EstimateStats* stats = nullptr);
+NoiseProfile estimateProfile(const vv::Plane& noisyRgb, EstimateStats* stats = nullptr, Domain domain = Domain::Laplacian);
 
 /** Temporal estimate from two frames of the same shot (consecutive, or motion-compensated):
  *  static areas give the noise directly, independent of texture; moving areas are rejected. */
-NoiseProfile estimateProfileTemporal(const vv::Plane& frameA, const vv::Plane& frameB, EstimateStats* stats = nullptr);
+NoiseProfile estimateProfileTemporal(const vv::Plane& frameA, const vv::Plane& frameB, EstimateStats* stats = nullptr,
+                                     Domain domain = Domain::Laplacian);
 
 }  // namespace dn
