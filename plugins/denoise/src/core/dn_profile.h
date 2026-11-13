@@ -40,6 +40,10 @@ vv::Plane toRgbPlane(const vv::Image& img);
  *  the clean value of that channel. Bins without samples are filled from their neighbours. */
 NoiseProfile measureProfile(const vv::Plane& noisyRgb, const vv::Plane& cleanRgb);
 
+/** Ground truth in the bands of the a trous transform (dn_starlet.h), binned by the clean
+ *  starlet lowpass below each band: the profile the spatial denoiser consumes. */
+NoiseProfile measureProfileStarlet(const vv::Plane& noisyRgb, const vv::Plane& cleanRgb);
+
 struct EstimateStats {
   int blocks[kBands][3][kBins] = {};
   bool binMeasured[kBands][3][kBins] = {};

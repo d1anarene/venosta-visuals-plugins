@@ -11,7 +11,7 @@ if(NOT TARGET vv_core)
 endif()
 
 # Research phase: CPU core + evaluation harness only (no host plug-in yet).
-add_library(dn_core STATIC src/core/dn_pyramid.cpp src/core/dn_profile.cpp)
+add_library(dn_core STATIC src/core/dn_pyramid.cpp src/core/dn_profile.cpp src/core/dn_starlet.cpp src/core/dn_spatial.cpp)
 target_include_directories(dn_core PUBLIC src/core)
 target_link_libraries(dn_core PUBLIC vv_core)
 set_target_properties(dn_core PROPERTIES POSITION_INDEPENDENT_CODE ON)

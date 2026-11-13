@@ -27,6 +27,7 @@
 
 #include "dn_color.h"
 #include "dn_pyramid.h"
+#include "dn_starlet.h"
 
 namespace dn {
 namespace {
@@ -201,6 +202,51 @@ vv::Image fromOpponent(const vv::Plane& opp, const vv::Image& alphaFrom) {
     img.px[i * 4] = c.x; img.px[i * 4 + 1] = c.y; img.px[i * 4 + 2] = c.z; img.px[i * 4 + 3] = alphaFrom.px[i * 4 + 3];
   }
   return img;
+}
+
+namespace {
+// Shared by both ground-truth measurements: noise bands, and the lowpass used to bin each band.
+NoiseProfile measureFromBands(const std::vector<const vv::Plane*>& bands, const std::vector<const vv::Plane*>& lows) {
+  NoiseProfile prof;
+  for (int b = 0; b < kBands && b < int(bands.size()); ++b) {
+    const vv::Plane& band = *bands[size_t(b)];
+    const vv::Plane& low = *lows[size_t(b)];
+    double s2[3][kBins] = {}, sx[3] = {}, sq[3] = {};
+    long n[3][kBins] = {};
+    for (int y = 0; y < band.height; ++y)
+      for (int x = 0; x < band.width; ++x) {
+        const float* q = band.at(x, y);
+        for (int c = 0; c < 3; ++c) {
+          const int k = binOf(low.at(x, y)[c]);
+          s2[c][k] += double(q[c]) * q[c]; ++n[c][k]; sq[c] += double(q[c]) * q[c];
+        }
+        sx[0] += double(q[0]) * q[1]; sx[1] += double(q[0]) * q[2]; sx[2] += double(q[1]) * q[2];
+      }
+    for (int c = 0; c < 3; ++c) {
+      bool ok[kBins];
+      for (int k = 0; k < kBins; ++k) {
+        ok[k] = n[c][k] >= 64;
+        prof.sigma[b][c][k] = ok[k] ? float(std::sqrt(s2[c][k] / double(n[c][k]))) : 0.f;
+      }
+      fillRow(prof.sigma[b][c], ok, 0.f);
+    }
+    const int pairs[3][2] = {{0, 1}, {0, 2}, {1, 2}};
+    for (int k = 0; k < 3; ++k) {
+      const double d = std::sqrt(sq[pairs[k][0]] * sq[pairs[k][1]]);
+      prof.corr[b][k] = d > 0 ? float(sx[k] / d) : 0.f;
+    }
+  }
+  return prof;
+}
+}  // namespace
+
+NoiseProfile measureProfileStarlet(const vv::Plane& noisy, const vv::Plane& clean) {
+  vv::Plane diff = noisy;
+  for (size_t i = 0; i < diff.v.size(); ++i) diff.v[i] -= clean.v[i];
+  const Starlet d = starletDecompose(diff, kBands), c = starletDecompose(clean, kBands);
+  std::vector<const vv::Plane*> bands, lows;
+  for (int b = 0; b < kBands; ++b) { bands.push_back(&d.bands[size_t(b)]); lows.push_back(&c.smooth[size_t(b)]); }
+  return measureFromBands(bands, lows);
 }
 
 NoiseProfile measureProfile(const vv::Plane& noisy, const vv::Plane& clean) {

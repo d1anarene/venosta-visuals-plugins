@@ -314,8 +314,10 @@ DECLARE_GPUFILTER_ENTRY(PrGPUFilterModule<Probe>)
 
 extern "C" DllExport PF_Err PluginDataEntryFunction2(PF_PluginDataPtr p, PF_PluginDataCB2 cb, SPBasicSuite*, const char*,
                                                      const char*) {
-  return PF_REGISTER_EFFECT_EXT2(p, cb, kName, kMatch, "Venosta Visuals Research", AE_RESERVED_INFO, "EffectMain",
-                                 "https://venostavisuals.com");
+  PF_Err result = PF_Err_INVALID_CALLBACK;  // the SDK macro assigns to a variable named `result`
+  result = PF_REGISTER_EFFECT_EXT2(p, cb, kName, kMatch, "Venosta Visuals Research", AE_RESERVED_INFO, "EffectMain",
+                                   "https://venostavisuals.com");
+  return result;
 }
 
 extern "C" DllExport PF_Err EffectMain(PF_Cmd cmd, PF_InData* in_data, PF_OutData* out_data, PF_ParamDef* params[],

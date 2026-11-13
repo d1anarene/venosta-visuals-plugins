@@ -13,6 +13,7 @@
 
 #include "dn_metrics.h"
 #include "dn_profile.h"
+#include "dn_spatial.h"
 #include "dn_synth.h"
 #include "dn_testimages.h"
 #include "vv/blur.h"
@@ -107,6 +108,52 @@ int baselineReport(int w, int h) {
   return 0;
 }
 
+// Spatial candidate (a) with the oracle profile (noise known exactly): separates filter quality
+// from estimation error. Compared with the noisy input and the better of two Gaussian blurs.
+int spatialReport(int w, int h, float luma, float chroma, float window, unsigned seed, bool quiet) {
+  if (!quiet) {
+    std::printf("PSNR dB / SSIM vs ground truth (spatial a, oracle profile, luma %.2f chroma %.2f window %.2f seed %u)\n", luma, chroma, window, seed);
+    std::printf("%-13s %-15s | %-15s | %-15s | %-15s | gain vs best\n", "image", "noise", "noisy", "best gauss", "spatial a");
+  }
+  double sumGain = 0, worstVsNoisy = 1e9, sumSsimVsNoisy = 0, worstSsimVsNoisy = 1e9;
+  int n = 0;
+  for (const std::string& name : testImageNames()) {
+    const vv::Image src = makeTestImage(name, w, h);
+    for (const Setting& st : settings()) {
+      if (std::string(st.name) == "low" || std::string(st.name) == "medium, no bayer") continue;
+      const Synth s = synthesize(src, st.sim, seed);
+      const double pn = psnr(s.noisy, s.clean), sn = ssim(s.noisy, s.clean);
+      double pg = -1, sg = 0;
+      for (float sig : {0.8f, 1.5f}) {
+        vv::Plane pl(w, h, 4);
+        pl.v = s.noisy.px;
+        vv::Image o = s.noisy;
+        o.px = vv::gaussianBlurDirect(pl, sig).v;
+        const double q = psnr(o, s.clean);
+        if (q > pg) { pg = q; sg = ssim(o, s.clean); }
+      }
+      const NoiseProfile prof = measureProfileStarlet(toRgbPlane(s.noisy), toRgbPlane(s.clean));
+      SpatialParams sp;
+      sp.lumaStrength = luma;
+      sp.chromaStrength = chroma;
+      sp.window = window;
+      const vv::Image d = denoiseSpatial(s.noisy, prof, sp);
+      const double pd = psnr(d, s.clean), sd = ssim(d, s.clean);
+      if (!quiet)
+        std::printf("%-13s %-15s | %6.2f / %.3f  | %6.2f / %.3f  | %6.2f / %.3f  | %+5.2f dB\n", name.c_str(), st.name, pn, sn,
+                    pg, sg, pd, sd, pd - std::max(pn, pg));
+      sumSsimVsNoisy += sd - sn;
+      worstSsimVsNoisy = std::fmin(worstSsimVsNoisy, sd - sn);
+      sumGain += pd - std::max(pn, pg);
+      worstVsNoisy = std::fmin(worstVsNoisy, pd - pn);
+      ++n;
+    }
+  }
+  std::printf("luma %.2f chroma %.2f window %.2f | mean gain %+.2f dB, worst vs noisy %+.2f dB | SSIM vs noisy: mean %+.3f, worst %+.3f\n",
+              luma, chroma, window, sumGain / n, worstVsNoisy, sumSsimVsNoisy / n, worstSsimVsNoisy);
+  return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -115,6 +162,10 @@ int main(int argc, char** argv) {
   if (mode == "profile") return profileReport(w, h, false);
   if (mode == "temporal") return profileReport(w, h, true);
   if (mode == "baseline") return baselineReport(w, h);
-  std::fprintf(stderr, "usage: dn_eval_tool profile|temporal|baseline [w h]\n");
+  if (mode == "spatial")
+    return spatialReport(w, h, argc > 4 ? float(std::atof(argv[4])) : 1.f, argc > 5 ? float(std::atof(argv[5])) : 1.5f,
+                         argc > 6 ? float(std::atof(argv[6])) : 1.f, argc > 7 ? unsigned(std::atoi(argv[7])) : 7u,
+                         argc > 8 && std::string(argv[8]) == "quiet");
+  std::fprintf(stderr, "usage: dn_eval_tool profile|temporal|baseline|spatial [w h]\n");
   return 2;
 }
