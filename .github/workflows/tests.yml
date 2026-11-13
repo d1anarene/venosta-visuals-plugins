@@ -2,6 +2,10 @@ name: tests
 on:
   push:
   pull_request:
+# A newer push to the same branch supersedes older runs (except on main).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   track-range-exporter:
     runs-on: ubuntu-latest
