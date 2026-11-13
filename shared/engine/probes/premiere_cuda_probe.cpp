@@ -26,7 +26,9 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <limits>
 #include <mutex>
 #include <string>
@@ -42,7 +44,7 @@ namespace {
 
 constexpr const char* kName = "Temporal Probe CUDA (research)";
 constexpr const char* kMatch = "VVIS Research TemporalProbeCUDA";
-constexpr const char* kBuild = "CUDA BUILD 2";
+constexpr const char* kBuild = "CUDA BUILD 3";
 enum { Input, Offset, View, Gain, ParamCount };
 
 // ---- Minimal CUDA driver API, loaded from nvcuda.dll (declarations as in cuda.h, 64-bit) --------
@@ -106,7 +108,7 @@ struct CudaDriver {
 std::string n(long long v) { return std::to_string(v); }
 
 // Process-wide record of the dependency queries, shown in the banner: proves whether Premiere asks.
-std::atomic<long long> gDepCalls{0}, gDepLastIndex{-1}, gDepLastResult{-1}, gDepLastRequested{0};
+std::atomic<long long> gDepCalls{0}, gDepLastIndex{-1}, gDepMaxIndex{-1}, gDepLastResult{-1}, gDepLastRequested{0};
 
 // ---- GPU path ------------------------------------------------------------------------------------
 class Probe : public PrGPUFilterBase {
@@ -124,22 +126,26 @@ class Probe : public PrGPUFilterBase {
     }
   }
 
-  // Same protocol as Adobe's SDK_CrossDissolve_GPU sample: fill one dependency and return
-  // NoError WITHOUT incrementing ioQueryIndex (build 1 incremented it; Premiere then delivered only
-  // the current frame).
+  // Build 3: four dependencies, in this order: -1, +1, -2, +2 frames. Protocol under test (build 1
+  // incremented after its only dependency and got none; build 2 did not increment and got one):
+  // fill the dependency for *ioQueryIndex; increment ioQueryIndex while more follow, not after
+  // the last one. Premiere then calls again with the incremented index.
+  static constexpr int kDeps[4] = {-1, +1, -2, +2};
   prSuiteError GetFrameDependencies(const PrGPUFilterRenderParams* p, csSDK_int32* index,
                                     PrGPUFilterFrameDependency* out) override {
     ++gDepCalls;
     prSuiteError r = suiteError_NotImplemented;
     try {
-      if (p && index && out) {
+      if (p && index && out && *index >= 0 && *index < 4) {
         gDepLastIndex = *index;
+        gDepMaxIndex = std::max<long long>(gDepMaxIndex.load(), *index);
         PrTime requested = 0;
-        if (*index == 0 && request(*p, offset(p), requested)) {
+        if (request(*p, kDeps[*index], requested)) {
           out->outDependencyType = PrGPUDependency_InputFrame;
           out->outTrackID = 0;  // current track (PrSDKGPUFilter.h)
           out->outSequenceTime = requested;
-          gDepLastRequested = requested;
+          if (*index == 0) gDepLastRequested = requested;
+          if (*index < 3) ++*index;  // more follow
           r = suiteError_NoError;
         }
       }
@@ -224,8 +230,8 @@ class Probe : public PrGPUFilterBase {
     lines.push_back("FRAMES DELIVERED: " + n((long long)count) + "  FORMAT " + (half ? "16F" : "32F") + "  " +
                     n(cur.width()) + "X" + n(cur.height()) + "  QUALITY " + n(p->inQuality) + "  DOWNSAMPLE " +
                     std::to_string(p->inDownsampleFactorX).substr(0, 4));
-    lines.push_back("DEPENDENCY QUERIES: " + n(gDepCalls.load()) + "  LAST INDEX " + n(gDepLastIndex.load()) + "  RESULT " +
-                    n(gDepLastResult.load()) + "  REQUESTED SEQ FRAME " + n(tpf > 0 ? gDepLastRequested.load() / tpf : -1));
+    lines.push_back("DEPENDENCY QUERIES: " + n(gDepCalls.load()) + "  MAX INDEX " + n(gDepMaxIndex.load()) + "  RESULT " +
+                    n(gDepLastResult.load()) + "  REQUESTED (-1,+1,-2,+2) FIRST SEQ FRAME " + n(tpf > 0 ? gDepLastRequested.load() / tpf : -1));
     CUcontext ctx = nullptr;
     cuda_.ctxGetCurrent(&ctx);
     if (!ctx) lines.push_back("NO CURRENT CUDA CONTEXT");
@@ -239,22 +245,31 @@ class Probe : public PrGPUFilterBase {
       return suiteError_NoError;
     }
     vv::Image result = current;
-    if (count >= 2) {
+    // Delivered extra frames, in request order -1, +1, -2, +2. Mean |difference| to the current
+    // frame (x1000) shows which is which: it grows with the time distance when there is motion.
+    std::string diffs;
+    int shown = -1;
+    for (csSDK_size_t i = 1; i < count && i <= 4; ++i) {
       Frame nb;
       vv::Image neighbour;
-      if (!frame(frames[1], nb)) {
-        lines.push_back("NEIGHBOUR FRAME UNREADABLE");
-      } else if (nb.format != cur.format || nb.width() != cur.width() || nb.height() != cur.height()) {
-        lines.push_back("NEIGHBOUR DIFFERS: " + n(nb.width()) + "X" + n(nb.height()) + " FORMAT " + n((long long)nb.format));
-      } else if (download(nb, half, neighbour, lines, "NEIGHBOUR")) {
-        lines.push_back(std::string("NEIGHBOUR IDENTICAL TO CURRENT: ") +
-                        (vv::probe::hash(neighbour) == vv::probe::hash(current) ? "YES" : "NO"));
-        if (mode != 0) result = vv::probe::display(current, &neighbour, mode, gain);
+      if (!frame(frames[i], nb)) { diffs += "  #" + n((long long)i) + " UNREADABLE"; continue; }
+      if (nb.format != cur.format || nb.width() != cur.width() || nb.height() != cur.height()) {
+        diffs += "  #" + n((long long)i) + " DIFFERENT SIZE";
+        continue;
       }
-    } else {
-      lines.push_back("NO NEIGHBOUR DELIVERED (ONLY THE CURRENT FRAME)");
+      if (!download(nb, half, neighbour, lines, "NEIGHBOUR")) continue;
+      double d = 0;
+      for (size_t k = 0; k < neighbour.px.size(); ++k)
+        if (k % 4 != 3) d += std::fabs(double(neighbour.px[k]) - current.px[k]);
+      d /= double(neighbour.px.size()) * 0.75;
+      diffs += "  " + std::string(i == 1 ? "-1" : i == 2 ? "+1" : i == 3 ? "-2" : "+2") + ":" + n((long long)std::llround(d * 1000.0));
+      // View 1/2 show the delivered frame matching OFFSET (-1, +1, -2, +2).
+      const int want = off == -1 ? 1 : off == 1 ? 2 : off == -2 ? 3 : off == 2 ? 4 : -1;
+      if (int(i) == want && mode != 0) { result = vv::probe::display(current, &neighbour, mode, gain); shown = int(i); }
     }
-    if (mode != 0 && result.px == current.px && count < 2) lines.push_back("SHOWING CURRENT FRAME");
+    if (count < 2) lines.push_back("NO NEIGHBOUR DELIVERED (ONLY THE CURRENT FRAME)");
+    else lines.push_back("MEAN DIFF X1000 PER DELIVERED FRAME:" + diffs);
+    if (mode != 0) lines.push_back(shown > 0 ? "SHOWING DELIVERED FRAME #" + n(shown) : "OFFSET NOT DELIVERED - SHOWING CURRENT FRAME");
     if (dst.width() != result.width || dst.height() != result.height) {
       lines.push_back("OUTPUT SIZE DIFFERS: " + n(dst.width()) + "X" + n(dst.height()));
       return suiteError_Fail;
