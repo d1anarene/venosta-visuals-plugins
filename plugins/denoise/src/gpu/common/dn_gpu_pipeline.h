@@ -11,6 +11,12 @@
 //   void dnCrop(const void* src, bool half, Buf rgb, const CropInfo&);
 //   void dnStarletV(Buf src, Buf dst, PlaneInfo, int step);
 //   void dnBlocks(Buf cur, Buf next, Buf blocks, size_t offsetF4, const BlockGrid&);  // 3 F4 per block
+// and for Quality Preview (half resolution):
+//   void dnHalve(const void* src, bool half, Buf dst, const FrameLayout& full, PlaneInfo halfSize);
+//   void dnUpFinish(const void* src, void* dst, bool half, Buf low, const FrameLayout& full, PlaneInfo halfSize);
+//   static const void* ptr(Buf);  static void* mptr(Buf);   // a Buf as a frame pointer
+// Preview runs the same filter on the 2x2-averaged frame and estimates the noise on that frame
+// too (its noise is lower and coarser than the full frame's), then upsamples the result.
 // Per band: 4 full-frame passes + 2 pyramid blurs. Memory (F4 full-res buffers): 9 + the pyramid's scratch. Rows may be bottom-up (OFX): every
 // pass is symmetric in y, so results do not depend on row order.
 #pragma once
@@ -59,14 +65,24 @@ class SpatialPipeline {
    *  w x h frame). Afterwards blocks() holds blockCount() blocks per band, DN_BANDS bands, 3 F4
    *  each; read it back once the work has finished and pass it to unpackBlocks. */
   bool encodeEstimate(const void* src, bool half, uint32_t w, uint32_t h, uint32_t rowPixels, bool rgba, bool bottomUp,
-                      uint32_t maxW, uint32_t maxH) {
+                      uint32_t maxW, uint32_t maxH, bool preview = false) {
     if (w == 0 || h == 0) return false;
-    const uint32_t cw = w < maxW ? w : maxW, ch = h < maxH ? h : maxH;
+    const uint32_t pw = preview ? (w + 1) / 2 : w, ph = preview ? (h + 1) / 2 : h;
+    const uint32_t cw = pw < maxW ? pw : maxW, ch = ph < maxH ? ph : maxH;
     if (cw < uint32_t(kEstimateBlock) || ch < uint32_t(kEstimateBlock)) return false;
-    ensure(w, h, cw, ch);
-    const CropInfo c{cw, ch, h, rowPixels, (w - cw) / 2, (h - ch) / 2, rgba ? 1 : 0, bottomUp ? 1 : 0};
+    ensure(w, h, cw, ch, preview);
+    const void* from = src;
+    bool fromHalf = half;
+    uint32_t fromRow = rowPixels;
+    if (preview) {
+      B.dnHalve(src, half, hsrc, FrameLayout{w, h, rowPixels, rgba ? 1 : 0, 0, 1.0f}, PlaneInfo{pw, ph});
+      from = Backend::ptr(hsrc);
+      fromHalf = false;
+      fromRow = pw;
+    }
+    const CropInfo c{cw, ch, ph, fromRow, (pw - cw) / 2, (ph - ch) / 2, rgba ? 1 : 0, bottomUp ? 1 : 0};
     const PlaneInfo p{cw, ch};
-    B.dnCrop(src, half, cropA, c);
+    B.dnCrop(from, fromHalf, cropA, c);
     Buf cur = cropA, next = cropB;
     for (int j = 0; j < DN_BANDS; ++j) {
       B.dnStarletH(cur, cropT, p, 1 << j);
@@ -82,11 +98,35 @@ class SpatialPipeline {
   Buf blocks() const { return blockBuf; }
 
   bool run(const void* src, void* dst, bool half, uint32_t w, uint32_t h, uint32_t rowPixels, const NoiseProfile& prof,
-           const SpatialParams& sp, bool rgba, int view = 0, float mix = 1.0f) {
+           const SpatialParams& sp, bool rgba, int view = 0, float mix = 1.0f, bool preview = false) {
     if (w == 0 || h == 0) return false;
-    ensure(w, h, cropW, cropH);
+    ensure(w, h, cropW, cropH, preview);
+    const FrameLayout full{w, h, rowPixels, rgba ? 1 : 0, view, mix};
+    if (!preview) {
+      filter(src, dst, half, w, h, rowPixels, prof, sp, full);
+      return true;
+    }
+    const uint32_t pw = (w + 1) / 2, ph = (h + 1) / 2;
+    B.dnHalve(src, half, hsrc, full, PlaneInfo{pw, ph});
+    filter(Backend::ptr(hsrc), Backend::mptr(hdst), false, pw, ph, pw, prof, sp,
+           FrameLayout{pw, ph, pw, rgba ? 1 : 0, 0, 1.0f});
+    B.dnUpFinish(src, dst, half, hdst, full, PlaneInfo{pw, ph});
+    return true;
+  }
+
+ private:
+  Backend& B;
+  vv::gpu::Pyramid<Backend> pyr;
+  uint32_t cachedW = 0, cachedH = 0, cropW = 0, cropH = 0;
+  bool cachedPreview = false;
+  Buf oppA{}, oppB{}, tmp{}, band{}, energy{}, E{}, var{}, pilot2{}, out{};
+  Buf cropA{}, cropB{}, cropT{}, blockBuf{}, hsrc{}, hdst{};
+
+  // The spatial filter on a w x h frame (host layout f; f.width/height == w/h).
+  void filter(const void* src, void* dst, bool half, uint32_t w, uint32_t h, uint32_t rowPixels,
+              const NoiseProfile& prof, const SpatialParams& sp, const FrameLayout& f) {
+    (void)rowPixels;
     const PlaneInfo p{w, h};
-    const FrameLayout f{w, h, rowPixels, rgba ? 1 : 0, view, mix};
     const DnProfileTable table = toTable(prof);
     B.dnPrepare(src, half, oppA, f);
     B.clear(out, p);
@@ -103,29 +143,29 @@ class SpatialPipeline {
       std::swap(cur, next);
     }
     B.dnFinish(src, dst, half, out, cur, f);
-    return true;
   }
-
- private:
-  Backend& B;
-  vv::gpu::Pyramid<Backend> pyr;
-  uint32_t cachedW = 0, cachedH = 0, cropW = 0, cropH = 0;
-  Buf oppA{}, oppB{}, tmp{}, band{}, energy{}, E{}, var{}, pilot2{}, out{};
-  Buf cropA{}, cropB{}, cropT{}, blockBuf{};
   BlockGrid grid{0, 0, 0, 0};
 
-  // One allocation set for both the frame and the estimate crop (releaseAll frees everything).
-  void ensure(uint32_t w, uint32_t h, uint32_t cw, uint32_t ch) {
-    if (w == cachedW && h == cachedH && cw == cropW && ch == cropH) return;
+  // One allocation set for the frame (full or, for Preview, half size) and the estimate crop
+  // (releaseAll frees everything).
+  void ensure(uint32_t w, uint32_t h, uint32_t cw, uint32_t ch, bool preview) {
+    if (w == cachedW && h == cachedH && cw == cropW && ch == cropH && preview == cachedPreview) return;
     cachedW = w;
     cachedH = h;
     cropW = cw;
     cropH = ch;
+    cachedPreview = preview;
     B.releaseAll();
-    const size_t n = size_t(w) * h;
+    const uint32_t pw = preview ? (w + 1) / 2 : w, ph = preview ? (h + 1) / 2 : h;
+    const size_t n = size_t(pw) * ph;
     oppA = B.alloc(n); oppB = B.alloc(n); tmp = B.alloc(n);
     band = B.alloc(n); energy = B.alloc(n); E = B.alloc(n); var = B.alloc(n); pilot2 = B.alloc(n); out = B.alloc(n);
-    pyr.allocate(w, h);
+    pyr.allocate(pw, ph);
+    hsrc = hdst = Buf{};
+    if (preview) {
+      hsrc = B.alloc(n);
+      hdst = B.alloc(n);
+    }
     grid = BlockGrid{cw, ch, 0, 0};
     blockBuf = Buf{};
     if (cw >= uint32_t(kEstimateBlock) && ch >= uint32_t(kEstimateBlock)) {

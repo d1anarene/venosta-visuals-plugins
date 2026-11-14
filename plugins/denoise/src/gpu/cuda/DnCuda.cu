@@ -13,6 +13,16 @@ using namespace dn::gpu;
 using vv::gpu::cuda::coords;
 
 template <typename T>
+__global__ void kHalve(const T* src, F4* d, FrameLayout f, PlaneInfo hp) {
+  uint32_t x, y;
+  if (coords(hp.width, hp.height, x, y)) pxDnHalve(src, d, f, hp, x, y);
+}
+template <typename T>
+__global__ void kUpFinish(const T* src, T* dst, const F4* low, FrameLayout f, PlaneInfo hp) {
+  uint32_t x, y;
+  if (coords(f.width, f.height, x, y)) pxDnUpFinish(src, dst, low, f, hp, x, y);
+}
+template <typename T>
 __global__ void kCrop(const T* src, F4* rgb, CropInfo c) {
   uint32_t x, y;
   if (coords(c.width, c.height, x, y)) pxDnCrop(src, rgb, c, x, y);
@@ -57,6 +67,20 @@ struct Backend : vv::gpu::cuda::CudaBackendBase {
   void dnPrepare(const void* src, bool half, Buf opp, const FrameLayout& f) {
     if (half) kPrepare<<<grid(f.width, f.height), block(), 0, stream>>>(static_cast<const H4*>(src), opp, f);
     else kPrepare<<<grid(f.width, f.height), block(), 0, stream>>>(static_cast<const F4*>(src), opp, f);
+    check();
+  }
+  static const void* ptr(Buf b) { return b; }
+  static void* mptr(Buf b) { return b; }
+  void dnHalve(const void* src, bool half, Buf d, const FrameLayout& f, PlaneInfo hp) {
+    if (half) kHalve<<<grid(hp.width, hp.height), block(), 0, stream>>>(static_cast<const H4*>(src), d, f, hp);
+    else kHalve<<<grid(hp.width, hp.height), block(), 0, stream>>>(static_cast<const F4*>(src), d, f, hp);
+    check();
+  }
+  void dnUpFinish(const void* src, void* dst, bool half, Buf low, const FrameLayout& f, PlaneInfo hp) {
+    if (half)
+      kUpFinish<<<grid(f.width, f.height), block(), 0, stream>>>(static_cast<const H4*>(src), static_cast<H4*>(dst), low, f, hp);
+    else
+      kUpFinish<<<grid(f.width, f.height), block(), 0, stream>>>(static_cast<const F4*>(src), static_cast<F4*>(dst), low, f, hp);
     check();
   }
   void dnCrop(const void* src, bool half, Buf rgb, const CropInfo& c) {
@@ -117,23 +141,24 @@ DnCudaEngine::~DnCudaEngine() {
 bool DnCudaEngine::ok() const { return impl_ && impl_->ok; }
 
 bool DnCudaEngine::render(const void* src, void* dst, bool half, uint32_t w, uint32_t h, uint32_t rowPixels,
-                          const NoiseProfile& profile, const SpatialParams& params, bool rgba, int view, float mix) {
+                          const NoiseProfile& profile, const SpatialParams& params, bool rgba, int view, float mix,
+                          bool preview) {
   if (!ok()) return false;
   Backend& B = impl_->backend;
   B.err = cudaSuccess;
-  if (!impl_->pipeline->run(src, dst, half, w, h, rowPixels, profile, params, rgba, view, mix)) return false;
+  if (!impl_->pipeline->run(src, dst, half, w, h, rowPixels, profile, params, rgba, view, mix, preview)) return false;
   B.note(cudaStreamSynchronize(B.stream));
   return B.err == cudaSuccess;
 }
 
 bool DnCudaEngine::estimateBlocks(const void* src, bool half, uint32_t w, uint32_t h, uint32_t rowPixels, bool rgba,
                                   bool bottomUp, uint32_t maxW, uint32_t maxH,
-                                  std::vector<std::vector<EstimateBlock>>& out, int& cropW, int& cropH) {
+                                  std::vector<std::vector<EstimateBlock>>& out, int& cropW, int& cropH, bool preview) {
   if (!ok()) return false;
   Backend& B = impl_->backend;
   B.err = cudaSuccess;
   gpu::SpatialPipeline<Backend>& P = *impl_->pipeline;
-  if (!P.encodeEstimate(src, half, w, h, rowPixels, rgba, bottomUp, maxW, maxH)) return false;
+  if (!P.encodeEstimate(src, half, w, h, rowPixels, rgba, bottomUp, maxW, maxH, preview)) return false;
   std::vector<F4> host(size_t(P.blockCount()) * 3 * DN_BANDS);
   B.note(cudaMemcpyAsync(host.data(), P.blocks(), host.size() * sizeof(F4), cudaMemcpyDeviceToHost, B.stream));
   B.note(cudaStreamSynchronize(B.stream));

@@ -136,3 +136,52 @@ kernel void dn_finish_f16(device const half4* src [[buffer(0)]], device half4* d
                           device const float4* res [[buffer(3)]], constant FrameLayout& f [[buffer(4)]], uint2 g [[thread_position_in_grid]]) {
   finish_impl(src, dst, out, res, f, g);
 }
+
+// Quality Preview (mirrors pxDnHalve / pxDnUpFinish).
+template <typename T>
+static void halve_impl(device const T* src, device float4* d, constant FrameLayout& f, constant Plane& hp, uint2 g) {
+  if (g.x >= hp.width || g.y >= hp.height) return;
+  uint x0 = 2u * g.x, y0 = 2u * g.y;
+  uint x1 = x0 + 1u < f.width ? x0 + 1u : f.width - 1u, y1 = y0 + 1u < f.height ? y0 + 1u : f.height - 1u;
+  float4 a = float4(src[y0 * f.rowPixels + x0]), b = float4(src[y0 * f.rowPixels + x1]);
+  float4 c = float4(src[y1 * f.rowPixels + x0]), e = float4(src[y1 * f.rowPixels + x1]);
+  d[g.y * hp.width + g.x] = ((a + b) + (c + e)) * 0.25f;
+}
+kernel void dn_halve_f32(device const float4* src [[buffer(0)]], device float4* d [[buffer(1)]], constant FrameLayout& f [[buffer(2)]],
+                         constant Plane& hp [[buffer(3)]], uint2 g [[thread_position_in_grid]]) { halve_impl(src, d, f, hp, g); }
+kernel void dn_halve_f16(device const half4* src [[buffer(0)]], device float4* d [[buffer(1)]], constant FrameLayout& f [[buffer(2)]],
+                         constant Plane& hp [[buffer(3)]], uint2 g [[thread_position_in_grid]]) { halve_impl(src, d, f, hp, g); }
+
+template <typename T>
+static void upfinish_impl(device const T* src, device T* dst, device const float4* low, constant FrameLayout& f,
+                          constant Plane& hp, uint2 g) {
+  if (g.x >= f.width || g.y >= f.height) return;
+  float u = float(g.x) * 0.5f - 0.25f, v = float(g.y) * 0.5f - 0.25f;
+  int i0 = int(u + 1.0f) - 1, j0 = int(v + 1.0f) - 1;
+  float fx = u - float(i0), fy = v - float(j0);
+  int W = int(hp.width) - 1, H = int(hp.height) - 1;
+  uint xa = uint(clamp(i0, 0, W)), xb = uint(clamp(i0 + 1, 0, W)), ya = uint(clamp(j0, 0, H)), yb = uint(clamp(j0 + 1, 0, H));
+  float3 a = low[ya * hp.width + xa].xyz, b = low[ya * hp.width + xb].xyz;
+  float3 c = low[yb * hp.width + xa].xyz, e = low[yb * hp.width + xb].xyz;
+  float3 top = a + (b - a) * fx, bot = c + (e - c) * fx;
+  float3 up = top + (bot - top) * fy;
+  uint o = g.y * f.rowPixels + g.x;
+  float4 s = float4(src[o]);
+  float3 in = f.rgba != 0 ? s.xyz : float3(s.z, s.y, s.x);
+  float3 cc = f.rgba != 0 ? up : float3(up.z, up.y, up.x);
+  float3 w = f.view == 1 ? 0.5f + 4.0f * (in - cc) : (f.view == 2 ? in : cc);
+  if (f.view == 0 && f.mix < 1.0f) w = in + (cc - in) * f.mix;
+  float3 r = in;
+  if (isfinite(w.x)) r.x = w.x;
+  if (isfinite(w.y)) r.y = w.y;
+  if (isfinite(w.z)) r.z = w.z;
+  dst[o] = f.rgba != 0 ? T(float4(r, s.w)) : T(float4(r.z, r.y, r.x, s.w));
+}
+kernel void dn_upfinish_f32(device const float4* src [[buffer(0)]], device float4* dst [[buffer(1)]], device const float4* low [[buffer(2)]],
+                            constant FrameLayout& f [[buffer(3)]], constant Plane& hp [[buffer(4)]], uint2 g [[thread_position_in_grid]]) {
+  upfinish_impl(src, dst, low, f, hp, g);
+}
+kernel void dn_upfinish_f16(device const half4* src [[buffer(0)]], device half4* dst [[buffer(1)]], device const float4* low [[buffer(2)]],
+                            constant FrameLayout& f [[buffer(3)]], constant Plane& hp [[buffer(4)]], uint2 g [[thread_position_in_grid]]) {
+  upfinish_impl(src, dst, low, f, hp, g);
+}

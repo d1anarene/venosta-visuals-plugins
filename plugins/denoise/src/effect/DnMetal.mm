@@ -41,14 +41,14 @@ class MetalRenderer : public vv::GpuRenderer {
     std::vector<std::vector<EstimateBlock>> blocks;
     int cw = 0, ch = 0;
     if (!engine_->estimateBlocks(queue, src, f.half, f.width, f.height, f.rowPixels, f.rgba, f.bottomUp, cropW(ep),
-                                 cropH(ep), blocks, cw, ch))
+                                 cropH(ep), blocks, cw, ch, ep.preview))
       return false;
     const NoiseProfile prof = profileFromBlocks(blocks, ep.noiseLevel);
     const double t1 = nowMs();
     const bool timing = ep.view == 3;
     id<MTLCommandBuffer> cb = [queue commandBuffer];
     if (!engine_->encode(cb, src, dst, f.half, f.width, f.height, f.rowPixels, prof, spatialParams(ep), f.rgba,
-                         timing ? 0 : ep.view, ep.mix))
+                         timing ? 0 : ep.view, ep.mix, ep.preview))
       return false;
     [cb commit];
     [cb waitUntilCompleted];

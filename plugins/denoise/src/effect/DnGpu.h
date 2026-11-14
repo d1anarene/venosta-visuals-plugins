@@ -15,9 +15,9 @@ namespace dn {
 /** Noise is estimated on a centred crop of at most this size (statistics, not detail, so a crop
  *  keeps the estimate cheap and identical between CPU and GPU paths). */
 constexpr int kEstimateCropW = 1024, kEstimateCropH = 576;
-/** Quality Preview: smaller crop, about 9x cheaper; the estimate varies more from frame to frame
- *  (synthetic 1080p noise: 6.9 % instead of 1.7 % mean change of the band 0-2 sigmas). */
-constexpr int kPreviewCropW = 384, kPreviewCropH = 216;
+/** Quality Preview filters the 2x2-averaged frame (half resolution) and estimates the noise of that
+ *  frame on a crop of the same scene area as Final's crop. */
+constexpr int kPreviewCropW = 512, kPreviewCropH = 288;
 inline int cropW(const EffectParams& ep) { return ep.preview ? kPreviewCropW : kEstimateCropW; }
 inline int cropH(const EffectParams& ep) { return ep.preview ? kPreviewCropH : kEstimateCropH; }
 

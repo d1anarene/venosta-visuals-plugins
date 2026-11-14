@@ -75,11 +75,15 @@ class DnEffect : public vv::Effect {
   bool render(vv::Image& img, const vv::ParamReader& r, int64_t) const override {
     const EffectParams ep = readParams(r);
     const double t0 = nowMs();
-    const vv::Image crop = centreCrop(img, cropW(ep), cropH(ep));
+    const vv::Image input = img;
+    const vv::Image work = ep.preview ? halveImage(input) : vv::Image();
+    const vv::Image& src = ep.preview ? work : input;
+    const vv::Image crop = centreCrop(src, cropW(ep), cropH(ep));
     const NoiseProfile prof = estimateSpatialProfile(crop, ep.noiseLevel);
     const double t1 = nowMs();
-    const vv::Image input = img;
-    finish(img, input, denoiseSpatial(input, prof, spatialParams(ep)), ep);
+    vv::Image result = denoiseSpatial(src, prof, spatialParams(ep));
+    if (ep.preview) result = upsampleImage(result, input.width, input.height);
+    finish(img, input, result, ep);
     if (ep.view == 3) {
       const double t2 = nowMs();
       drawTiming(img, Timing{"CPU", img.width, img.height, crop.width, crop.height, false, ep.preview, t1 - t0, t2 - t1,

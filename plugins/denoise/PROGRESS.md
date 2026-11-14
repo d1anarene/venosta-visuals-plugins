@@ -145,7 +145,7 @@ Historical findings below are limited by the current review in `docs/RESEARCH.md
 - Cause found: the per-frame noise estimate on the CPU (1024x576 crop) took about 315 ms on a
   4-core container. Now about 180 ms with identical output (bit-exact check: one starlet
   decomposition instead of two, parallel block statistics, clamp-free interior of the B3 filter).
-- New **Quality: Preview / Final** (disk ID 9, default Final): Preview estimates on a 384x216 crop
+- New **Quality: Preview / Final** (disk ID 9, default Final): Preview (first version) estimated on a 384x216 crop
   (about 20 ms here); the profile then varies more from frame to frame (synthetic 1080p noise:
   6.9 % instead of 1.7 % mean change of the band 0-2 sigmas), so possibly some flicker.
 - Defaults halved: Luma Strength 0.5, Chroma Strength 0.75 (owner's request).
@@ -185,3 +185,13 @@ Historical findings below are limited by the current review in `docs/RESEARCH.md
   Final estimate 23 ms + filter 100 ms = 122 ms (was 289 ms); Preview estimate 9 ms + filter
   91 ms = 100 ms (was 159 ms). The filter is now the main cost; Preview and Final differ only in
   the estimate crop.
+
+## Quality Preview at half resolution (2026-11-14, owner's request)
+
+- Preview now filters the 2x2-averaged frame (half resolution) and upsamples the result
+  bilinearly; the noise is estimated on that half-size frame (512x288 crop, the same scene area as
+  Final's 1024x576), because averaging lowers and coarsens the noise. Final is unchanged.
+- Emulation vs CPU reference (halveImage / denoiseSpatial / upsampleImage): 32f 0.0001/255,
+  estimate 1e-6 relative; bottom-up frames of odd height average a mirrored 2x2 grid (checked
+  against the clean image instead). Expected roughly a quarter of the filter time; not measured
+  in the host yet.

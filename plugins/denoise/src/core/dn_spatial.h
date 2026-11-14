@@ -29,4 +29,10 @@ vv::Image denoiseSpatial(const vv::Image& noisy, const NoiseProfile& profile, co
 /** noiseScale (optional, 1 channel, frame size): per-pixel factor on the noise std, e.g. after a
  *  temporal average reduced the noise unevenly. */
 
+/** Quality Preview: half resolution. halveImage averages 2x2 pixels (last row/column clamped:
+ *  size (w+1)/2 x (h+1)/2); upsampleImage is bilinear with pixel centres aligned (half pixel x
+ *  sits at full x = 2x + 0.5). The GPU passes (pxDnHalve / pxDnUpFinish) do the same. */
+vv::Image halveImage(const vv::Image& img);
+vv::Image upsampleImage(const vv::Image& low, int width, int height);
+
 }  // namespace dn

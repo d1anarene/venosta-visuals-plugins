@@ -134,6 +134,15 @@ VV_HD void pxDnAccumulate(F4* out, const F4* band, const F4* P, const F4* var, c
   out[i].z += band[i].z * dn_wiener_gain(P[i].z, var[i].z, b.strength[2], rec);
 }
 
+// View / mix / non-finite handling shared by both finish passes. in, c: RGB.
+VV_HD void dnCompose(const float* in, const float* cc, const FrameLayout& f, float* r) {
+  for (int k = 0; k < 3; ++k) {
+    float v = f.view == 1 ? 0.5f + 4.0f * (in[k] - cc[k]) : (f.view == 2 ? in[k] : cc[k]);
+    if (f.view == 0 && f.mix < 1.0f) v = in[k] + (cc[k] - in[k]) * f.mix;
+    r[k] = isFiniteF(v) ? v : in[k];
+  }
+}
+
 // 6. Opponent result (bands + residual) -> host frame; alpha from the source; non-finite -> source.
 template <typename T>
 VV_HD void pxDnFinish(const T* src, T* dst, const F4* out, const F4* residual, const FrameLayout& f, uint32_t x,
@@ -142,13 +151,45 @@ VV_HD void pxDnFinish(const T* src, T* dst, const F4* out, const F4* residual, c
   const F4 s = loadPx(src, o);
   const vv_float3 c = dn_from_opponent(vv_make3(out[i].x + residual[i].x, out[i].y + residual[i].y, out[i].z + residual[i].z));
   const float in[3] = {f.rgba ? s.x : s.z, s.y, f.rgba ? s.z : s.x};
-  float r[3] = {in[0], in[1], in[2]};
   const float cc[3] = {c.x, c.y, c.z};
+  float r[3];
+  dnCompose(in, cc, f, r);
+  if (f.rgba) storePx(dst, o, F4{r[0], r[1], r[2], s.w});
+  else storePx(dst, o, F4{r[2], r[1], r[0], s.w});
+}
+
+// Quality Preview: 2x2 average of the host frame into a half-size F4 frame (host channel order,
+// same row order), and the bilinear upsample of the half-size result composed with the source.
+template <typename T>
+VV_HD void pxDnHalve(const T* src, F4* dst, const FrameLayout& f, PlaneInfo hp, uint32_t x, uint32_t y) {
+  const uint32_t x0 = 2u * x, y0 = 2u * y;
+  const uint32_t x1 = x0 + 1u < f.width ? x0 + 1u : f.width - 1u, y1 = y0 + 1u < f.height ? y0 + 1u : f.height - 1u;
+  const F4 a = loadPx(src, y0 * f.rowPixels + x0), b = loadPx(src, y0 * f.rowPixels + x1);
+  const F4 c = loadPx(src, y1 * f.rowPixels + x0), d = loadPx(src, y1 * f.rowPixels + x1);
+  dst[y * hp.width + x] = F4{((a.x + b.x) + (c.x + d.x)) * 0.25f, ((a.y + b.y) + (c.y + d.y)) * 0.25f,
+                             ((a.z + b.z) + (c.z + d.z)) * 0.25f, ((a.w + b.w) + (c.w + d.w)) * 0.25f};
+}
+template <typename T>
+VV_HD void pxDnUpFinish(const T* src, T* dst, const F4* low, const FrameLayout& f, PlaneInfo hp, uint32_t x, uint32_t y) {
+  const float u = float(x) * 0.5f - 0.25f, v = float(y) * 0.5f - 0.25f;
+  const int i0 = int(u + 1.0f) - 1, j0 = int(v + 1.0f) - 1;
+  const float fx = u - float(i0), fy = v - float(j0);
+  const int W = int(hp.width) - 1, H = int(hp.height) - 1;
+  const uint32_t xa = uint32_t(clampi(i0, 0, W)), xb = uint32_t(clampi(i0 + 1, 0, W));
+  const uint32_t ya = uint32_t(clampi(j0, 0, H)), yb = uint32_t(clampi(j0 + 1, 0, H));
+  const F4 a = low[ya * hp.width + xa], b = low[ya * hp.width + xb], c = low[yb * hp.width + xa], d = low[yb * hp.width + xb];
+  const float av[3] = {a.x, a.y, a.z}, bv[3] = {b.x, b.y, b.z}, cv[3] = {c.x, c.y, c.z}, dv[3] = {d.x, d.y, d.z};
+  float up[3];
   for (int k = 0; k < 3; ++k) {
-    float v = f.view == 1 ? 0.5f + 4.0f * (in[k] - cc[k]) : (f.view == 2 ? in[k] : cc[k]);
-    if (f.view == 0 && f.mix < 1.0f) v = in[k] + (cc[k] - in[k]) * f.mix;
-    if (isFiniteF(v)) r[k] = v;
+    const float top = av[k] + (bv[k] - av[k]) * fx, bot = cv[k] + (dv[k] - cv[k]) * fx;
+    up[k] = top + (bot - top) * fy;
   }
+  const uint32_t o = y * f.rowPixels + x;
+  const F4 s = loadPx(src, o);
+  const float in[3] = {f.rgba ? s.x : s.z, s.y, f.rgba ? s.z : s.x};
+  const float cc[3] = {f.rgba ? up[0] : up[2], up[1], f.rgba ? up[2] : up[0]};
+  float r[3];
+  dnCompose(in, cc, f, r);
   if (f.rgba) storePx(dst, o, F4{r[0], r[1], r[2], s.w});
   else storePx(dst, o, F4{r[2], r[1], r[0], s.w});
 }

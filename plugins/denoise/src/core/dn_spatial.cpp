@@ -56,4 +56,36 @@ vv::Image denoiseSpatial(const vv::Image& noisy, const NoiseProfile& prof, const
   return out;
 }
 
+vv::Image halveImage(const vv::Image& img) {
+  const int w2 = (img.width + 1) / 2, h2 = (img.height + 1) / 2;
+  vv::Image out(w2, h2);
+  for (int y = 0; y < h2; ++y)
+    for (int x = 0; x < w2; ++x) {
+      const int x0 = 2 * x, y0 = 2 * y, x1 = std::min(x0 + 1, img.width - 1), y1 = std::min(y0 + 1, img.height - 1);
+      const float *a = img.at(x0, y0), *b = img.at(x1, y0), *c = img.at(x0, y1), *d = img.at(x1, y1);
+      float* o = out.at(x, y);
+      for (int k = 0; k < 4; ++k) o[k] = ((a[k] + b[k]) + (c[k] + d[k])) * 0.25f;
+    }
+  return out;
+}
+
+vv::Image upsampleImage(const vv::Image& low, int width, int height) {
+  vv::Image out(width, height);
+  for (int y = 0; y < height; ++y)
+    for (int x = 0; x < width; ++x) {
+      const float u = float(x) * 0.5f - 0.25f, v = float(y) * 0.5f - 0.25f;
+      const int i0 = int(u + 1.0f) - 1, j0 = int(v + 1.0f) - 1;  // floor for u, v >= -0.25
+      const float fx = u - float(i0), fy = v - float(j0);
+      const int xa = std::clamp(i0, 0, low.width - 1), xb = std::clamp(i0 + 1, 0, low.width - 1);
+      const int ya = std::clamp(j0, 0, low.height - 1), yb = std::clamp(j0 + 1, 0, low.height - 1);
+      const float *a = low.at(xa, ya), *b = low.at(xb, ya), *c = low.at(xa, yb), *d = low.at(xb, yb);
+      float* o = out.at(x, y);
+      for (int k = 0; k < 4; ++k) {
+        const float top = a[k] + (b[k] - a[k]) * fx, bot = c[k] + (d[k] - c[k]) * fx;
+        o[k] = top + (bot - top) * fy;
+      }
+    }
+  return out;
+}
+
 }  // namespace dn

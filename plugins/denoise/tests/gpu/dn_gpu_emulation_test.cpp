@@ -16,6 +16,20 @@ using namespace dn::eval;
 
 namespace {
 struct Emu : vv::gpu::EmulationBackend {
+  static const void* ptr(Buf b) { return b; }
+  static void* mptr(Buf b) { return b; }
+  void dnHalve(const void* src, bool half, Buf d, const FrameLayout& f, PlaneInfo hp) {
+    grid(hp.width, hp.height, [&](uint32_t x, uint32_t y) {
+      if (half) pxDnHalve(static_cast<const H4*>(src), d, f, hp, x, y);
+      else pxDnHalve(static_cast<const F4*>(src), d, f, hp, x, y);
+    });
+  }
+  void dnUpFinish(const void* src, void* dst, bool half, Buf low, const FrameLayout& f, PlaneInfo hp) {
+    grid(f.width, f.height, [&](uint32_t x, uint32_t y) {
+      if (half) pxDnUpFinish(static_cast<const H4*>(src), static_cast<H4*>(dst), low, f, hp, x, y);
+      else pxDnUpFinish(static_cast<const F4*>(src), static_cast<F4*>(dst), low, f, hp, x, y);
+    });
+  }
   void dnPrepare(const void* src, bool half, Buf opp, const FrameLayout& f) {
     grid(f.width, f.height, [&](uint32_t x, uint32_t y) {
       if (half) pxDnPrepare(static_cast<const H4*>(src), opp, f, x, y);
@@ -159,6 +173,76 @@ int main() {
       ++cases;
     }
   }
+  // Quality Preview: half resolution (2x2 average, filter, bilinear upsample) and the estimate on
+  // the half-size frame, against the CPU reference (halveImage / denoiseSpatial / upsampleImage).
+  double worstPrev = 0;
+  for (const char* name : {"skin", "text"}) {
+    for (auto [W, H] : std::vector<std::pair<int, int>>{{161, 91}, {120, 68}}) {
+      const Synth s = synthesize(makeTestImage(name, W, H), NoiseSim(), 7u);
+      for (int mode = 0; mode < 3; ++mode) {
+        const size_t n = size_t(W) * H;
+        std::vector<F4> f32(n);
+        std::vector<H4> f16(n);
+        vv::Image in = s.noisy;
+        for (int y = 0; y < H; ++y)
+          for (int x = 0; x < W; ++x) {
+            float* p = in.at(x, y);
+            if (mode == 2) f32[size_t(H - 1 - y) * W + x] = F4{p[0], p[1], p[2], p[3]};
+            else if (mode == 1) {
+              f16[size_t(y) * W + x] = H4{floatToHalf(p[2]), floatToHalf(p[1]), floatToHalf(p[0]), floatToHalf(p[3])};
+              const F4 q = loadPx(f16.data(), uint32_t(y * W + x));
+              p[0] = q.z; p[1] = q.y; p[2] = q.x; p[3] = q.w;
+            } else f32[size_t(y) * W + x] = F4{p[2], p[1], p[0], p[3]};
+          }
+        const vv::Image small = halveImage(in);
+        const NoiseProfile wantProf = estimateProfile(toRgbPlane(small), nullptr, Domain::Starlet);
+        SpatialParams sp;
+        const vv::Image ref = upsampleImage(denoiseSpatial(small, wantProf, sp), W, H);
+        void* frame = mode == 1 ? static_cast<void*>(f16.data()) : static_cast<void*>(f32.data());
+        double de = 1e9;
+        if (pipe.encodeEstimate(frame, mode == 1, uint32_t(W), uint32_t(H), uint32_t(W), mode == 2, mode == 2, 4096, 4096,
+                                true)) {
+          const NoiseProfile got =
+              estimateFromBlocks(unpackBlocks(pipe.blocks(), pipe.blockCount(), DN_BANDS), nullptr, Domain::Starlet);
+          de = 0;
+          for (int b = 0; b < kBands; ++b)
+            for (int c = 0; c < 3; ++c)
+              for (int k = 0; k < kBins; ++k)
+                de = std::fmax(de, std::fabs(double(got.sigma[b][c][k]) - wantProf.sigma[b][c][k]) /
+                                       std::fmax(1e-6, double(wantProf.sigma[b][c][k])));
+        }
+        if (!pipe.run(frame, frame, mode == 1, uint32_t(W), uint32_t(H), uint32_t(W), wantProf, sp, mode == 2, 0, 1.0f, true))
+          ++failures;
+        double d = 0, errGpu = 0, errRef = 0;
+        bool alpha = true;
+        for (int y = 0; y < H; ++y)
+          for (int x = 0; x < W; ++x) {
+            const F4 q = mode == 2 ? f32[size_t(H - 1 - y) * W + x] : (mode == 1 ? loadPx(f16.data(), uint32_t(y * W + x)) : f32[size_t(y) * W + x]);
+            const float g[4] = {mode == 2 ? q.x : q.z, q.y, mode == 2 ? q.z : q.x, q.w};
+            const float* r = ref.at(x, y);
+            const float* c0 = s.clean.at(x, y);
+            for (int c = 0; c < 3; ++c) {
+              d = std::isfinite(g[c]) ? std::fmax(d, std::fabs(double(g[c]) - r[c])) : 1e9;
+              errGpu += double(g[c] - c0[c]) * (g[c] - c0[c]);
+              errRef += double(r[c] - c0[c]) * (r[c] - c0[c]);
+            }
+            alpha = alpha && g[3] == in.at(x, y)[3];
+          }
+        // 32f top-down: same maths. 16f: output quantisation. Bottom-up (OpenFX layout): the
+        // pyramid's mirrored sampling grid as in the full-size test (3/255) at even heights; at odd
+        // heights the 2x2 grid itself is mirrored (an equally valid preview), so only its error
+        // against the clean image is compared (within 10 % of the reference's).
+        const bool exact = mode != 2 || H % 2 == 0;
+        const double tol = mode == 0 ? 1e-4 : (mode == 1 ? 4.0 / 255.0 : 3.0 / 255.0);
+        const bool ok = alpha && (exact ? d <= tol && de < 1e-3 : errGpu <= errRef * 1.1);
+        if (!ok) std::printf("  FAIL preview %s %dx%d mode %d: max %.6f estimate %.2e alpha %s\n", name, W, H, mode, d, de, alpha ? "ok" : "CHANGED");
+        failures += ok ? 0 : 1;
+        if (mode == 0) worstPrev = std::fmax(worstPrev, d);
+        ++cases;
+      }
+    }
+  }
+  std::printf("Quality Preview (half resolution) vs CPU: worst 32f x255 = %.4f\n", worstPrev * 255);
   std::printf("Noise estimate on the device vs CPU: worst relative sigma / corr difference %.2e\n", worstEst);
   std::printf("Denoise spatial GPU emulation vs CPU: %d cases, worst 32f x255 = %.4f, 16f x255 = %.3f, OpenFX x255 = %.4f\n%s\n",
               cases, worst[0] * 255, worst[1] * 255, worst[2] * 255, failures ? "FAIL" : "PASS");

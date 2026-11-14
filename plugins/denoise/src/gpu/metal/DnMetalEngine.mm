@@ -14,14 +14,31 @@ struct Backend : vv::gpu::MetalBackend {
   const void* src = nullptr;  // current frame (id<MTLBuffer> bridged)
   void* dst = nullptr;
 
-  void dnPrepare(const void*, bool half, Buf opp, const FrameLayout& f) {
-    [encoder() setBuffer:(__bridge id<MTLBuffer>)src offset:0 atIndex:0];
+  void dnPrepare(const void* s, bool half, Buf opp, const FrameLayout& f) {
+    [encoder() setBuffer:(__bridge id<MTLBuffer>)s offset:0 atIndex:0];
     [encoder() setBuffer:opp offset:0 atIndex:1];
     [encoder() setBytes:&f length:sizeof(f) atIndex:2];
     dispatch(half ? "dn_prepare_f16" : "dn_prepare_f32", f.width, f.height);
   }
-  void dnCrop(const void*, bool half, Buf rgb, const CropInfo& c) {
-    [encoder() setBuffer:(__bridge id<MTLBuffer>)src offset:0 atIndex:0];
+  static const void* ptr(Buf b) { return (__bridge const void*)b; }
+  static void* mptr(Buf b) { return (__bridge void*)b; }
+  void dnHalve(const void* s, bool half, Buf d, const FrameLayout& f, PlaneInfo hp) {
+    [encoder() setBuffer:(__bridge id<MTLBuffer>)s offset:0 atIndex:0];
+    [encoder() setBuffer:d offset:0 atIndex:1];
+    [encoder() setBytes:&f length:sizeof(f) atIndex:2];
+    [encoder() setBytes:&hp length:sizeof(hp) atIndex:3];
+    dispatch(half ? "dn_halve_f16" : "dn_halve_f32", hp.width, hp.height);
+  }
+  void dnUpFinish(const void* s, void* d, bool half, Buf low, const FrameLayout& f, PlaneInfo hp) {
+    [encoder() setBuffer:(__bridge id<MTLBuffer>)s offset:0 atIndex:0];
+    [encoder() setBuffer:(__bridge id<MTLBuffer>)d offset:0 atIndex:1];
+    [encoder() setBuffer:low offset:0 atIndex:2];
+    [encoder() setBytes:&f length:sizeof(f) atIndex:3];
+    [encoder() setBytes:&hp length:sizeof(hp) atIndex:4];
+    dispatch(half ? "dn_upfinish_f16" : "dn_upfinish_f32", f.width, f.height);
+  }
+  void dnCrop(const void* s, bool half, Buf rgb, const CropInfo& c) {
+    [encoder() setBuffer:(__bridge id<MTLBuffer>)s offset:0 atIndex:0];
     [encoder() setBuffer:rgb offset:0 atIndex:1];
     [encoder() setBytes:&c length:sizeof(c) atIndex:2];
     dispatch(half ? "dn_crop_f16" : "dn_crop_f32", c.width, c.height);
@@ -78,9 +95,9 @@ struct Backend : vv::gpu::MetalBackend {
     [encoder() setBytes:&b length:sizeof(b) atIndex:4];
     dispatch("dn_accumulate", b.width, b.height);
   }
-  void dnFinish(const void*, void*, bool half, Buf out, Buf res, const FrameLayout& f) {
-    [encoder() setBuffer:(__bridge id<MTLBuffer>)src offset:0 atIndex:0];
-    [encoder() setBuffer:(__bridge id<MTLBuffer>)dst offset:0 atIndex:1];
+  void dnFinish(const void* s, void* d, bool half, Buf out, Buf res, const FrameLayout& f) {
+    [encoder() setBuffer:(__bridge id<MTLBuffer>)s offset:0 atIndex:0];
+    [encoder() setBuffer:(__bridge id<MTLBuffer>)d offset:0 atIndex:1];
     [encoder() setBuffer:out offset:0 atIndex:2];
     [encoder() setBuffer:res offset:0 atIndex:3];
     [encoder() setBytes:&f length:sizeof(f) atIndex:4];
@@ -105,7 +122,8 @@ DnMetalEngine::DnMetalEngine(id<MTLDevice> device, const std::string& path) : im
   }
   impl_->backend = std::make_unique<Backend>(device, lib, std::vector<std::string>{
       "dn_prepare_f32", "dn_prepare_f16", "dn_starlet_h", "dn_starlet_v_band", "dn_pilot",
-      "dn_accumulate", "dn_finish_f32", "dn_finish_f16", "dn_crop_f32", "dn_crop_f16", "dn_starlet_v", "dn_blocks"});
+      "dn_accumulate", "dn_finish_f32", "dn_finish_f16", "dn_crop_f32", "dn_crop_f16", "dn_starlet_v", "dn_blocks",
+      "dn_halve_f32", "dn_halve_f16", "dn_upfinish_f32", "dn_upfinish_f16"});
   if (!impl_->backend->ok()) {
     impl_->error = impl_->backend->error();
     return;
@@ -118,27 +136,27 @@ const std::string& DnMetalEngine::error() const { return impl_->error; }
 
 bool DnMetalEngine::encode(id<MTLCommandBuffer> cb, id<MTLBuffer> src, id<MTLBuffer> dst, bool half, uint32_t w, uint32_t h,
                            uint32_t rowPixels, const NoiseProfile& profile, const SpatialParams& params, bool rgba,
-                           int view, float mix) {
+                           int view, float mix, bool preview) {
   if (!ok()) return false;
   Backend& B = *impl_->backend;
   B.src = (__bridge const void*)src;
   B.dst = (__bridge void*)dst;
   B.begin(cb);
-  const bool done = impl_->pipeline->run(B.src, B.dst, half, w, h, rowPixels, profile, params, rgba, view, mix);
+  const bool done = impl_->pipeline->run(B.src, B.dst, half, w, h, rowPixels, profile, params, rgba, view, mix, preview);
   B.end();
   return done;
 }
 
 bool DnMetalEngine::estimateBlocks(id<MTLCommandQueue> queue, id<MTLBuffer> src, bool half, uint32_t w, uint32_t h,
                                    uint32_t rowPixels, bool rgba, bool bottomUp, uint32_t maxW, uint32_t maxH,
-                                   std::vector<std::vector<EstimateBlock>>& out, int& cropW, int& cropH) {
+                                   std::vector<std::vector<EstimateBlock>>& out, int& cropW, int& cropH, bool preview) {
   if (!ok() || !queue) return false;
   Backend& B = *impl_->backend;
   gpu::SpatialPipeline<Backend>& P = *impl_->pipeline;
   B.src = (__bridge const void*)src;
   id<MTLCommandBuffer> cb = [queue commandBuffer];
   B.begin(cb);
-  const bool encoded = P.encodeEstimate(B.src, half, w, h, rowPixels, rgba, bottomUp, maxW, maxH);
+  const bool encoded = P.encodeEstimate(B.src, half, w, h, rowPixels, rgba, bottomUp, maxW, maxH, preview);
   B.end();
   if (!encoded) return false;
   const size_t bytes = size_t(P.blockCount()) * 3 * DN_BANDS * sizeof(vv::gpu::F4);
