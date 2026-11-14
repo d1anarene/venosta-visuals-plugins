@@ -38,8 +38,8 @@ class MetalRenderer : public vv::GpuRenderer {
     id<MTLBuffer> src = (__bridge id<MTLBuffer>)const_cast<void*>(f.src);
     id<MTLBuffer> dst = (__bridge id<MTLBuffer>)f.dst;
     vv::Image crop;
-    if (!engine_->downloadCrop(queue, src, f.half, f.width, f.height, f.rowPixels, f.rgba, f.bottomUp, kEstimateCropW,
-                               kEstimateCropH, crop))
+    if (!engine_->downloadCrop(queue, src, f.half, f.width, f.height, f.rowPixels, f.rgba, f.bottomUp, cropW(ep),
+                               cropH(ep), crop))
       return false;
     id<MTLCommandBuffer> cb = [queue commandBuffer];
     if (!engine_->encode(cb, src, dst, f.half, f.width, f.height, f.rowPixels,

@@ -11,15 +11,36 @@ using vv::ParamReader;
 using vv::ParamSpec;
 
 enum class ParamKey : int {
-  MasterEnable, Mix, View, Radius, LumaStrength, ChromaStrength, Detail, NoiseLevel, Count
+  Preset, MasterEnable, Mix, Quality, View, Radius, LumaStrength, ChromaStrength, Detail, NoiseLevel, Count
 };
+
+// Preset menu: item 1 is "(Custom)" (what the menu shows after a preset was applied or a value
+// edited). Values: luma, chroma, detail (0..1), noise level.
+struct Preset {
+  const char* name;
+  float luma, chroma, detail, noiseLevel;
+};
+inline const Preset* presets(int& count) {
+  static const Preset p[] = {
+      {"Light", 0.35f, 0.5f, 0.7f, 1.f},
+      {"Medium", 0.5f, 0.75f, 0.5f, 1.f},
+      {"Strong", 1.f, 1.5f, 0.3f, 1.f},
+      {"Chroma Only", 0.f, 1.f, 0.5f, 1.f},
+      {"Low Light", 0.75f, 2.f, 0.4f, 1.25f},
+  };
+  count = int(sizeof(p) / sizeof(p[0]));
+  return p;
+}
+#define DN_PRESET_ITEMS "(Custom)|Light|Medium|Strong|Chroma Only|Low Light"
+#define DN_PRESET_COUNT 6
 
 struct EffectParams {
   bool masterEnable = true;
   float mix = 1.f;
+  bool preview = false;    // Quality: Preview (cheaper noise estimate) / Final
   int view = 0;            // 0 result, 1 removed noise (x4 + grey), 2 input
   int radius = 2;          // temporal radius (frames each side) where the host supplies frames
-  float lumaStrength = 1.f, chromaStrength = 1.5f;
+  float lumaStrength = 0.5f, chromaStrength = 0.75f;
   float detail = 0.5f;     // 0..1: 1 keeps the most detail (less spatial smoothing after fusion)
   float noiseLevel = 1.f;  // scales the estimated noise profile
 };
@@ -36,14 +57,22 @@ inline const std::vector<ParamSpec>& allParams() {
       v.push_back(s);
       return v.back();
     };
+    ParamSpec& pre = add(K::Preset, T::Popup, "Preset", 10, 0, 0, 0, 0, 1);
+    pre.items = DN_PRESET_ITEMS;
+    pre.itemCount = DN_PRESET_COUNT;
+    pre.supervise = true;
+    pre.cannotTimeVary = true;
     add(K::MasterEnable, T::Checkbox, "Master Enable", 1, 0, 0, 0, 0, 1);
     add(K::Mix, T::Float, "Mix", 2, 0, 100, 0, 100, 100, 1).percent = true;
+    ParamSpec& quality = add(K::Quality, T::Popup, "Quality", 9, 0, 0, 0, 0, 2);
+    quality.items = "Preview|Final";
+    quality.itemCount = 2;
     ParamSpec& view = add(K::View, T::Popup, "View", 3, 0, 0, 0, 0, 1);
     view.items = "Result|Removed Noise|Input";
     view.itemCount = 3;
     add(K::Radius, T::IntSlider, "Temporal Frames (each side)", 4, 0, 3, 0, 3, 2, 0);
-    add(K::LumaStrength, T::Float, "Luma Strength", 5, 0, 4, 0, 2, 1.0);
-    add(K::ChromaStrength, T::Float, "Chroma Strength", 6, 0, 6, 0, 3, 1.5);
+    add(K::LumaStrength, T::Float, "Luma Strength", 5, 0, 4, 0, 2, 0.5);
+    add(K::ChromaStrength, T::Float, "Chroma Strength", 6, 0, 6, 0, 3, 0.75);
     add(K::Detail, T::Float, "Detail", 7, 0, 100, 0, 100, 50, 0).percent = true;
     add(K::NoiseLevel, T::Float, "Noise Level", 8, 0.25, 4, 0.5, 2, 1.0);
     return v;
@@ -58,6 +87,7 @@ inline EffectParams readParams(const ParamReader& r) {
   EffectParams p;
   p.masterEnable = r.flag(paramIndex(K::MasterEnable));
   p.mix = float(r.number(paramIndex(K::Mix))) / 100.f;
+  p.preview = r.popup(paramIndex(K::Quality)) == 1;
   p.view = r.popup(paramIndex(K::View)) - 1;
   p.radius = int(r.number(paramIndex(K::Radius)));
   p.lumaStrength = float(r.number(paramIndex(K::LumaStrength)));
@@ -68,8 +98,8 @@ inline EffectParams readParams(const ParamReader& r) {
   p.mix = clampf(p.mix, 0, 1, 1);
   p.view = p.view < 0 || p.view > 2 ? 0 : p.view;
   p.radius = p.radius < 0 ? 0 : (p.radius > 3 ? 3 : p.radius);
-  p.lumaStrength = clampf(p.lumaStrength, 0, 4, 1);
-  p.chromaStrength = clampf(p.chromaStrength, 0, 6, 1.5f);
+  p.lumaStrength = clampf(p.lumaStrength, 0, 4, 0.5f);
+  p.chromaStrength = clampf(p.chromaStrength, 0, 6, 0.75f);
   p.detail = clampf(p.detail, 0, 1, 0.5f);
   p.noiseLevel = clampf(p.noiseLevel, 0.25f, 4, 1);
   return p;

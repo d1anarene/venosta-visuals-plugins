@@ -74,7 +74,7 @@ class DnEffect : public vv::Effect {
 
   bool render(vv::Image& img, const vv::ParamReader& r, int64_t) const override {
     const EffectParams ep = readParams(r);
-    const NoiseProfile prof = estimateSpatialProfile(centreCrop(img), ep.noiseLevel);
+    const NoiseProfile prof = estimateSpatialProfile(centreCrop(img, cropW(ep), cropH(ep)), ep.noiseLevel);
     const vv::Image input = img;
     finish(img, input, denoiseSpatial(input, prof, spatialParams(ep)), ep);
     return true;
@@ -98,6 +98,22 @@ class DnEffect : public vv::Effect {
     tp.postStrength = 1.f - ep.detail;
     const vv::Image input = img;
     finish(img, input, denoiseTemporal(frames, centre, pr.starlet, pr.pixel, sp, tp), ep);
+    return true;
+  }
+
+  bool paramChanged(int hostIndex, const vv::ParamReader& r, vv::ParamWriter& w) const override {
+    const int menu = paramIndex(ParamKey::Preset);
+    if (hostIndex != menu || r.popup(menu) < 2) return false;
+    int count = 0;
+    const Preset* list = presets(count);
+    const int i = r.popup(menu) - 2;
+    if (i < 0 || i >= count) return false;
+    const Preset& p = list[i];
+    w.setNumber(paramIndex(ParamKey::LumaStrength), p.luma);
+    w.setNumber(paramIndex(ParamKey::ChromaStrength), p.chroma);
+    w.setNumber(paramIndex(ParamKey::Detail), p.detail * 100.0);
+    w.setNumber(paramIndex(ParamKey::NoiseLevel), p.noiseLevel);
+    w.setPopup(menu, 1);
     return true;
   }
 

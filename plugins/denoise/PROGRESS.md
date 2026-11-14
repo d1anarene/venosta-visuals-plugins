@@ -137,3 +137,18 @@ Historical findings below are limited by the current review in `docs/RESEARCH.md
   Premiere build. CUDA has not been compiled locally or run anywhere yet. Nothing host-tested.
 - Next: temporal fusion on the GPU, and multi-frame GPU dependencies in the Premiere adapter
   once probe build 3 confirms the protocol.
+
+## First host feedback and changes (2026-11-14)
+
+- Owner test, Premiere Pro 2027, Windows, CUDA (build 1.1.6 of the prototype): the effect works
+  and removes noise, but playback is **not smooth**; luma/chroma defaults too strong.
+- Cause found: the per-frame noise estimate on the CPU (1024x576 crop) took about 315 ms on a
+  4-core container. Now about 180 ms with identical output (bit-exact check: one starlet
+  decomposition instead of two, parallel block statistics, clamp-free interior of the B3 filter).
+- New **Quality: Preview / Final** (disk ID 9, default Final): Preview estimates on a 384x216 crop
+  (about 20 ms here); the profile then varies more from frame to frame (synthetic 1080p noise:
+  6.9 % instead of 1.7 % mean change of the band 0-2 sigmas), so possibly some flicker.
+- Defaults halved: Luma Strength 0.5, Chroma Strength 0.75 (owner's request).
+- New **Preset** menu (disk ID 10): Light, Medium (= defaults), Strong, Chroma Only, Low Light.
+- Not yet measured in a host: playback speed after these changes. Real-time needs the estimate on
+  the GPU or a stored profile (R3).

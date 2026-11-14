@@ -25,6 +25,14 @@ struct Host : vv::ParamReader {
   int popup(int i) const override { return int(v[size_t(i)]); }
 };
 
+struct Writer : vv::ParamWriter {
+  Host& h;
+  explicit Writer(Host& host) : h(host) {}
+  void setNumber(int i, double x) override { h.v[size_t(i)] = x; }
+  void setFlag(int i, bool x) override { h.v[size_t(i)] = x; }
+  void setPopup(int i, int x) override { h.v[size_t(i)] = x; }
+};
+
 int main() {
   const vv::Effect& fx = vv::effect();
   CHECK(fx.maxTemporalRadius() == 3);
@@ -50,6 +58,21 @@ int main() {
   bool alpha = true, finite = true;
   for (size_t i = 0; i < t.px.size(); ++i) { if (i % 4 == 3) alpha = alpha && t.px[i] == 0.6f; finite = finite && std::isfinite(t.px[i]); }
   CHECK(alpha && finite);
+  // Presets: "Strong" (item 4) writes its values and the menu returns to (Custom).
+  {
+    Host p;
+    Writer w(p);
+    p.set(ParamKey::Preset, 4);
+    CHECK(fx.paramChanged(paramIndex(ParamKey::Preset), p, w));
+    CHECK(p.v[size_t(paramIndex(ParamKey::LumaStrength))] == 1.0 && p.v[size_t(paramIndex(ParamKey::Preset))] == 1);
+    CHECK(std::fabs(p.v[size_t(paramIndex(ParamKey::Detail))] - 30.0) < 1e-4);
+    CHECK(!fx.paramChanged(paramIndex(ParamKey::Mix), p, w));
+    // Quality Preview renders too (smaller estimate crop).
+    p.set(ParamKey::Quality, 1);
+    vv::Image q = s[2].noisy;
+    CHECK(fx.render(q, p, 2));
+    CHECK(psnr(q, s[2].clean) > psnr(s[2].noisy, s[2].clean) + 3);
+  }
   // Bypass and views.
   h.set(ParamKey::MasterEnable, 0);
   CHECK(!fx.active(h));

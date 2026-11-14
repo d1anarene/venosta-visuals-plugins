@@ -43,8 +43,8 @@ class CudaRenderer : public vv::GpuRenderer {
     if (!prepare(nullptr)) return false;
     const EffectParams ep = readParams(r);
     vv::Image crop;
-    if (!engine_->downloadCrop(f.src, f.half, f.width, f.height, f.rowPixels, f.rgba, f.bottomUp, kEstimateCropW,
-                               kEstimateCropH, crop))
+    if (!engine_->downloadCrop(f.src, f.half, f.width, f.height, f.rowPixels, f.rgba, f.bottomUp, cropW(ep),
+                               cropH(ep), crop))
       return false;
     return engine_->render(f.src, f.dst, f.half, f.width, f.height, f.rowPixels,
                            estimateSpatialProfile(crop, ep.noiseLevel), spatialParams(ep), f.rgba, ep.view, ep.mix);

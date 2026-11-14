@@ -20,6 +20,8 @@
 // Channel correlation: from the blocks whose normalised variance is low in all three channels.
 #include "dn_profile.h"
 
+#include "vv/parallel.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -69,9 +71,13 @@ struct Block {
 };
 
 std::vector<Block> blocks(const vv::Plane& band, const vv::Plane& low) {
-  std::vector<Block> out;
-  for (int by = 0; by + kBlock <= band.height; by += kStride)
-    for (int bx = 0; bx + kBlock <= band.width; bx += kStride) {
+  const int rows = band.height >= kBlock ? (band.height - kBlock) / kStride + 1 : 0;
+  const int cols = band.width >= kBlock ? (band.width - kBlock) / kStride + 1 : 0;
+  std::vector<Block> out(size_t(rows) * size_t(cols));
+  vv::parallelRows(rows, [&](int r) {
+    const int by = r * kStride;
+    for (int q = 0; q < cols; ++q) {
+      const int bx = q * kStride;
       double s2[3] = {}, sv[3] = {}, sx[3] = {};
       for (int y = by; y < by + kBlock; ++y)
         for (int x = bx; x < bx + kBlock; ++x) {
@@ -81,7 +87,7 @@ std::vector<Block> blocks(const vv::Plane& band, const vv::Plane& low) {
           sx[0] += double(p[0]) * p[1]; sx[1] += double(p[0]) * p[2]; sx[2] += double(p[1]) * p[2];
         }
       const double n = kBlock * kBlock;
-      Block b;
+      Block& b = out[size_t(r) * size_t(cols) + size_t(q)];
       for (int c = 0; c < 3; ++c) {
         b.var[c] = float(s2[c] / n);  // band coefficients have zero mean: no mean removal (see top)
         b.value[c] = float(sv[c] / n);
@@ -89,8 +95,8 @@ std::vector<Block> blocks(const vv::Plane& band, const vv::Plane& low) {
       b.cov[0] = float(sx[0] / n);
       b.cov[1] = float(sx[1] / n);
       b.cov[2] = float(sx[2] / n);
-      out.push_back(b);
     }
+  }, 4);
   return out;
 }
 
@@ -314,8 +320,15 @@ namespace {
 // used for binning from `values`.
 NoiseProfile estimateImpl(const vv::Plane& signal, const vv::Plane& values, EstimateStats* stats, Domain domain) {
   const Calib* cal = calibration(domain);
-  const std::vector<vv::Plane> bands = bandsOf(domain, signal);
-  const std::vector<vv::Plane> lows = lowsOf(domain, values, int(bands.size()));
+  std::vector<vv::Plane> bands, lows;
+  if (domain == Domain::Starlet && &signal == &values) {  // single frame: one decomposition serves both
+    Starlet s = starletDecompose(signal, kBands);
+    bands = std::move(s.bands);
+    lows = std::move(s.smooth);
+  } else {
+    bands = bandsOf(domain, signal);
+    lows = lowsOf(domain, values, int(bands.size()));
+  }
   NoiseProfile prof;
   for (int b = 0; b < kBands && b < int(bands.size()); ++b) {
     const std::vector<Block> bl = blocks(bands[size_t(b)], lows[size_t(b)]);
