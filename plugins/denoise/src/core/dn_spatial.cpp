@@ -39,10 +39,12 @@ vv::Image denoiseSpatial(const vv::Image& noisy, const NoiseProfile& prof, const
     });
     // Window grows with the band scale (coefficients are correlated over ~2^j px).
     const float win = sp.window * float(1 << j);
-    const vv::Plane E = vv::gaussianBlur(e, win);
+    // Same blur plan as the GPU pyramid (vv_gpu_pyramid.h), so CPU and GPU agree.
+    const vv::BlurStep plan = vv::planGaussian(win, w, h);
+    const vv::Plane E = vv::blurByPlan(e, plan);
     vv::Plane pilot2(w, h, 3);
     for (size_t i = 0; i < band.v.size(); ++i) pilot2.v[i] = dn_pilot_sq(band.v[i], E.v[i], var.v[i], sp.pilotTau);
-    const vv::Plane P = vv::gaussianBlur(pilot2, win);
+    const vv::Plane P = vv::blurByPlan(pilot2, plan);
     for (size_t i = 0; i < band.v.size(); ++i) {
       const int c = int(i % 3);
       band.v[i] *= dn_wiener_gain(P.v[i], var.v[i], strength[c], j == 0 ? sp.detailRecovery : 0.f);

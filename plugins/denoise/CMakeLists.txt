@@ -84,6 +84,10 @@ add_executable(dn_effect_tests tests/core/test_effect.cpp src/effect/DnEffect.cp
 target_include_directories(dn_effect_tests PRIVATE src/effect)
 target_link_libraries(dn_effect_tests PRIVATE dn_eval)
 add_test(NAME effect COMMAND dn_effect_tests)
+add_executable(dn_gpu_emulation_tests tests/gpu/dn_gpu_emulation_test.cpp)
+target_include_directories(dn_gpu_emulation_tests PRIVATE src/gpu/common)
+target_link_libraries(dn_gpu_emulation_tests PRIVATE dn_eval)
+add_test(NAME gpu_emulation COMMAND dn_gpu_emulation_tests)
 if(DN_BUILD_PLUGIN)
   include(${VV_ENGINE_DIR}/cmake/vv_premiere.cmake)
   vv_add_premiere_effect(Denoise PIPL src/effect/DnPiPL.r BUNDLE_ID com.venostavisuals.Denoise
