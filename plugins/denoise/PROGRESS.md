@@ -181,3 +181,7 @@ Historical findings below are limited by the current review in `docs/RESEARCH.md
   Emulation vs CPU estimate: worst relative sigma/correlation difference 1.1e-6 (float block sums
   instead of double), all three frame layouts. Metal test extended accordingly (CI). Speed in the
   host not measured yet.
+- **Measured in the host** (owner, Premiere 2027, Windows, GTX 1080, 4K 32f, CUDA, 2026-11-14):
+  Final estimate 23 ms + filter 100 ms = 122 ms (was 289 ms); Preview estimate 9 ms + filter
+  91 ms = 100 ms (was 159 ms). The filter is now the main cost; Preview and Final differ only in
+  the estimate crop.
