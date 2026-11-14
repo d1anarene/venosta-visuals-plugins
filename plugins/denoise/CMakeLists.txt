@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
+if(NOT DEFINED CMAKE_OSX_ARCHITECTURES)
+  set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "macOS architectures")
+endif()
 project(Denoise VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,7 +13,7 @@ if(NOT TARGET vv_core)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../shared/engine ${CMAKE_BINARY_DIR}/vv-engine)
 endif()
 
-# Research phase: CPU core + evaluation harness only (no host plug-in yet).
+# CPU core (research reference) + evaluation harness.
 add_library(dn_core STATIC src/core/dn_pyramid.cpp src/core/dn_profile.cpp src/core/dn_starlet.cpp src/core/dn_spatial.cpp src/core/dn_temporal.cpp)
 target_include_directories(dn_core PUBLIC src/core)
 target_link_libraries(dn_core PUBLIC vv_core)
