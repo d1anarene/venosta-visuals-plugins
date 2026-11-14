@@ -42,7 +42,7 @@ void finish(vv::Image& img, const vv::Image& input, const vv::Image& result, con
     if (i % 4 == 3) continue;  // alpha unchanged
     const float in = input.px[i], r = result.px[i];
     float o = ep.view == 1 ? 0.5f + 4.f * (in - r) : (ep.view == 2 ? in : r);
-    if (ep.view == 0 && ep.mix < 1.f) o = in + (o - in) * ep.mix;
+    if ((ep.view == 0 || ep.view == 3) && ep.mix < 1.f) o = in + (o - in) * ep.mix;
     img.px[i] = std::isfinite(o) ? o : in;
   }
 }
@@ -74,9 +74,18 @@ class DnEffect : public vv::Effect {
 
   bool render(vv::Image& img, const vv::ParamReader& r, int64_t) const override {
     const EffectParams ep = readParams(r);
-    const NoiseProfile prof = estimateSpatialProfile(centreCrop(img, cropW(ep), cropH(ep)), ep.noiseLevel);
+    const double t0 = nowMs();
+    const vv::Image crop = centreCrop(img, cropW(ep), cropH(ep));
+    const NoiseProfile prof = estimateSpatialProfile(crop, ep.noiseLevel);
+    const double t1 = nowMs();
     const vv::Image input = img;
     finish(img, input, denoiseSpatial(input, prof, spatialParams(ep)), ep);
+    if (ep.view == 3) {
+      const double t2 = nowMs();
+      drawTiming(img, Timing{"CPU", img.width, img.height, crop.width, crop.height, false, ep.preview, t1 - t0, t2 - t1,
+                             t2 - t0},
+                 img.height);
+    }
     return true;
   }
 

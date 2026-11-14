@@ -1,13 +1,13 @@
 // Denoise — spatial filter as GPU passes for any backend (CUDA, Metal, CPU emulation). Same steps
 // and blur plans as dn_spatial.cpp. The Backend provides the vv::gpu::Pyramid operations plus:
-//   void dnPrepare(const void* src, bool half, Buf opp, Buf rgb, const FrameLayout&);
-//   void dnStarlet(Buf src, Buf tmp, Buf dst, PlaneInfo, int step);        // H then V
-//   void dnBand(Buf cur, Buf next, Buf band, Buf energy, PlaneInfo);
-//   void dnVar(Buf lowRgb, Buf scale (may be null), Buf var, const DnProfileTable&, const BandInfo&);
+//   void dnPrepare(const void* src, bool half, Buf opp, const FrameLayout&);
+//   void dnStarletH(Buf src, Buf tmp, PlaneInfo, int step);
+//   void dnStarletVBand(Buf tmp, Buf cur, Buf next, Buf band, Buf energy, Buf var, const DnProfileTable&,
+//                       const BandInfo&, int step);
 //   void dnPilot(Buf band, Buf E, Buf var, Buf pilot2, const BandInfo&);
 //   void dnAccumulate(Buf out, Buf band, Buf P, Buf var, const BandInfo&);
 //   void dnFinish(const void* src, void* dst, bool half, Buf out, Buf residual, const FrameLayout&);
-// Memory (F4 full-res buffers): 11 + the pyramid's scratch. Rows may be bottom-up (OFX): every
+// Per band: 4 full-frame passes + 2 pyramid blurs. Memory (F4 full-res buffers): 9 + the pyramid's scratch. Rows may be bottom-up (OFX): every
 // pass is symmetric in y, so results do not depend on row order.
 #pragma once
 #include "dn_gpu_pixels.h"
@@ -42,22 +42,19 @@ class SpatialPipeline {
     const PlaneInfo p{w, h};
     const FrameLayout f{w, h, rowPixels, rgba ? 1 : 0, view, mix};
     const DnProfileTable table = toTable(prof);
-    B.dnPrepare(src, half, oppA, rgbA, f);
+    B.dnPrepare(src, half, oppA, f);
     B.clear(out, p);
-    Buf cur = oppA, next = oppB, rcur = rgbA, rnext = rgbB;
+    Buf cur = oppA, next = oppB;
     for (int j = 0; j < DN_BANDS; ++j) {
-      B.dnStarlet(cur, tmp, next, p, 1 << j);
-      B.dnStarlet(rcur, tmp, rnext, p, 1 << j);
-      B.dnBand(cur, next, band, energy, p);
-      BandInfo bi{w, h, j, 0, sp.pilotTau, {sp.lumaStrength, sp.chromaStrength, sp.chromaStrength}, sp.detailRecovery};
-      B.dnVar(rnext, nullBuf(), var, table, bi);
+      const BandInfo bi{w, h, j, 0, sp.pilotTau, {sp.lumaStrength, sp.chromaStrength, sp.chromaStrength}, sp.detailRecovery};
+      B.dnStarletH(cur, tmp, p, 1 << j);
+      B.dnStarletVBand(tmp, cur, next, band, energy, var, table, bi, 1 << j);
       const vv::BlurStep plan = vv::planGaussian(sp.window * float(1 << j), int(w), int(h));
       pyr.blurByPlan(energy, E, plan);
       B.dnPilot(band, E, var, pilot2, bi);
       pyr.blurByPlan(pilot2, E, plan);  // E now holds P
       B.dnAccumulate(out, band, E, var, bi);
       std::swap(cur, next);
-      std::swap(rcur, rnext);
     }
     B.dnFinish(src, dst, half, out, cur, f);
     return true;
@@ -67,16 +64,15 @@ class SpatialPipeline {
   Backend& B;
   vv::gpu::Pyramid<Backend> pyr;
   uint32_t cachedW = 0, cachedH = 0;
-  Buf oppA{}, oppB{}, rgbA{}, rgbB{}, tmp{}, band{}, energy{}, E{}, var{}, pilot2{}, out{};
+  Buf oppA{}, oppB{}, tmp{}, band{}, energy{}, E{}, var{}, pilot2{}, out{};
 
-  static Buf nullBuf() { return Buf{}; }
   void ensure(uint32_t w, uint32_t h) {
     if (w == cachedW && h == cachedH) return;
     cachedW = w;
     cachedH = h;
     B.releaseAll();
     const size_t n = size_t(w) * h;
-    oppA = B.alloc(n); oppB = B.alloc(n); rgbA = B.alloc(n); rgbB = B.alloc(n); tmp = B.alloc(n);
+    oppA = B.alloc(n); oppB = B.alloc(n); tmp = B.alloc(n);
     band = B.alloc(n); energy = B.alloc(n); E = B.alloc(n); var = B.alloc(n); pilot2 = B.alloc(n); out = B.alloc(n);
     pyr.allocate(w, h);
   }

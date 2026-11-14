@@ -18,6 +18,10 @@ class DnCudaEngine {
    *  first, for noise estimation. */
   bool downloadCrop(const void* src, bool half, uint32_t width, uint32_t height, uint32_t rowPixels, bool rgba,
                     bool bottomUp, uint32_t maxW, uint32_t maxH, vv::Image& out);
+  /** Rows y0..y0+h-1 (as stored) of a frame buffer <-> RGBA float image (diagnostic overlays). */
+  bool readRegion(const void* buf, bool half, uint32_t rowPixels, bool rgba, uint32_t x0, uint32_t y0, uint32_t w,
+                  uint32_t h, vv::Image& out);
+  bool writeRegion(void* buf, bool half, uint32_t rowPixels, bool rgba, uint32_t x0, uint32_t y0, const vv::Image& in);
 
  private:
   struct Impl;

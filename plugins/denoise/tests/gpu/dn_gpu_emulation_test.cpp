@@ -16,21 +16,17 @@ using namespace dn::eval;
 
 namespace {
 struct Emu : vv::gpu::EmulationBackend {
-  void dnPrepare(const void* src, bool half, Buf opp, Buf rgb, const FrameLayout& f) {
+  void dnPrepare(const void* src, bool half, Buf opp, const FrameLayout& f) {
     grid(f.width, f.height, [&](uint32_t x, uint32_t y) {
-      if (half) pxDnPrepare(static_cast<const H4*>(src), opp, rgb, f, x, y);
-      else pxDnPrepare(static_cast<const F4*>(src), opp, rgb, f, x, y);
+      if (half) pxDnPrepare(static_cast<const H4*>(src), opp, f, x, y);
+      else pxDnPrepare(static_cast<const F4*>(src), opp, f, x, y);
     });
   }
-  void dnStarlet(Buf s, Buf t, Buf d, PlaneInfo p, int step) {
+  void dnStarletH(Buf s, Buf t, PlaneInfo p, int step) {
     grid(p.width, p.height, [&](uint32_t x, uint32_t y) { pxDnStarletH(s, t, p, step, x, y); });
-    grid(p.width, p.height, [&](uint32_t x, uint32_t y) { pxDnStarletV(t, d, p, step, x, y); });
   }
-  void dnBand(Buf c, Buf n, Buf b, Buf e, PlaneInfo p) {
-    grid(p.width, p.height, [&](uint32_t x, uint32_t y) { pxDnBand(c, n, b, e, p, x, y); });
-  }
-  void dnVar(Buf low, Buf scale, Buf var, const DnProfileTable& t, const BandInfo& b) {
-    grid(b.width, b.height, [&](uint32_t x, uint32_t y) { pxDnVar(low, scale, var, t, b, x, y); });
+  void dnStarletVBand(Buf t, Buf c, Buf n, Buf b, Buf e, Buf v, const DnProfileTable& tab, const BandInfo& bi, int step) {
+    grid(bi.width, bi.height, [&](uint32_t x, uint32_t y) { pxDnStarletVBand(t, c, n, b, e, v, tab, bi, step, x, y); });
   }
   void dnPilot(Buf band, Buf E, Buf var, Buf p2, const BandInfo& b) {
     grid(b.width, b.height, [&](uint32_t x, uint32_t y) { pxDnPilot(band, E, var, p2, b, x, y); });

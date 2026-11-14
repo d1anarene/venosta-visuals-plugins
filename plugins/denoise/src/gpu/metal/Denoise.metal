@@ -15,18 +15,16 @@ struct Plane { uint width, height; };
 struct Step { int step; };
 
 template <typename T>
-static void prepare_impl(device const T* src, device float4* opp, device float4* rgb, constant FrameLayout& f, uint2 g) {
+static void prepare_impl(device const T* src, device float4* opp, constant FrameLayout& f, uint2 g) {
   if (g.x >= f.width || g.y >= f.height) return;
   float4 s = float4(src[g.y * f.rowPixels + g.x]);
   float3 c = f.rgba != 0 ? s.xyz : float3(s.z, s.y, s.x);
-  uint i = g.y * f.width + g.x;
-  opp[i] = float4(dn_to_opponent(c), s.w);
-  rgb[i] = float4(c, s.w);
+  opp[g.y * f.width + g.x] = float4(dn_to_opponent(c), s.w);
 }
-kernel void dn_prepare_f32(device const float4* src [[buffer(0)]], device float4* opp [[buffer(1)]], device float4* rgb [[buffer(2)]],
-                           constant FrameLayout& f [[buffer(3)]], uint2 g [[thread_position_in_grid]]) { prepare_impl(src, opp, rgb, f, g); }
-kernel void dn_prepare_f16(device const half4* src [[buffer(0)]], device float4* opp [[buffer(1)]], device float4* rgb [[buffer(2)]],
-                           constant FrameLayout& f [[buffer(3)]], uint2 g [[thread_position_in_grid]]) { prepare_impl(src, opp, rgb, f, g); }
+kernel void dn_prepare_f32(device const float4* src [[buffer(0)]], device float4* opp [[buffer(1)]],
+                           constant FrameLayout& f [[buffer(2)]], uint2 g [[thread_position_in_grid]]) { prepare_impl(src, opp, f, g); }
+kernel void dn_prepare_f16(device const half4* src [[buffer(0)]], device float4* opp [[buffer(1)]],
+                           constant FrameLayout& f [[buffer(2)]], uint2 g [[thread_position_in_grid]]) { prepare_impl(src, opp, f, g); }
 
 kernel void dn_starlet_h(device const float4* s [[buffer(0)]], device float4* d [[buffer(1)]], constant Plane& p [[buffer(2)]],
                          constant Step& st [[buffer(3)]], uint2 g [[thread_position_in_grid]]) {
@@ -36,32 +34,24 @@ kernel void dn_starlet_h(device const float4* s [[buffer(0)]], device float4* d 
   for (int t = -2; t <= 2; ++t) acc += k[t + 2] * s[g.y * p.width + uint(clamp(int(g.x) + t * st.step, 0, int(p.width) - 1))];
   d[g.y * p.width + g.x] = acc;
 }
-kernel void dn_starlet_v(device const float4* s [[buffer(0)]], device float4* d [[buffer(1)]], constant Plane& p [[buffer(2)]],
-                         constant Step& st [[buffer(3)]], uint2 g [[thread_position_in_grid]]) {
-  if (g.x >= p.width || g.y >= p.height) return;
+kernel void dn_starlet_v_band(device const float4* tmp [[buffer(0)]], device const float4* cur [[buffer(1)]],
+                              device float4* next [[buffer(2)]], device float4* band [[buffer(3)]],
+                              device float4* energy [[buffer(4)]], device float4* var [[buffer(5)]],
+                              constant DnProfileTable& t [[buffer(6)]], constant BandInfo& b [[buffer(7)]],
+                              constant Step& st [[buffer(8)]], uint2 g [[thread_position_in_grid]]) {
+  if (g.x >= b.width || g.y >= b.height) return;
   const float k[5] = {1.0f / 16, 4.0f / 16, 6.0f / 16, 4.0f / 16, 1.0f / 16};
   float4 acc = float4(0.0f);
-  for (int t = -2; t <= 2; ++t) acc += k[t + 2] * s[uint(clamp(int(g.y) + t * st.step, 0, int(p.height) - 1)) * p.width + g.x];
-  d[g.y * p.width + g.x] = acc;
-}
-kernel void dn_band(device const float4* c [[buffer(0)]], device const float4* n [[buffer(1)]], device float4* b [[buffer(2)]],
-                    device float4* e [[buffer(3)]], constant Plane& p [[buffer(4)]], uint2 g [[thread_position_in_grid]]) {
-  if (g.x >= p.width || g.y >= p.height) return;
-  uint i = g.y * p.width + g.x;
-  float3 v = c[i].xyz - n[i].xyz;
-  b[i] = float4(v, 0.0f);
-  e[i] = float4(v * v, 0.0f);
-}
-kernel void dn_var(device const float4* low [[buffer(0)]], device const float4* scale [[buffer(1)]], device float4* var [[buffer(2)]],
-                   constant DnProfileTable& t [[buffer(3)]], constant BandInfo& b [[buffer(4)]], uint2 g [[thread_position_in_grid]]) {
-  if (g.x >= b.width || g.y >= b.height) return;
+  for (int s = -2; s <= 2; ++s) acc += k[s + 2] * tmp[uint(clamp(int(g.y) + s * st.step, 0, int(b.height) - 1)) * b.width + g.x];
   uint i = g.y * b.width + g.x;
+  next[i] = acc;
+  float3 d = cur[i].xyz - acc.xyz;
+  band[i] = float4(d, 0.0f);
+  energy[i] = float4(d * d, 0.0f);
   float sig[3 * DN_BINS];
-  for (int k = 0; k < 3 * DN_BINS; ++k) sig[k] = t.sigma[b.band * 3 * DN_BINS + k];
+  for (int q = 0; q < 3 * DN_BINS; ++q) sig[q] = t.sigma[b.band * 3 * DN_BINS + q];
   float cor[3] = {t.corr[b.band * 3], t.corr[b.band * 3 + 1], t.corr[b.band * 3 + 2]};
-  float3 v = dn_opponent_variance(sig, cor, low[i].xyz);
-  float k = b.hasScale != 0 ? scale[i].x : 1.0f;
-  var[i] = float4(v * k * k, 0.0f);
+  var[i] = float4(dn_opponent_variance(sig, cor, dn_from_opponent(acc.xyz)), 0.0f);
 }
 kernel void dn_pilot(device const float4* band [[buffer(0)]], device const float4* E [[buffer(1)]], device const float4* var [[buffer(2)]],
                      device float4* p2 [[buffer(3)]], constant BandInfo& b [[buffer(4)]], uint2 g [[thread_position_in_grid]]) {

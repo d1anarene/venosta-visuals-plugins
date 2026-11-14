@@ -3,7 +3,11 @@
 #include "DnGpu.h"
 
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
 #include <cstring>
+
+#include "vv/overlay.h"
 
 #ifdef DN_WITH_CUDA_RENDERER
 #include "DnCuda.h"
@@ -31,6 +35,37 @@ SpatialParams spatialParams(const EffectParams& ep) {
   return sp;
 }
 
+double nowMs() {
+  using C = std::chrono::steady_clock;
+  return std::chrono::duration<double, std::milli>(C::now().time_since_epoch()).count();
+}
+
+std::vector<std::string> timingLines(const Timing& t) {
+  char b[5][96];
+  std::snprintf(b[0], sizeof b[0], "DENOISE TIMING - %s", t.path);
+  std::snprintf(b[1], sizeof b[1], "%dX%d %s - QUALITY %s", t.width, t.height, t.half ? "16F" : "32F",
+                t.preview ? "PREVIEW" : "FINAL");
+  std::snprintf(b[2], sizeof b[2], "NOISE ESTIMATE %.0f MS (%dX%d)", t.estimateMs, t.cropW, t.cropH);
+  std::snprintf(b[3], sizeof b[3], "FILTER %.0f MS", t.filterMs);
+  std::snprintf(b[4], sizeof b[4], "TOTAL %.0f MS", t.totalMs);
+  return {b[0], b[1], b[2], b[3], b[4]};
+}
+
+void timingBox(const Timing& t, int frameWidth, int frameHeight, int& w, int& h) {
+  vv::overlay::bannerSize(timingLines(t), vv::overlay::bannerScale(frameHeight), w, h);
+  w = std::min(w, frameWidth);
+  h = std::min(h, frameHeight);
+}
+
+void drawTiming(vv::Image& img, const Timing& t, int frameHeight) {
+  vv::overlay::drawBanner(img, timingLines(t), vv::overlay::bannerScale(frameHeight));
+}
+
+void flipRows(vv::Image& img) {
+  for (int y = 0; y < img.height / 2; ++y)
+    std::swap_ranges(img.at(0, y), img.at(0, y) + size_t(img.width) * 4, img.at(0, img.height - 1 - y));
+}
+
 #ifdef DN_WITH_CUDA_RENDERER
 namespace {
 class CudaRenderer : public vv::GpuRenderer {
@@ -42,12 +77,30 @@ class CudaRenderer : public vv::GpuRenderer {
   bool render(const vv::GpuFrame& f, const vv::ParamReader& r, int64_t) override {
     if (!prepare(nullptr)) return false;
     const EffectParams ep = readParams(r);
+    const double t0 = nowMs();
     vv::Image crop;
     if (!engine_->downloadCrop(f.src, f.half, f.width, f.height, f.rowPixels, f.rgba, f.bottomUp, cropW(ep),
                                cropH(ep), crop))
       return false;
-    return engine_->render(f.src, f.dst, f.half, f.width, f.height, f.rowPixels,
-                           estimateSpatialProfile(crop, ep.noiseLevel), spatialParams(ep), f.rgba, ep.view, ep.mix);
+    const NoiseProfile prof = estimateSpatialProfile(crop, ep.noiseLevel);
+    const double t1 = nowMs();
+    const bool timing = ep.view == 3;
+    if (!engine_->render(f.src, f.dst, f.half, f.width, f.height, f.rowPixels, prof, spatialParams(ep), f.rgba,
+                         timing ? 0 : ep.view, ep.mix))
+      return false;
+    if (!timing) return true;
+    const double t2 = nowMs();
+    const Timing tm{"CUDA", int(f.width), int(f.height), crop.width, crop.height, f.half, ep.preview,
+                    t1 - t0, t2 - t1, t2 - t0};
+    int bw = 0, bh = 0;
+    timingBox(tm, int(f.width), int(f.height), bw, bh);
+    const uint32_t y0 = f.bottomUp ? f.height - uint32_t(bh) : 0;
+    vv::Image box;
+    if (!engine_->readRegion(f.dst, f.half, f.rowPixels, f.rgba, 0, y0, uint32_t(bw), uint32_t(bh), box)) return false;
+    if (f.bottomUp) flipRows(box);
+    drawTiming(box, tm, int(f.height));
+    if (f.bottomUp) flipRows(box);
+    return engine_->writeRegion(f.dst, f.half, f.rowPixels, f.rgba, 0, y0, box);
   }
 
  private:

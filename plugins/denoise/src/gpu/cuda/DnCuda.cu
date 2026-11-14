@@ -13,25 +13,18 @@ using namespace dn::gpu;
 using vv::gpu::cuda::coords;
 
 template <typename T>
-__global__ void kPrepare(const T* src, F4* opp, F4* rgb, FrameLayout f) {
+__global__ void kPrepare(const T* src, F4* opp, FrameLayout f) {
   uint32_t x, y;
-  if (coords(f.width, f.height, x, y)) pxDnPrepare(src, opp, rgb, f, x, y);
+  if (coords(f.width, f.height, x, y)) pxDnPrepare(src, opp, f, x, y);
 }
 __global__ void kStarletH(const F4* s, F4* d, PlaneInfo p, int step) {
   uint32_t x, y;
   if (coords(p.width, p.height, x, y)) pxDnStarletH(s, d, p, step, x, y);
 }
-__global__ void kStarletV(const F4* s, F4* d, PlaneInfo p, int step) {
+__global__ void kStarletVBand(const F4* t, const F4* c, F4* n, F4* b, F4* e, F4* v, DnProfileTable tab, BandInfo bi,
+                              int step) {
   uint32_t x, y;
-  if (coords(p.width, p.height, x, y)) pxDnStarletV(s, d, p, step, x, y);
-}
-__global__ void kBand(const F4* c, const F4* n, F4* b, F4* e, PlaneInfo p) {
-  uint32_t x, y;
-  if (coords(p.width, p.height, x, y)) pxDnBand(c, n, b, e, p, x, y);
-}
-__global__ void kVar(const F4* low, const F4* scale, F4* var, DnProfileTable t, BandInfo b) {
-  uint32_t x, y;
-  if (coords(b.width, b.height, x, y)) pxDnVar(low, scale, var, t, b, x, y);
+  if (coords(bi.width, bi.height, x, y)) pxDnStarletVBand(t, c, n, b, e, v, tab, bi, step, x, y);
 }
 __global__ void kPilot(const F4* band, const F4* E, const F4* var, F4* p2, BandInfo b) {
   uint32_t x, y;
@@ -48,22 +41,17 @@ __global__ void kFinish(const T* src, T* dst, const F4* out, const F4* res, Fram
 }
 
 struct Backend : vv::gpu::cuda::CudaBackendBase {
-  void dnPrepare(const void* src, bool half, Buf opp, Buf rgb, const FrameLayout& f) {
-    if (half) kPrepare<<<grid(f.width, f.height), block(), 0, stream>>>(static_cast<const H4*>(src), opp, rgb, f);
-    else kPrepare<<<grid(f.width, f.height), block(), 0, stream>>>(static_cast<const F4*>(src), opp, rgb, f);
+  void dnPrepare(const void* src, bool half, Buf opp, const FrameLayout& f) {
+    if (half) kPrepare<<<grid(f.width, f.height), block(), 0, stream>>>(static_cast<const H4*>(src), opp, f);
+    else kPrepare<<<grid(f.width, f.height), block(), 0, stream>>>(static_cast<const F4*>(src), opp, f);
     check();
   }
-  void dnStarlet(Buf s, Buf t, Buf d, PlaneInfo p, int step) {
+  void dnStarletH(Buf s, Buf t, PlaneInfo p, int step) {
     kStarletH<<<grid(p.width, p.height), block(), 0, stream>>>(s, t, p, step);
-    kStarletV<<<grid(p.width, p.height), block(), 0, stream>>>(t, d, p, step);
     check();
   }
-  void dnBand(Buf c, Buf n, Buf b, Buf e, PlaneInfo p) {
-    kBand<<<grid(p.width, p.height), block(), 0, stream>>>(c, n, b, e, p);
-    check();
-  }
-  void dnVar(Buf low, Buf scale, Buf var, const DnProfileTable& t, const BandInfo& b) {
-    kVar<<<grid(b.width, b.height), block(), 0, stream>>>(low, scale, var, t, b);
+  void dnStarletVBand(Buf t, Buf c, Buf n, Buf b, Buf e, Buf v, const DnProfileTable& tab, const BandInfo& bi, int step) {
+    kStarletVBand<<<grid(bi.width, bi.height), block(), 0, stream>>>(t, c, n, b, e, v, tab, bi, step);
     check();
   }
   void dnPilot(Buf band, Buf E, Buf var, Buf p2, const BandInfo& b) {
@@ -131,5 +119,38 @@ bool DnCudaEngine::downloadCrop(const void* src, bool half, uint32_t w, uint32_t
       d[0] = rgba ? s.x : s.z; d[1] = s.y; d[2] = rgba ? s.z : s.x; d[3] = s.w;
     }
   return true;
+}
+
+bool DnCudaEngine::readRegion(const void* buf, bool half, uint32_t rowPixels, bool rgba, uint32_t x0, uint32_t y0,
+                              uint32_t w, uint32_t h, vv::Image& out) {
+  if (!ok() || !w || !h) return false;
+  const size_t px = half ? 8 : 16;
+  std::vector<unsigned char> host(size_t(w) * h * px);
+  const unsigned char* base = static_cast<const unsigned char*>(buf) + (size_t(y0) * rowPixels + x0) * px;
+  if (cudaMemcpy2D(host.data(), w * px, base, size_t(rowPixels) * px, w * px, h, cudaMemcpyDeviceToHost) != cudaSuccess)
+    return false;
+  out = vv::Image(int(w), int(h));
+  for (uint32_t i = 0; i < w * h; ++i) {
+    const F4 s = half ? loadPx(reinterpret_cast<const H4*>(host.data()), i) : loadPx(reinterpret_cast<const F4*>(host.data()), i);
+    float* d = &out.px[size_t(i) * 4];
+    d[0] = rgba ? s.x : s.z; d[1] = s.y; d[2] = rgba ? s.z : s.x; d[3] = s.w;
+  }
+  return true;
+}
+
+bool DnCudaEngine::writeRegion(void* buf, bool half, uint32_t rowPixels, bool rgba, uint32_t x0, uint32_t y0,
+                               const vv::Image& in) {
+  if (!ok() || in.width <= 0 || in.height <= 0) return false;
+  const uint32_t w = uint32_t(in.width), h = uint32_t(in.height);
+  const size_t px = half ? 8 : 16;
+  std::vector<unsigned char> host(size_t(w) * h * px);
+  for (uint32_t i = 0; i < w * h; ++i) {
+    const float* s = &in.px[size_t(i) * 4];
+    const F4 v = rgba ? F4{s[0], s[1], s[2], s[3]} : F4{s[2], s[1], s[0], s[3]};
+    if (half) storePx(reinterpret_cast<H4*>(host.data()), i, v);
+    else storePx(reinterpret_cast<F4*>(host.data()), i, v);
+  }
+  unsigned char* base = static_cast<unsigned char*>(buf) + (size_t(y0) * rowPixels + x0) * px;
+  return cudaMemcpy2D(base, size_t(rowPixels) * px, host.data(), w * px, w * px, h, cudaMemcpyHostToDevice) == cudaSuccess;
 }
 }  // namespace dn

@@ -73,6 +73,17 @@ int main() {
     CHECK(fx.render(q, p, 2));
     CHECK(psnr(q, s[2].clean) > psnr(s[2].noisy, s[2].clean) + 3);
   }
+  // Timing view: result plus an opaque banner top left; the rest is the normal result.
+  {
+    Host p;
+    p.set(ParamKey::View, 4);
+    vv::Image tv = s[2].noisy, ref = s[2].noisy;
+    CHECK(fx.render(tv, p, 2));
+    Host q;
+    fx.render(ref, q, 2);
+    CHECK(tv.at(0, 0)[0] == 0.f && tv.at(0, 0)[3] == 1.f);
+    CHECK(tv.at(150, 100)[0] == ref.at(150, 100)[0]);
+  }
   // Bypass and views.
   h.set(ParamKey::MasterEnable, 0);
   CHECK(!fx.active(h));

@@ -13,41 +13,33 @@ struct Backend : vv::gpu::MetalBackend {
   using vv::gpu::MetalBackend::MetalBackend;
   const void* src = nullptr;  // current frame (id<MTLBuffer> bridged)
   void* dst = nullptr;
-  id<MTLBuffer> one = nil;    // placeholder for the unused noise-scale buffer
 
-  void dnPrepare(const void*, bool half, Buf opp, Buf rgb, const FrameLayout& f) {
+  void dnPrepare(const void*, bool half, Buf opp, const FrameLayout& f) {
     [encoder() setBuffer:(__bridge id<MTLBuffer>)src offset:0 atIndex:0];
     [encoder() setBuffer:opp offset:0 atIndex:1];
-    [encoder() setBuffer:rgb offset:0 atIndex:2];
-    [encoder() setBytes:&f length:sizeof(f) atIndex:3];
+    [encoder() setBytes:&f length:sizeof(f) atIndex:2];
     dispatch(half ? "dn_prepare_f16" : "dn_prepare_f32", f.width, f.height);
   }
-  void dnStarlet(Buf s, Buf t, Buf d, PlaneInfo p, int step) {
+  void dnStarletH(Buf s, Buf t, PlaneInfo p, int step) {
     const int st = step;
     [encoder() setBuffer:s offset:0 atIndex:0];
     [encoder() setBuffer:t offset:0 atIndex:1];
     [encoder() setBytes:&p length:sizeof(p) atIndex:2];
     [encoder() setBytes:&st length:sizeof(st) atIndex:3];
     dispatch("dn_starlet_h", p.width, p.height);
+  }
+  void dnStarletVBand(Buf t, Buf c, Buf n, Buf b, Buf e, Buf v, const DnProfileTable& tab, const BandInfo& bi, int step) {
+    const int st = step;
     [encoder() setBuffer:t offset:0 atIndex:0];
-    [encoder() setBuffer:d offset:0 atIndex:1];
-    dispatch("dn_starlet_v", p.width, p.height);
-  }
-  void dnBand(Buf c, Buf n, Buf b, Buf e, PlaneInfo p) {
-    [encoder() setBuffer:c offset:0 atIndex:0];
-    [encoder() setBuffer:n offset:0 atIndex:1];
-    [encoder() setBuffer:b offset:0 atIndex:2];
-    [encoder() setBuffer:e offset:0 atIndex:3];
-    [encoder() setBytes:&p length:sizeof(p) atIndex:4];
-    dispatch("dn_band", p.width, p.height);
-  }
-  void dnVar(Buf low, Buf scale, Buf var, const DnProfileTable& t, const BandInfo& b) {
-    [encoder() setBuffer:low offset:0 atIndex:0];
-    [encoder() setBuffer:(scale ? scale : low) offset:0 atIndex:1];  // unused when hasScale == 0
-    [encoder() setBuffer:var offset:0 atIndex:2];
-    [encoder() setBytes:&t length:sizeof(t) atIndex:3];
-    [encoder() setBytes:&b length:sizeof(b) atIndex:4];
-    dispatch("dn_var", b.width, b.height);
+    [encoder() setBuffer:c offset:0 atIndex:1];
+    [encoder() setBuffer:n offset:0 atIndex:2];
+    [encoder() setBuffer:b offset:0 atIndex:3];
+    [encoder() setBuffer:e offset:0 atIndex:4];
+    [encoder() setBuffer:v offset:0 atIndex:5];
+    [encoder() setBytes:&tab length:sizeof(tab) atIndex:6];
+    [encoder() setBytes:&bi length:sizeof(bi) atIndex:7];
+    [encoder() setBytes:&st length:sizeof(st) atIndex:8];
+    dispatch("dn_starlet_v_band", bi.width, bi.height);
   }
   void dnPilot(Buf band, Buf E, Buf var, Buf p2, const BandInfo& b) {
     [encoder() setBuffer:band offset:0 atIndex:0];
@@ -91,7 +83,7 @@ DnMetalEngine::DnMetalEngine(id<MTLDevice> device, const std::string& path) : im
     return;
   }
   impl_->backend = std::make_unique<Backend>(device, lib, std::vector<std::string>{
-      "dn_prepare_f32", "dn_prepare_f16", "dn_starlet_h", "dn_starlet_v", "dn_band", "dn_var", "dn_pilot",
+      "dn_prepare_f32", "dn_prepare_f16", "dn_starlet_h", "dn_starlet_v_band", "dn_pilot",
       "dn_accumulate", "dn_finish_f32", "dn_finish_f16"});
   if (!impl_->backend->ok()) {
     impl_->error = impl_->backend->error();
@@ -141,5 +133,52 @@ bool DnMetalEngine::downloadCrop(id<MTLCommandQueue> queue, id<MTLBuffer> src, b
       d[0] = rgba ? s.x : s.z; d[1] = s.y; d[2] = rgba ? s.z : s.x; d[3] = s.w;
     }
   return true;
+}
+
+bool DnMetalEngine::readRegion(id<MTLCommandQueue> queue, id<MTLBuffer> buf, bool half, uint32_t rowPixels, bool rgba,
+                               uint32_t x0, uint32_t y0, uint32_t w, uint32_t h, vv::Image& out) {
+  if (!queue || !buf || !w || !h) return false;
+  const size_t px = half ? 8 : 16, rowBytes = size_t(w) * px;
+  id<MTLBuffer> host = [queue.device newBufferWithLength:rowBytes * h options:MTLResourceStorageModeShared];
+  id<MTLCommandBuffer> cb = [queue commandBuffer];
+  id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
+  for (uint32_t y = 0; y < h; ++y)
+    [blit copyFromBuffer:buf sourceOffset:(size_t(y0 + y) * rowPixels + x0) * px toBuffer:host
+       destinationOffset:size_t(y) * rowBytes size:rowBytes];
+  [blit endEncoding];
+  [cb commit];
+  [cb waitUntilCompleted];
+  if (cb.status != MTLCommandBufferStatusCompleted) return false;
+  out = vv::Image(int(w), int(h));
+  for (uint32_t i = 0; i < w * h; ++i) {
+    const vv::gpu::F4 s = half ? vv::gpu::loadPx(static_cast<const vv::gpu::H4*>(host.contents), i)
+                               : vv::gpu::loadPx(static_cast<const vv::gpu::F4*>(host.contents), i);
+    float* d = &out.px[size_t(i) * 4];
+    d[0] = rgba ? s.x : s.z; d[1] = s.y; d[2] = rgba ? s.z : s.x; d[3] = s.w;
+  }
+  return true;
+}
+
+bool DnMetalEngine::writeRegion(id<MTLCommandQueue> queue, id<MTLBuffer> buf, bool half, uint32_t rowPixels, bool rgba,
+                                uint32_t x0, uint32_t y0, const vv::Image& in) {
+  if (!queue || !buf || in.width <= 0 || in.height <= 0) return false;
+  const uint32_t w = uint32_t(in.width), h = uint32_t(in.height);
+  const size_t px = half ? 8 : 16, rowBytes = size_t(w) * px;
+  id<MTLBuffer> host = [queue.device newBufferWithLength:rowBytes * h options:MTLResourceStorageModeShared];
+  for (uint32_t i = 0; i < w * h; ++i) {
+    const float* s = &in.px[size_t(i) * 4];
+    const vv::gpu::F4 v = rgba ? vv::gpu::F4{s[0], s[1], s[2], s[3]} : vv::gpu::F4{s[2], s[1], s[0], s[3]};
+    if (half) vv::gpu::storePx(static_cast<vv::gpu::H4*>(host.contents), i, v);
+    else vv::gpu::storePx(static_cast<vv::gpu::F4*>(host.contents), i, v);
+  }
+  id<MTLCommandBuffer> cb = [queue commandBuffer];
+  id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
+  for (uint32_t y = 0; y < h; ++y)
+    [blit copyFromBuffer:host sourceOffset:size_t(y) * rowBytes toBuffer:buf
+       destinationOffset:(size_t(y0 + y) * rowPixels + x0) * px size:rowBytes];
+  [blit endEncoding];
+  [cb commit];
+  [cb waitUntilCompleted];
+  return cb.status == MTLCommandBufferStatusCompleted;
 }
 }  // namespace dn

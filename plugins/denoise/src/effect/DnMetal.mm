@@ -37,17 +37,35 @@ class MetalRenderer : public vv::GpuRenderer {
     const EffectParams ep = readParams(r);
     id<MTLBuffer> src = (__bridge id<MTLBuffer>)const_cast<void*>(f.src);
     id<MTLBuffer> dst = (__bridge id<MTLBuffer>)f.dst;
+    const double t0 = nowMs();
     vv::Image crop;
     if (!engine_->downloadCrop(queue, src, f.half, f.width, f.height, f.rowPixels, f.rgba, f.bottomUp, cropW(ep),
                                cropH(ep), crop))
       return false;
+    const NoiseProfile prof = estimateSpatialProfile(crop, ep.noiseLevel);
+    const double t1 = nowMs();
+    const bool timing = ep.view == 3;
     id<MTLCommandBuffer> cb = [queue commandBuffer];
-    if (!engine_->encode(cb, src, dst, f.half, f.width, f.height, f.rowPixels,
-                         estimateSpatialProfile(crop, ep.noiseLevel), spatialParams(ep), f.rgba, ep.view, ep.mix))
+    if (!engine_->encode(cb, src, dst, f.half, f.width, f.height, f.rowPixels, prof, spatialParams(ep), f.rgba,
+                         timing ? 0 : ep.view, ep.mix))
       return false;
     [cb commit];
     [cb waitUntilCompleted];
-    return cb.status == MTLCommandBufferStatusCompleted;
+    if (cb.status != MTLCommandBufferStatusCompleted) return false;
+    if (!timing) return true;
+    const double t2 = nowMs();
+    const Timing tm{"METAL", int(f.width), int(f.height), crop.width, crop.height, f.half, ep.preview,
+                    t1 - t0, t2 - t1, t2 - t0};
+    int bw = 0, bh = 0;
+    timingBox(tm, int(f.width), int(f.height), bw, bh);
+    const uint32_t y0 = f.bottomUp ? f.height - uint32_t(bh) : 0;
+    vv::Image box;
+    if (!engine_->readRegion(queue, dst, f.half, f.rowPixels, f.rgba, 0, y0, uint32_t(bw), uint32_t(bh), box))
+      return false;
+    if (f.bottomUp) flipRows(box);
+    drawTiming(box, tm, int(f.height));
+    if (f.bottomUp) flipRows(box);
+    return engine_->writeRegion(queue, dst, f.half, f.rowPixels, f.rgba, 0, y0, box);
   }
 
  private:

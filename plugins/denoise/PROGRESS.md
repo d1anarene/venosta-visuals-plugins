@@ -152,3 +152,16 @@ Historical findings below are limited by the current review in `docs/RESEARCH.md
 - New **Preset** menu (disk ID 10): Light, Medium (= defaults), Strong, Chroma Only, Low Light.
 - Not yet measured in a host: playback speed after these changes. Real-time needs the estimate on
   the GPU or a stored profile (R3).
+
+## GPU passes merged, timing view (2026-11-14)
+
+- Owner test 2: 4K footage, GTX 1080, Premiere (CUDA): noise reduction looks good, but Preview
+  still lags a lot. Owner's condition: no loss of quality for speed.
+- Same maths, fewer passes: the RGB lowpass for the noise lookup is now the inverse opponent
+  transform of the opponent lowpass (the starlet is linear, the transform orthonormal) instead of a
+  second decomposition, and the vertical starlet step computes band, energy and noise variance in
+  the same pass. Per band 4 full-frame passes + 2 pyramid blurs (was 8 + 2); 9 full-frame buffers
+  (was 11). Emulation vs CPU reference unchanged (32f 0.0001/255, 16f 0.124/255).
+- New View item **Timing (diagnostic)**: result plus a banner with path (CUDA / METAL / CPU),
+  frame size, noise-estimate and filter times. Banner code moved to the shared core
+  (`vv/overlay.h`, used by the probes too). Speed on the owner's GPU not measured yet.

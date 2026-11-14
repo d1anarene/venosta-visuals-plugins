@@ -2,6 +2,8 @@
 // CPU and GPU paths share (noise estimate from a centred crop, parameter mapping).
 #pragma once
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "DnParamsTable.h"
 #include "dn_profile.h"
@@ -23,6 +25,22 @@ vv::Image centreCrop(const vv::Image& img, int maxW = kEstimateCropW, int maxH =
 /** Single-frame starlet profile from an image that is already cropped, scaled by Noise Level. */
 NoiseProfile estimateSpatialProfile(const vv::Image& crop, float level);
 SpatialParams spatialParams(const EffectParams& ep);
+
+/** View "Timing (diagnostic)": the banner text and its size in pixels for a frame. */
+struct Timing {
+  const char* path;  // "CUDA", "METAL", "CPU"
+  int width, height, cropW, cropH;
+  bool half, preview;
+  double estimateMs, filterMs, totalMs;
+};
+std::vector<std::string> timingLines(const Timing& t);
+/** Draws the banner top left of `img` (top row first) at the scale for a frame of `frameHeight`. */
+void drawTiming(vv::Image& img, const Timing& t, int frameHeight);
+/** Banner size in pixels for a frame of this height, clipped to the frame. */
+void timingBox(const Timing& t, int frameWidth, int frameHeight, int& w, int& h);
+void flipRows(vv::Image& img);
+/** Seconds since an arbitrary start, for the timing view. */
+double nowMs();
 
 std::unique_ptr<vv::GpuRenderer> makeMetalRenderer();
 std::unique_ptr<vv::GpuRenderer> makeCudaRenderer();

@@ -38,7 +38,7 @@ struct EffectParams {
   bool masterEnable = true;
   float mix = 1.f;
   bool preview = false;    // Quality: Preview (cheaper noise estimate) / Final
-  int view = 0;            // 0 result, 1 removed noise (x4 + grey), 2 input
+  int view = 0;            // 0 result, 1 removed noise (x4 + grey), 2 input, 3 result + timing banner
   int radius = 2;          // temporal radius (frames each side) where the host supplies frames
   float lumaStrength = 0.5f, chromaStrength = 0.75f;
   float detail = 0.5f;     // 0..1: 1 keeps the most detail (less spatial smoothing after fusion)
@@ -68,8 +68,8 @@ inline const std::vector<ParamSpec>& allParams() {
     quality.items = "Preview|Final";
     quality.itemCount = 2;
     ParamSpec& view = add(K::View, T::Popup, "View", 3, 0, 0, 0, 0, 1);
-    view.items = "Result|Removed Noise|Input";
-    view.itemCount = 3;
+    view.items = "Result|Removed Noise|Input|Timing (diagnostic)";
+    view.itemCount = 4;
     add(K::Radius, T::IntSlider, "Temporal Frames (each side)", 4, 0, 3, 0, 3, 2, 0);
     add(K::LumaStrength, T::Float, "Luma Strength", 5, 0, 4, 0, 2, 0.5);
     add(K::ChromaStrength, T::Float, "Chroma Strength", 6, 0, 6, 0, 3, 0.75);
@@ -96,7 +96,7 @@ inline EffectParams readParams(const ParamReader& r) {
   p.noiseLevel = float(r.number(paramIndex(K::NoiseLevel)));
   auto clampf = [](float v, float lo, float hi, float d) { return v == v ? (v < lo ? lo : (v > hi ? hi : v)) : d; };
   p.mix = clampf(p.mix, 0, 1, 1);
-  p.view = p.view < 0 || p.view > 2 ? 0 : p.view;
+  p.view = p.view < 0 || p.view > 3 ? 0 : p.view;
   p.radius = p.radius < 0 ? 0 : (p.radius > 3 ? 3 : p.radius);
   p.lumaStrength = clampf(p.lumaStrength, 0, 4, 0.5f);
   p.chromaStrength = clampf(p.chromaStrength, 0, 6, 0.75f);
