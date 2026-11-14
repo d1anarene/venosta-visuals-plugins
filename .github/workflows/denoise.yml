@@ -1,5 +1,5 @@
 name: denoise
-# Denoise RESEARCH PROTOTYPE (CPU only): builds installers as workflow artifacts for testing.
+# Denoise RESEARCH PROTOTYPE (Premiere: GPU spatial filter, CUDA/Metal; Resolve: CPU, temporal): builds installers as workflow artifacts for testing.
 # Deliberately NOT part of release.yml: nothing is published until the plugin is ready.
 on:
   push:
@@ -20,8 +20,8 @@ jobs:
       binary: Denoise
       name: Denoise (research prototype)
       cmake_flags: -DDN_BUILD_PLUGIN=ON
-      cuda: false
-      metal: false
+      cuda: true
+      metal: true
       mac_pkg_id: com.venostavisuals.denoise.prototype
       iss: plugins/denoise/installer/windows/Denoise.iss
   resolve:

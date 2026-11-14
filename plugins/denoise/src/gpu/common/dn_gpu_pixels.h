@@ -13,6 +13,8 @@ using namespace vv::gpu;
 struct FrameLayout {
   uint32_t width, height, rowPixels;
   int32_t rgba;
+  int32_t view;  // 0 result, 1 removed noise (0.5 + 4 x (input - result)), 2 input
+  float mix;     // result only: input + (result - input) * mix
 };
 
 struct BandInfo {
@@ -93,10 +95,14 @@ VV_HD void pxDnFinish(const T* src, T* dst, const F4* out, const F4* residual, c
   const uint32_t i = y * f.width + x, o = y * f.rowPixels + x;
   const F4 s = loadPx(src, o);
   const vv_float3 c = dn_from_opponent(vv_make3(out[i].x + residual[i].x, out[i].y + residual[i].y, out[i].z + residual[i].z));
-  float r[3] = {f.rgba ? s.x : s.z, s.y, f.rgba ? s.z : s.x};
+  const float in[3] = {f.rgba ? s.x : s.z, s.y, f.rgba ? s.z : s.x};
+  float r[3] = {in[0], in[1], in[2]};
   const float cc[3] = {c.x, c.y, c.z};
-  for (int k = 0; k < 3; ++k)
-    if (isFiniteF(cc[k])) r[k] = cc[k];
+  for (int k = 0; k < 3; ++k) {
+    float v = f.view == 1 ? 0.5f + 4.0f * (in[k] - cc[k]) : (f.view == 2 ? in[k] : cc[k]);
+    if (f.view == 0 && f.mix < 1.0f) v = in[k] + (cc[k] - in[k]) * f.mix;
+    if (isFiniteF(v)) r[k] = v;
+  }
   if (f.rgba) storePx(dst, o, F4{r[0], r[1], r[2], s.w});
   else storePx(dst, o, F4{r[2], r[1], r[0], s.w});
 }

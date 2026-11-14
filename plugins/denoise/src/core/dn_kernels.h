@@ -5,6 +5,13 @@
 
 #include "vv/kernels.h"
 
+// Pointers to small per-thread arrays: MSL needs the address space spelled out.
+#ifdef __METAL_VERSION__
+#define DN_THREAD thread
+#else
+#define DN_THREAD
+#endif
+
 #define DN_BANDS 5
 #define DN_BINS 16
 
@@ -15,7 +22,7 @@ struct DnProfileTable {
 };
 
 // Interpolated between bin centres; constant beyond the first/last centre (NoiseProfile::at).
-VV_FN float dn_sigma_at(const float* row, float value) {
+VV_FN float dn_sigma_at(DN_THREAD const float* row, float value) {
   const float t = (value == value ? value : 0.0f) * (float)DN_BINS - 0.5f;
   if (t <= 0.0f) return row[0];
   if (t >= (float)(DN_BINS - 1)) return row[DN_BINS - 1];
@@ -25,7 +32,7 @@ VV_FN float dn_sigma_at(const float* row, float value) {
 
 // Noise variance of the three opponent channels (dn_color.h) at encoded RGB `rgb` in band b:
 // W S W^T with S_ij = rho_ij sigma_i sigma_j.
-VV_FN vv_float3 dn_opponent_variance(const float* sigmaBand, const float* corrBand, vv_float3 rgb) {
+VV_FN vv_float3 dn_opponent_variance(DN_THREAD const float* sigmaBand, DN_THREAD const float* corrBand, vv_float3 rgb) {
   const float s0 = dn_sigma_at(sigmaBand, rgb.x), s1 = dn_sigma_at(sigmaBand + DN_BINS, rgb.y);
   const float s2 = dn_sigma_at(sigmaBand + 2 * DN_BINS, rgb.z);
   const float c01 = corrBand[0] * s0 * s1, c02 = corrBand[1] * s0 * s2, c12 = corrBand[2] * s1 * s2;

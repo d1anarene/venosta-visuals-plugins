@@ -1,9 +1,11 @@
-// Denoise as a vv::Effect (RESEARCH PROTOTYPE, CPU only, not released).
-// Noise profile: estimated every frame (two-frame temporal estimate when a neighbour exists,
-// otherwise the single-frame spatial estimate), scaled by Noise Level. Temporal fusion where the
-// host supplies neighbours (OpenFX temporal clip access); spatial only otherwise (Premiere CPU).
+// Denoise as a vv::Effect (RESEARCH PROTOTYPE, not released).
+// Noise profile: estimated every frame on a centred crop (two-frame temporal estimate when a
+// neighbour exists, otherwise the single-frame spatial estimate), scaled by Noise Level. Temporal
+// fusion where the host supplies neighbours (OpenFX temporal clip access, CPU); spatial only
+// otherwise. GPU (Premiere only, see CMakeLists.txt): spatial filter on CUDA / Metal.
 #include <cmath>
 
+#include "DnGpu.h"
 #include "DnParamsTable.h"
 #include "dn_profile.h"
 #include "dn_spatial.h"
@@ -19,10 +21,10 @@ struct Profiles {
 };
 
 Profiles estimate(const vv::Image& cur, const vv::Image* other, float level) {
-  const vv::Plane a = toRgbPlane(cur);
+  const vv::Plane a = toRgbPlane(centreCrop(cur));
   Profiles p;
   if (other && other->width == cur.width && other->height == cur.height) {
-    const vv::Plane b = toRgbPlane(*other);
+    const vv::Plane b = toRgbPlane(centreCrop(*other));
     p.starlet = estimateProfileTemporal(a, b, nullptr, Domain::Starlet);
     p.pixel = pixelSigmaFrom(estimateProfileTemporal(a, b, nullptr, Domain::Pixel));
   } else {
@@ -54,7 +56,7 @@ class DnEffect : public vv::Effect {
       e.matchName = "VVIS Denoise";
       e.ofxId = "com.venostavisuals.Denoise";
       e.category = "Venosta Visuals";
-      e.description = "Research prototype: temporal + spatial noise reduction, CPU only.";
+      e.description = "Research prototype: temporal + spatial noise reduction.";
       e.versionMajor = 1;
       e.versionMinor = 0;
       e.ofxParamPrefix = "dn";
@@ -72,12 +74,9 @@ class DnEffect : public vv::Effect {
 
   bool render(vv::Image& img, const vv::ParamReader& r, int64_t) const override {
     const EffectParams ep = readParams(r);
-    const Profiles pr = estimate(img, nullptr, ep.noiseLevel);
-    SpatialParams sp;
-    sp.lumaStrength = ep.lumaStrength;
-    sp.chromaStrength = ep.chromaStrength;
+    const NoiseProfile prof = estimateSpatialProfile(centreCrop(img), ep.noiseLevel);
     const vv::Image input = img;
-    finish(img, input, denoiseSpatial(input, pr.starlet, sp), ep);
+    finish(img, input, denoiseSpatial(input, prof, spatialParams(ep)), ep);
     return true;
   }
 
@@ -94,14 +93,27 @@ class DnEffect : public vv::Effect {
     if (frames.size() < 2) return render(img, r, key);
     const vv::Image* other = frames[size_t(centre == 0 ? 1 : centre - 1)];  // nearest earlier (or later) frame
     const Profiles pr = estimate(img, other, ep.noiseLevel);
-    SpatialParams sp;
-    sp.lumaStrength = ep.lumaStrength;
-    sp.chromaStrength = ep.chromaStrength;
+    const SpatialParams sp = spatialParams(ep);
     TemporalParams tp;
     tp.postStrength = 1.f - ep.detail;
     const vv::Image input = img;
     finish(img, input, denoiseTemporal(frames, centre, pr.starlet, pr.pixel, sp, tp), ep);
     return true;
+  }
+
+  bool hasGpu(vv::GpuApi api) const override {
+#if defined(DN_WITH_METAL_RENDERER)
+    return api == vv::GpuApi::Metal;
+#elif defined(DN_WITH_CUDA_RENDERER)
+    return api == vv::GpuApi::Cuda;
+#else
+    (void)api;
+    return false;
+#endif
+  }
+  std::unique_ptr<vv::GpuRenderer> makeGpuRenderer(vv::GpuApi api) const override {
+    if (!hasGpu(api)) return nullptr;
+    return api == vv::GpuApi::Metal ? makeMetalRenderer() : makeCudaRenderer();
   }
 };
 

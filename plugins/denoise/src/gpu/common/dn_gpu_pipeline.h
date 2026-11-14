@@ -36,11 +36,11 @@ class SpatialPipeline {
   explicit SpatialPipeline(Backend& b) : B(b), pyr(b) {}
 
   bool run(const void* src, void* dst, bool half, uint32_t w, uint32_t h, uint32_t rowPixels, const NoiseProfile& prof,
-           const SpatialParams& sp, bool rgba) {
+           const SpatialParams& sp, bool rgba, int view = 0, float mix = 1.0f) {
     if (w == 0 || h == 0) return false;
     ensure(w, h);
     const PlaneInfo p{w, h};
-    const FrameLayout f{w, h, rowPixels, rgba ? 1 : 0};
+    const FrameLayout f{w, h, rowPixels, rgba ? 1 : 0, view, mix};
     const DnProfileTable table = toTable(prof);
     B.dnPrepare(src, half, oppA, rgbA, f);
     B.clear(out, p);

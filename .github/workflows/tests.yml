@@ -166,6 +166,19 @@ jobs:
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release --parallel
           ctest --test-dir build -C Release --output-on-failure
+  denoise-metal:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: plugins/denoise
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Metal kernels, engine and comparison tool
+        run: |
+          cmake -S . -B build-gpu -DCMAKE_BUILD_TYPE=Release -DDN_BUILD_GPU_TESTS=ON
+          cmake --build build-gpu --parallel --target dn_metal_vs_cpu
+      - name: Compare GPU with CPU reference
+        run: ./build-gpu/dn_metal_vs_cpu build-gpu/metal/Denoise.metallib
   film-effects-core-windows:
     runs-on: windows-latest
     defaults:

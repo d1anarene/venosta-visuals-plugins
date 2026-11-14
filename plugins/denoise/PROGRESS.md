@@ -121,3 +121,19 @@ Historical findings below are limited by the current review in `docs/RESEARCH.md
   release.yml**. Slow (CPU) and untested in any host. Profile estimation per frame can flicker.
 - Tests: effect through the vv::Effect interface (spatial, temporal window, missing neighbours,
   bypass, views, alpha); OFX bundle load test (exports only the entry points).
+
+## D6 (first pass): spatial filter on the GPU (2026-11-14) — not run in a host
+
+- The spatial filter (a) as backend-neutral GPU passes (`src/gpu/common`), run by the shared
+  CPU emulation backend in a test (32f 0.0001/255, 16f 0.124/255 vs the CPU reference), and by
+  new Metal (`src/gpu/metal`) and CUDA (`src/gpu/cuda`) engines. View and Mix are applied in the
+  final pass.
+- Premiere: GPU renderer (Metal on macOS, CUDA on Windows), spatial only for now. The noise
+  profile is estimated on the CPU from a centred crop (at most 1024x576) read back from the GPU
+  frame; the CPU paths use the same crop, so CPU and GPU estimate from the same pixels.
+- Resolve (OpenFX) stays CPU on purpose: the GPU renderers are spatial only and the OpenFX GPU
+  path has no CPU fallback, so a GPU build would lose temporal fusion there.
+- CI: Metal-vs-CPU comparison (`denoise-metal` in tests.yml); CUDA is compiled in the Windows
+  Premiere build. CUDA has not been compiled locally or run anywhere yet. Nothing host-tested.
+- Next: temporal fusion on the GPU, and multi-frame GPU dependencies in the Premiere adapter
+  once probe build 3 confirms the protocol.
