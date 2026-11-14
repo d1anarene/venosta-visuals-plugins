@@ -7,6 +7,10 @@
 //   void dnPilot(Buf band, Buf E, Buf var, Buf pilot2, const BandInfo&);
 //   void dnAccumulate(Buf out, Buf band, Buf P, Buf var, const BandInfo&);
 //   void dnFinish(const void* src, void* dst, bool half, Buf out, Buf residual, const FrameLayout&);
+// and for the noise estimate on the device:
+//   void dnCrop(const void* src, bool half, Buf rgb, const CropInfo&);
+//   void dnStarletV(Buf src, Buf dst, PlaneInfo, int step);
+//   void dnBlocks(Buf cur, Buf next, Buf blocks, size_t offsetF4, const BlockGrid&);  // 3 F4 per block
 // Per band: 4 full-frame passes + 2 pyramid blurs. Memory (F4 full-res buffers): 9 + the pyramid's scratch. Rows may be bottom-up (OFX): every
 // pass is symmetric in y, so results do not depend on row order.
 #pragma once
@@ -29,16 +33,58 @@ inline DnProfileTable toTable(const NoiseProfile& p) {
   return t;
 }
 
+/** Unpacks the block buffer of encodeEstimate (bands one after another) into the CPU layout. */
+inline std::vector<std::vector<EstimateBlock>> unpackBlocks(const F4* data, uint32_t perBand, int bands) {
+  std::vector<std::vector<EstimateBlock>> out(static_cast<size_t>(bands));
+  for (int b = 0; b < bands; ++b) {
+    out[size_t(b)].resize(perBand);
+    for (uint32_t i = 0; i < perBand; ++i) {
+      const F4* q = data + (size_t(b) * perBand + i) * 3;
+      EstimateBlock& e = out[size_t(b)][i];
+      e.var[0] = q[0].x; e.var[1] = q[0].y; e.var[2] = q[0].z;
+      e.value[0] = q[1].x; e.value[1] = q[1].y; e.value[2] = q[1].z;
+      e.cov[0] = q[2].x; e.cov[1] = q[2].y; e.cov[2] = q[2].z;
+    }
+  }
+  return out;
+}
+
 template <typename Backend>
 class SpatialPipeline {
  public:
   using Buf = typename Backend::Buf;
   explicit SpatialPipeline(Backend& b) : B(b), pyr(b) {}
 
+  /** Encodes the device part of the noise estimate on a centred crop (at most maxW x maxH of a
+   *  w x h frame). Afterwards blocks() holds blockCount() blocks per band, DN_BANDS bands, 3 F4
+   *  each; read it back once the work has finished and pass it to unpackBlocks. */
+  bool encodeEstimate(const void* src, bool half, uint32_t w, uint32_t h, uint32_t rowPixels, bool rgba, bool bottomUp,
+                      uint32_t maxW, uint32_t maxH) {
+    if (w == 0 || h == 0) return false;
+    const uint32_t cw = w < maxW ? w : maxW, ch = h < maxH ? h : maxH;
+    if (cw < uint32_t(kEstimateBlock) || ch < uint32_t(kEstimateBlock)) return false;
+    ensure(w, h, cw, ch);
+    const CropInfo c{cw, ch, h, rowPixels, (w - cw) / 2, (h - ch) / 2, rgba ? 1 : 0, bottomUp ? 1 : 0};
+    const PlaneInfo p{cw, ch};
+    B.dnCrop(src, half, cropA, c);
+    Buf cur = cropA, next = cropB;
+    for (int j = 0; j < DN_BANDS; ++j) {
+      B.dnStarletH(cur, cropT, p, 1 << j);
+      B.dnStarletV(cropT, next, p, 1 << j);
+      B.dnBlocks(cur, next, blockBuf, size_t(j) * blockCount() * 3, grid);
+      std::swap(cur, next);
+    }
+    return true;
+  }
+  uint32_t cropWidth() const { return cropW; }
+  uint32_t cropHeight() const { return cropH; }
+  uint32_t blockCount() const { return grid.cols * grid.rows; }
+  Buf blocks() const { return blockBuf; }
+
   bool run(const void* src, void* dst, bool half, uint32_t w, uint32_t h, uint32_t rowPixels, const NoiseProfile& prof,
            const SpatialParams& sp, bool rgba, int view = 0, float mix = 1.0f) {
     if (w == 0 || h == 0) return false;
-    ensure(w, h);
+    ensure(w, h, cropW, cropH);
     const PlaneInfo p{w, h};
     const FrameLayout f{w, h, rowPixels, rgba ? 1 : 0, view, mix};
     const DnProfileTable table = toTable(prof);
@@ -63,18 +109,32 @@ class SpatialPipeline {
  private:
   Backend& B;
   vv::gpu::Pyramid<Backend> pyr;
-  uint32_t cachedW = 0, cachedH = 0;
+  uint32_t cachedW = 0, cachedH = 0, cropW = 0, cropH = 0;
   Buf oppA{}, oppB{}, tmp{}, band{}, energy{}, E{}, var{}, pilot2{}, out{};
+  Buf cropA{}, cropB{}, cropT{}, blockBuf{};
+  BlockGrid grid{0, 0, 0, 0};
 
-  void ensure(uint32_t w, uint32_t h) {
-    if (w == cachedW && h == cachedH) return;
+  // One allocation set for both the frame and the estimate crop (releaseAll frees everything).
+  void ensure(uint32_t w, uint32_t h, uint32_t cw, uint32_t ch) {
+    if (w == cachedW && h == cachedH && cw == cropW && ch == cropH) return;
     cachedW = w;
     cachedH = h;
+    cropW = cw;
+    cropH = ch;
     B.releaseAll();
     const size_t n = size_t(w) * h;
     oppA = B.alloc(n); oppB = B.alloc(n); tmp = B.alloc(n);
     band = B.alloc(n); energy = B.alloc(n); E = B.alloc(n); var = B.alloc(n); pilot2 = B.alloc(n); out = B.alloc(n);
     pyr.allocate(w, h);
+    grid = BlockGrid{cw, ch, 0, 0};
+    blockBuf = Buf{};
+    if (cw >= uint32_t(kEstimateBlock) && ch >= uint32_t(kEstimateBlock)) {
+      grid.cols = (cw - uint32_t(kEstimateBlock)) / uint32_t(kEstimateStride) + 1;
+      grid.rows = (ch - uint32_t(kEstimateBlock)) / uint32_t(kEstimateStride) + 1;
+      const size_t c = size_t(cw) * ch;
+      cropA = B.alloc(c); cropB = B.alloc(c); cropT = B.alloc(c);
+      blockBuf = B.alloc(size_t(blockCount()) * 3 * DN_BANDS);
+    }
   }
 };
 

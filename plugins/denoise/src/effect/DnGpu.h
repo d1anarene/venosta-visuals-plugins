@@ -24,6 +24,8 @@ inline int cropH(const EffectParams& ep) { return ep.preview ? kPreviewCropH : k
 vv::Image centreCrop(const vv::Image& img, int maxW = kEstimateCropW, int maxH = kEstimateCropH);
 /** Single-frame starlet profile from an image that is already cropped, scaled by Noise Level. */
 NoiseProfile estimateSpatialProfile(const vv::Image& crop, float level);
+/** The same estimate from per-band block statistics computed on the GPU, scaled by Noise Level. */
+NoiseProfile profileFromBlocks(const std::vector<std::vector<EstimateBlock>>& blocks, float level);
 SpatialParams spatialParams(const EffectParams& ep);
 
 /** View "Timing (diagnostic)": the banner text and its size in pixels for a frame. */

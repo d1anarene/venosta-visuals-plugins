@@ -56,19 +56,19 @@ void fillRow(float* row, const bool* ok, float fallback) {
   }
 }
 
-constexpr int kBlock = 8, kStride = 4, kMinBlocks = 6;
+constexpr int kBlock = kEstimateBlock, kStride = kEstimateStride, kMinBlocks = 6;
 constexpr float kQuantile = 0.1f;
 constexpr float kSpreadTolerance = 2.0f;
 constexpr float kMaxSlope = 1.5f;  // max |d ln sigma / d ln v| between bins
 
+// The element a full sort would put at q * (n - 1) (exact; reorders v).
 float quantile(std::vector<float>& v, float q) {
-  std::sort(v.begin(), v.end());
-  return v[size_t(q * float(v.size() - 1))];
+  const auto k = v.begin() + std::ptrdiff_t(q * float(v.size() - 1));
+  std::nth_element(v.begin(), k, v.end());
+  return *k;
 }
 
-struct Block {
-  float var[3], value[3], cov[3];  // cov: RG, RB, GB
-};
+using Block = EstimateBlock;  // cov: RG, RB, GB
 
 std::vector<Block> blocks(const vv::Plane& band, const vv::Plane& low) {
   const int rows = band.height >= kBlock ? (band.height - kBlock) / kStride + 1 : 0;
@@ -318,21 +318,32 @@ NoiseProfile measureProfile(const vv::Plane& noisy, const vv::Plane& clean) {
 namespace {
 // Shared by the spatial and temporal estimators: band coefficients come from `signal`, the value
 // used for binning from `values`.
-NoiseProfile estimateImpl(const vv::Plane& signal, const vv::Plane& values, EstimateStats* stats, Domain domain) {
+NoiseProfile fromBlocks(const std::vector<std::vector<Block>>& perBand, EstimateStats* stats, Domain domain) {
   const Calib* cal = calibration(domain);
-  std::vector<vv::Plane> bands, lows;
-  if (domain == Domain::Starlet && &signal == &values) {  // single frame: one decomposition serves both
-    Starlet s = starletDecompose(signal, kBands);
-    bands = std::move(s.bands);
-    lows = std::move(s.smooth);
-  } else {
-    bands = bandsOf(domain, signal);
-    lows = lowsOf(domain, values, int(bands.size()));
-  }
+  const int nBands = int(perBand.size());
   NoiseProfile prof;
-  for (int b = 0; b < kBands && b < int(bands.size()); ++b) {
-    const std::vector<Block> bl = blocks(bands[size_t(b)], lows[size_t(b)]);
-    for (int c = 0; c < 3; ++c) {
+  const int nb = std::min(kBands, nBands);
+  // Every (band, channel) curve is independent: computed in parallel, each writing only its own
+  // row (deterministic). Block positions on a row are fixed, so the interpolation index and weight
+  // of each block value are computed once (same arithmetic as NoiseProfile::at).
+  vv::parallelRows(nb * 3, [&](int task) {
+    const int b = task / 3, c = task % 3;
+    const std::vector<Block>& bl = perBand[size_t(b)];
+    {
+      std::vector<int> lo(bl.size());
+      std::vector<float> fr(bl.size());
+      std::vector<unsigned char> mode(bl.size());  // 0 interpolate, 1 first, 2 last
+      for (size_t q = 0; q < bl.size(); ++q) {
+        const float v = bl[q].value[c];
+        const float t = (std::isfinite(v) ? v : 0.f) * kBins - 0.5f;
+        mode[q] = t <= 0.f ? 1 : (t >= kBins - 1 ? 2 : 0);
+        lo[q] = mode[q] == 0 ? int(t) : 0;
+        fr[q] = mode[q] == 0 ? t - float(lo[q]) : 0.f;
+      }
+      const float* row = prof.sigma[b][c];
+      auto curveAt = [&](size_t q) {
+        return mode[q] == 1 ? row[0] : mode[q] == 2 ? row[kBins - 1] : row[lo[q]] + (row[lo[q] + 1] - row[lo[q]]) * fr[q];
+      };
       // Start: low quantile per bin (texture only adds variance).
       std::vector<float> perBin[kBins], all;
       for (const Block& k : bl) perBin[binOf(k.value[c])].push_back(k.var[c]);
@@ -344,7 +355,7 @@ NoiseProfile estimateImpl(const vv::Plane& signal, const vv::Plane& values, Esti
           prof.sigma[b][c][k] = std::sqrt(quantile(perBin[k], kQuantile) / cal[b].q10);
           // Trust test: pure noise has a known spread of block variances (50 % / 10 % quantile);
           // a bin made of edges and texture is much wider. Such bins are interpolated instead.
-          const float q10 = quantile(perBin[k], kQuantile), q50 = quantile(perBin[k], 0.5f);
+          const float q10 = quantile(perBin[k], kQuantile), q50 = quantile(perBin[k], 0.5f);  // exact, any order
           if (q10 <= 0.f || q50 / q10 > kSpreadTolerance * cal[b].spread) ok[k] = false;
         }
         if (stats) stats->blocks[b][c][k] = int(perBin[k].size());
@@ -357,8 +368,9 @@ NoiseProfile estimateImpl(const vv::Plane& signal, const vv::Plane& values, Esti
       for (int it = 0; it < 6; ++it) {
         double sum[kBins] = {};
         int n[kBins] = {};
-        for (const Block& k : bl) {
-          const float s = prof.at(b, c, k.value[c]);
+        for (size_t q = 0; q < bl.size(); ++q) {
+          const Block& k = bl[q];
+          const float s = curveAt(q);
           if (s <= 0.f) continue;
           const float r = k.var[c] / (s * s);
           if (r >= cal[b].q95) continue;
@@ -390,6 +402,9 @@ NoiseProfile estimateImpl(const vv::Plane& signal, const vv::Plane& values, Esti
       if (stats)
         for (int k = 0; k < kBins; ++k) stats->binMeasured[b][c][k] = ok[k];
     }
+  }, 1);
+  vv::parallelRows(nb, [&](int b) {
+    const std::vector<Block>& bl = perBand[size_t(b)];
     // Correlation from blocks with low normalised variance in all channels.
     std::vector<std::pair<float, const Block*>> score;
     for (const Block& k : bl) {
@@ -400,8 +415,9 @@ NoiseProfile estimateImpl(const vv::Plane& signal, const vv::Plane& values, Esti
       }
       score.push_back({m, &k});
     }
-    std::sort(score.begin(), score.end(), [](const auto& a, const auto& z) { return a.first < z.first; });
     const size_t use = std::max<size_t>(1, score.size() / 5);
+    std::partial_sort(score.begin(), score.begin() + std::ptrdiff_t(std::min(use, score.size())), score.end(),
+                      [](const auto& a, const auto& z) { return a.first < z.first; });
     const int pairs[3][2] = {{0, 1}, {0, 2}, {1, 2}};
     for (int k = 0; k < 3; ++k) {
       double cv = 0, va = 0, vb = 0;
@@ -411,25 +427,47 @@ NoiseProfile estimateImpl(const vv::Plane& signal, const vv::Plane& values, Esti
       }
       prof.corr[b][k] = va > 0 && vb > 0 ? float(std::clamp(cv / std::sqrt(va * vb), -1.0, 1.0)) : 0.f;
     }
-  }
+  }, 1);
   // Across bands (not for the single pixel band): camera noise falls off smoothly towards coarser
   // bands, while coarse bands of real pictures are full of structure (texture only ever raises an
   // estimate). The ratio band1/band0 is measured reliably (many blocks); bands 2+ are capped at
   // the previous band times that ratio (x1.15, clamped 0.3..0.8). Measured on skin at 192x108:
   // band 4 was 18x over the truth before, within 0.7x after.
-  if (domain != Domain::Pixel && int(bands.size()) >= 3)
+  if (domain != Domain::Pixel && nBands >= 3)
     for (int c = 0; c < 3; ++c)
       for (int k = 0; k < kBins; ++k) {
         const float s0 = prof.sigma[0][c][k], s1 = prof.sigma[1][c][k];
         if (s0 <= 0.f) continue;
         const float cap = std::clamp(s1 / s0 * 1.15f, 0.3f, 0.8f);
-        for (int b = 2; b < kBands && b < int(bands.size()); ++b)
+        for (int b = 2; b < kBands && b < nBands; ++b)
           prof.sigma[b][c][k] = std::min(prof.sigma[b][c][k], prof.sigma[b - 1][c][k] * cap);
       }
   return prof;
 }
 
+NoiseProfile estimateImpl(const vv::Plane& signal, const vv::Plane& values, EstimateStats* stats, Domain domain) {
+  std::vector<vv::Plane> bands, lows;
+  if (domain == Domain::Starlet && &signal == &values) {  // single frame: one decomposition serves both
+    Starlet s = starletDecompose(signal, kBands);
+    bands = std::move(s.bands);
+    lows = std::move(s.smooth);
+  } else {
+    bands = bandsOf(domain, signal);
+    lows = lowsOf(domain, values, int(bands.size()));
+  }
+  std::vector<std::vector<Block>> perBand;
+  for (int b = 0; b < kBands && b < int(bands.size()); ++b) perBand.push_back(blocks(bands[size_t(b)], lows[size_t(b)]));
+  return fromBlocks(perBand, stats, domain);
+}
+
 }  // namespace
+
+std::vector<EstimateBlock> estimateBlocks(const vv::Plane& band, const vv::Plane& low) { return blocks(band, low); }
+
+NoiseProfile estimateFromBlocks(const std::vector<std::vector<EstimateBlock>>& perBand, EstimateStats* stats,
+                                Domain domain) {
+  return fromBlocks(perBand, stats, domain);
+}
 
 NoiseProfile estimateProfile(const vv::Plane& noisy, EstimateStats* stats, Domain domain) {
   return estimateImpl(noisy, noisy, stats, domain);

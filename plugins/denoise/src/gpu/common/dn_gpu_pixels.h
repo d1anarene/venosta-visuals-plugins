@@ -23,6 +23,58 @@ struct BandInfo {
   float tau, strength[3], recovery;
 };
 
+// Noise estimate on the device: a centred crop of the frame as RGB, top row first (same pixels as
+// the CPU reference's centreCrop of the top-first image), its starlet decomposition, and the
+// 8x8 / stride 4 block statistics of every band (dn_profile.h, EstimateBlock). The statistical
+// part (quantiles, iterations) stays on the CPU (estimateFromBlocks).
+struct CropInfo {
+  uint32_t width, height;          // crop size
+  uint32_t frameHeight, rowPixels;
+  uint32_t x0, y0;                 // crop origin in top-first coordinates
+  int32_t rgba, bottomUp;
+};
+struct BlockGrid {
+  uint32_t width, height, cols, rows;  // plane size, blocks per row / column
+};
+
+template <typename T>
+VV_HD void pxDnCrop(const T* src, F4* rgb, const CropInfo& c, uint32_t x, uint32_t y) {
+  const uint32_t row = c.bottomUp ? c.frameHeight - 1u - (c.y0 + y) : c.y0 + y;
+  const F4 s = loadPx(src, row * c.rowPixels + c.x0 + x);
+  rgb[y * c.width + x] = c.rgba ? F4{s.x, s.y, s.z, 0.0f} : F4{s.z, s.y, s.x, 0.0f};
+}
+
+// Vertical starlet step alone (the estimate needs no band pass of its own).
+VV_HD void pxDnStarletV(const F4* src, F4* dst, PlaneInfo p, int step, uint32_t x, uint32_t y) {
+  const float k[5] = {1.0f / 16, 4.0f / 16, 6.0f / 16, 4.0f / 16, 1.0f / 16};
+  F4 acc{0, 0, 0, 0};
+  for (int t = -2; t <= 2; ++t) {
+    const F4 v = src[uint32_t(clampi(int(y) + t * step, 0, int(p.height) - 1)) * p.width + x];
+    acc.x += k[t + 2] * v.x; acc.y += k[t + 2] * v.y; acc.z += k[t + 2] * v.z; acc.w += k[t + 2] * v.w;
+  }
+  dst[y * p.width + x] = acc;
+}
+
+// One block (column q, row r): band = cur - next, lowpass = next. Out: 3 F4 per block
+// {var.rgb, value.rgb, cov RG RB GB}.
+VV_HD void pxDnBlock(const F4* cur, const F4* next, F4* out, const BlockGrid& g, uint32_t q, uint32_t r) {
+  float s2[3] = {0, 0, 0}, sv[3] = {0, 0, 0}, sx[3] = {0, 0, 0};
+  for (uint32_t y = r * 4u; y < r * 4u + 8u; ++y)
+    for (uint32_t x = q * 4u; x < q * 4u + 8u; ++x) {
+      const uint32_t i = y * g.width + x;
+      const F4 c = cur[i], l = next[i];
+      const float b0 = c.x - l.x, b1 = c.y - l.y, b2 = c.z - l.z;
+      s2[0] += b0 * b0; s2[1] += b1 * b1; s2[2] += b2 * b2;
+      sv[0] += l.x; sv[1] += l.y; sv[2] += l.z;
+      sx[0] += b0 * b1; sx[1] += b0 * b2; sx[2] += b1 * b2;
+    }
+  const float n = 1.0f / 64.0f;
+  const uint32_t o = (r * g.cols + q) * 3u;
+  out[o] = F4{s2[0] * n, s2[1] * n, s2[2] * n, 0.0f};
+  out[o + 1] = F4{sv[0] * n, sv[1] * n, sv[2] * n, 0.0f};
+  out[o + 2] = F4{sx[0] * n, sx[1] * n, sx[2] * n, 0.0f};
+}
+
 // 1. Host frame -> opponent (xyz, alpha in w).
 template <typename T>
 VV_HD void pxDnPrepare(const T* src, F4* opp, const FrameLayout& f, uint32_t x, uint32_t y) {

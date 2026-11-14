@@ -13,6 +13,19 @@ using namespace dn::gpu;
 using vv::gpu::cuda::coords;
 
 template <typename T>
+__global__ void kCrop(const T* src, F4* rgb, CropInfo c) {
+  uint32_t x, y;
+  if (coords(c.width, c.height, x, y)) pxDnCrop(src, rgb, c, x, y);
+}
+__global__ void kStarletV(const F4* s, F4* d, PlaneInfo p, int step) {
+  uint32_t x, y;
+  if (coords(p.width, p.height, x, y)) pxDnStarletV(s, d, p, step, x, y);
+}
+__global__ void kBlocks(const F4* c, const F4* n, F4* b, BlockGrid g) {
+  uint32_t q, r;
+  if (coords(g.cols, g.rows, q, r)) pxDnBlock(c, n, b, g, q, r);
+}
+template <typename T>
 __global__ void kPrepare(const T* src, F4* opp, FrameLayout f) {
   uint32_t x, y;
   if (coords(f.width, f.height, x, y)) pxDnPrepare(src, opp, f, x, y);
@@ -44,6 +57,19 @@ struct Backend : vv::gpu::cuda::CudaBackendBase {
   void dnPrepare(const void* src, bool half, Buf opp, const FrameLayout& f) {
     if (half) kPrepare<<<grid(f.width, f.height), block(), 0, stream>>>(static_cast<const H4*>(src), opp, f);
     else kPrepare<<<grid(f.width, f.height), block(), 0, stream>>>(static_cast<const F4*>(src), opp, f);
+    check();
+  }
+  void dnCrop(const void* src, bool half, Buf rgb, const CropInfo& c) {
+    if (half) kCrop<<<grid(c.width, c.height), block(), 0, stream>>>(static_cast<const H4*>(src), rgb, c);
+    else kCrop<<<grid(c.width, c.height), block(), 0, stream>>>(static_cast<const F4*>(src), rgb, c);
+    check();
+  }
+  void dnStarletV(Buf s, Buf d, PlaneInfo p, int step) {
+    kStarletV<<<grid(p.width, p.height), block(), 0, stream>>>(s, d, p, step);
+    check();
+  }
+  void dnBlocks(Buf c, Buf n, Buf b, size_t off, const BlockGrid& g) {
+    kBlocks<<<grid(g.cols, g.rows), block(), 0, stream>>>(c, n, b + off, g);
     check();
   }
   void dnStarletH(Buf s, Buf t, PlaneInfo p, int step) {
@@ -100,24 +126,21 @@ bool DnCudaEngine::render(const void* src, void* dst, bool half, uint32_t w, uin
   return B.err == cudaSuccess;
 }
 
-bool DnCudaEngine::downloadCrop(const void* src, bool half, uint32_t w, uint32_t h, uint32_t rowPixels, bool rgba,
-                                bool bottomUp, uint32_t maxW, uint32_t maxH, vv::Image& out) {
-  if (!ok() || !w || !h) return false;
-  const uint32_t cw = std::min(w, maxW), ch = std::min(h, maxH), x0 = (w - cw) / 2, y0 = (h - ch) / 2;
-  const size_t px = half ? 8 : 16;
-  std::vector<unsigned char> host(size_t(cw) * ch * px);
-  const unsigned char* base = static_cast<const unsigned char*>(src) + (size_t(y0) * rowPixels + x0) * px;
-  if (cudaMemcpy2D(host.data(), cw * px, base, size_t(rowPixels) * px, cw * px, ch, cudaMemcpyDeviceToHost) != cudaSuccess)
-    return false;
-  out = vv::Image(int(cw), int(ch));
-  for (uint32_t y = 0; y < ch; ++y)
-    for (uint32_t x = 0; x < cw; ++x) {
-      const size_t i = size_t(y) * cw + x;
-      const F4 s = half ? loadPx(reinterpret_cast<const H4*>(host.data()), uint32_t(i))
-                        : loadPx(reinterpret_cast<const F4*>(host.data()), uint32_t(i));
-      float* d = out.at(int(x), int(bottomUp ? ch - 1 - y : y));
-      d[0] = rgba ? s.x : s.z; d[1] = s.y; d[2] = rgba ? s.z : s.x; d[3] = s.w;
-    }
+bool DnCudaEngine::estimateBlocks(const void* src, bool half, uint32_t w, uint32_t h, uint32_t rowPixels, bool rgba,
+                                  bool bottomUp, uint32_t maxW, uint32_t maxH,
+                                  std::vector<std::vector<EstimateBlock>>& out, int& cropW, int& cropH) {
+  if (!ok()) return false;
+  Backend& B = impl_->backend;
+  B.err = cudaSuccess;
+  gpu::SpatialPipeline<Backend>& P = *impl_->pipeline;
+  if (!P.encodeEstimate(src, half, w, h, rowPixels, rgba, bottomUp, maxW, maxH)) return false;
+  std::vector<F4> host(size_t(P.blockCount()) * 3 * DN_BANDS);
+  B.note(cudaMemcpyAsync(host.data(), P.blocks(), host.size() * sizeof(F4), cudaMemcpyDeviceToHost, B.stream));
+  B.note(cudaStreamSynchronize(B.stream));
+  if (B.err != cudaSuccess) return false;
+  out = gpu::unpackBlocks(host.data(), P.blockCount(), DN_BANDS);
+  cropW = int(P.cropWidth());
+  cropH = int(P.cropHeight());
   return true;
 }
 

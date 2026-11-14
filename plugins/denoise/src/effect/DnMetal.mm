@@ -38,11 +38,12 @@ class MetalRenderer : public vv::GpuRenderer {
     id<MTLBuffer> src = (__bridge id<MTLBuffer>)const_cast<void*>(f.src);
     id<MTLBuffer> dst = (__bridge id<MTLBuffer>)f.dst;
     const double t0 = nowMs();
-    vv::Image crop;
-    if (!engine_->downloadCrop(queue, src, f.half, f.width, f.height, f.rowPixels, f.rgba, f.bottomUp, cropW(ep),
-                               cropH(ep), crop))
+    std::vector<std::vector<EstimateBlock>> blocks;
+    int cw = 0, ch = 0;
+    if (!engine_->estimateBlocks(queue, src, f.half, f.width, f.height, f.rowPixels, f.rgba, f.bottomUp, cropW(ep),
+                                 cropH(ep), blocks, cw, ch))
       return false;
-    const NoiseProfile prof = estimateSpatialProfile(crop, ep.noiseLevel);
+    const NoiseProfile prof = profileFromBlocks(blocks, ep.noiseLevel);
     const double t1 = nowMs();
     const bool timing = ep.view == 3;
     id<MTLCommandBuffer> cb = [queue commandBuffer];
@@ -54,7 +55,7 @@ class MetalRenderer : public vv::GpuRenderer {
     if (cb.status != MTLCommandBufferStatusCompleted) return false;
     if (!timing) return true;
     const double t2 = nowMs();
-    const Timing tm{"METAL", int(f.width), int(f.height), crop.width, crop.height, f.half, ep.preview,
+    const Timing tm{"METAL", int(f.width), int(f.height), cw, ch, f.half, ep.preview,
                     t1 - t0, t2 - t1, t2 - t0};
     int bw = 0, bh = 0;
     timingBox(tm, int(f.width), int(f.height), bw, bh);

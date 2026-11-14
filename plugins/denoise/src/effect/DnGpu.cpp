@@ -28,6 +28,10 @@ NoiseProfile estimateSpatialProfile(const vv::Image& crop, float level) {
   return estimateProfile(toRgbPlane(crop), nullptr, Domain::Starlet).scaled(level);
 }
 
+NoiseProfile profileFromBlocks(const std::vector<std::vector<EstimateBlock>>& blocks, float level) {
+  return estimateFromBlocks(blocks, nullptr, Domain::Starlet).scaled(level);
+}
+
 SpatialParams spatialParams(const EffectParams& ep) {
   SpatialParams sp;
   sp.lumaStrength = ep.lumaStrength;
@@ -78,11 +82,12 @@ class CudaRenderer : public vv::GpuRenderer {
     if (!prepare(nullptr)) return false;
     const EffectParams ep = readParams(r);
     const double t0 = nowMs();
-    vv::Image crop;
-    if (!engine_->downloadCrop(f.src, f.half, f.width, f.height, f.rowPixels, f.rgba, f.bottomUp, cropW(ep),
-                               cropH(ep), crop))
+    std::vector<std::vector<EstimateBlock>> blocks;
+    int cw = 0, ch = 0;
+    if (!engine_->estimateBlocks(f.src, f.half, f.width, f.height, f.rowPixels, f.rgba, f.bottomUp, cropW(ep),
+                                 cropH(ep), blocks, cw, ch))
       return false;
-    const NoiseProfile prof = estimateSpatialProfile(crop, ep.noiseLevel);
+    const NoiseProfile prof = profileFromBlocks(blocks, ep.noiseLevel);
     const double t1 = nowMs();
     const bool timing = ep.view == 3;
     if (!engine_->render(f.src, f.dst, f.half, f.width, f.height, f.rowPixels, prof, spatialParams(ep), f.rgba,
@@ -90,7 +95,7 @@ class CudaRenderer : public vv::GpuRenderer {
       return false;
     if (!timing) return true;
     const double t2 = nowMs();
-    const Timing tm{"CUDA", int(f.width), int(f.height), crop.width, crop.height, f.half, ep.preview,
+    const Timing tm{"CUDA", int(f.width), int(f.height), cw, ch, f.half, ep.preview,
                     t1 - t0, t2 - t1, t2 - t0};
     int bw = 0, bh = 0;
     timingBox(tm, int(f.width), int(f.height), bw, bh);

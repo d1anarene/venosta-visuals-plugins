@@ -20,6 +20,27 @@ struct Backend : vv::gpu::MetalBackend {
     [encoder() setBytes:&f length:sizeof(f) atIndex:2];
     dispatch(half ? "dn_prepare_f16" : "dn_prepare_f32", f.width, f.height);
   }
+  void dnCrop(const void*, bool half, Buf rgb, const CropInfo& c) {
+    [encoder() setBuffer:(__bridge id<MTLBuffer>)src offset:0 atIndex:0];
+    [encoder() setBuffer:rgb offset:0 atIndex:1];
+    [encoder() setBytes:&c length:sizeof(c) atIndex:2];
+    dispatch(half ? "dn_crop_f16" : "dn_crop_f32", c.width, c.height);
+  }
+  void dnStarletV(Buf s, Buf d, PlaneInfo p, int step) {
+    const int st = step;
+    [encoder() setBuffer:s offset:0 atIndex:0];
+    [encoder() setBuffer:d offset:0 atIndex:1];
+    [encoder() setBytes:&p length:sizeof(p) atIndex:2];
+    [encoder() setBytes:&st length:sizeof(st) atIndex:3];
+    dispatch("dn_starlet_v", p.width, p.height);
+  }
+  void dnBlocks(Buf c, Buf n, Buf b, size_t off, const BlockGrid& g) {
+    [encoder() setBuffer:c offset:0 atIndex:0];
+    [encoder() setBuffer:n offset:0 atIndex:1];
+    [encoder() setBuffer:b offset:off * sizeof(F4) atIndex:2];
+    [encoder() setBytes:&g length:sizeof(g) atIndex:3];
+    dispatch("dn_blocks", g.cols, g.rows);
+  }
   void dnStarletH(Buf s, Buf t, PlaneInfo p, int step) {
     const int st = step;
     [encoder() setBuffer:s offset:0 atIndex:0];
@@ -84,7 +105,7 @@ DnMetalEngine::DnMetalEngine(id<MTLDevice> device, const std::string& path) : im
   }
   impl_->backend = std::make_unique<Backend>(device, lib, std::vector<std::string>{
       "dn_prepare_f32", "dn_prepare_f16", "dn_starlet_h", "dn_starlet_v_band", "dn_pilot",
-      "dn_accumulate", "dn_finish_f32", "dn_finish_f16"});
+      "dn_accumulate", "dn_finish_f32", "dn_finish_f16", "dn_crop_f32", "dn_crop_f16", "dn_starlet_v", "dn_blocks"});
   if (!impl_->backend->ok()) {
     impl_->error = impl_->backend->error();
     return;
@@ -108,30 +129,29 @@ bool DnMetalEngine::encode(id<MTLCommandBuffer> cb, id<MTLBuffer> src, id<MTLBuf
   return done;
 }
 
-bool DnMetalEngine::downloadCrop(id<MTLCommandQueue> queue, id<MTLBuffer> src, bool half, uint32_t w, uint32_t h,
-                                 uint32_t rowPixels, bool rgba, bool bottomUp, uint32_t maxW, uint32_t maxH, vv::Image& out) {
-  if (!queue || !src || !w || !h) return false;
-  const uint32_t cw = std::min(w, maxW), ch = std::min(h, maxH), x0 = (w - cw) / 2, y0 = (h - ch) / 2;
-  const size_t px = half ? 8 : 16, rowBytes = size_t(cw) * px;
-  id<MTLBuffer> host = [queue.device newBufferWithLength:rowBytes * ch options:MTLResourceStorageModeShared];
+bool DnMetalEngine::estimateBlocks(id<MTLCommandQueue> queue, id<MTLBuffer> src, bool half, uint32_t w, uint32_t h,
+                                   uint32_t rowPixels, bool rgba, bool bottomUp, uint32_t maxW, uint32_t maxH,
+                                   std::vector<std::vector<EstimateBlock>>& out, int& cropW, int& cropH) {
+  if (!ok() || !queue) return false;
+  Backend& B = *impl_->backend;
+  gpu::SpatialPipeline<Backend>& P = *impl_->pipeline;
+  B.src = (__bridge const void*)src;
   id<MTLCommandBuffer> cb = [queue commandBuffer];
+  B.begin(cb);
+  const bool encoded = P.encodeEstimate(B.src, half, w, h, rowPixels, rgba, bottomUp, maxW, maxH);
+  B.end();
+  if (!encoded) return false;
+  const size_t bytes = size_t(P.blockCount()) * 3 * DN_BANDS * sizeof(vv::gpu::F4);
+  id<MTLBuffer> host = [queue.device newBufferWithLength:bytes options:MTLResourceStorageModeShared];
   id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
-  for (uint32_t y = 0; y < ch; ++y)
-    [blit copyFromBuffer:src sourceOffset:(size_t(y0 + y) * rowPixels + x0) * px toBuffer:host
-       destinationOffset:size_t(y) * rowBytes size:rowBytes];
+  [blit copyFromBuffer:P.blocks() sourceOffset:0 toBuffer:host destinationOffset:0 size:bytes];
   [blit endEncoding];
   [cb commit];
   [cb waitUntilCompleted];
   if (cb.status != MTLCommandBufferStatusCompleted) return false;
-  out = vv::Image(int(cw), int(ch));
-  for (uint32_t y = 0; y < ch; ++y)
-    for (uint32_t x = 0; x < cw; ++x) {
-      const size_t i = size_t(y) * cw + x;
-      const vv::gpu::F4 s = half ? vv::gpu::loadPx(static_cast<const vv::gpu::H4*>(host.contents), uint32_t(i))
-                                 : vv::gpu::loadPx(static_cast<const vv::gpu::F4*>(host.contents), uint32_t(i));
-      float* d = out.at(int(x), int(bottomUp ? ch - 1 - y : y));
-      d[0] = rgba ? s.x : s.z; d[1] = s.y; d[2] = rgba ? s.z : s.x; d[3] = s.w;
-    }
+  out = gpu::unpackBlocks(static_cast<const vv::gpu::F4*>(host.contents), P.blockCount(), DN_BANDS);
+  cropW = int(P.cropWidth());
+  cropH = int(P.cropHeight());
   return true;
 }
 

@@ -9,6 +9,7 @@
 // exactly as W S W^T. Any other transform can derive its own noise levels from this model by
 // synthesising noise with it (deterministic Monte Carlo).
 #pragma once
+#include <vector>
 #include <cstdint>
 
 #include "vv/image.h"
@@ -52,6 +53,21 @@ struct EstimateStats {
   int blocks[kBands][3][kBins] = {};
   bool binMeasured[kBands][3][kBins] = {};
 };
+
+/** Statistics of one 8x8 block (stride 4) of a band: mean squared coefficient per RGB channel,
+ *  mean lowpass value per channel, mean cross products RG, RB, GB. The block grid is row-major
+ *  over the band, top row first. GPU paths compute these on the device (same definition). */
+struct EstimateBlock {
+  float var[3], value[3], cov[3];
+};
+constexpr int kEstimateBlock = 8, kEstimateStride = 4;
+/** Block statistics of one band with its lowpass (CPU reference). */
+std::vector<EstimateBlock> estimateBlocks(const vv::Plane& band, const vv::Plane& low);
+/** The statistical part of the single-frame estimate, from per-band block statistics (band 0 =
+ *  finest). estimateProfile(noisy, stats, Domain::Starlet) == estimateFromBlocks(blocks of the
+ *  starlet bands of noisy, stats, Domain::Starlet). */
+NoiseProfile estimateFromBlocks(const std::vector<std::vector<EstimateBlock>>& perBand, EstimateStats* stats,
+                                Domain domain);
 
 /** Blind estimate from a noisy frame alone (see dn_profile.cpp for the method). */
 NoiseProfile estimateProfile(const vv::Plane& noisyRgb, EstimateStats* stats = nullptr, Domain domain = Domain::Laplacian);

@@ -165,3 +165,19 @@ Historical findings below are limited by the current review in `docs/RESEARCH.md
 - New View item **Timing (diagnostic)**: result plus a banner with path (CUDA / METAL / CPU),
   frame size, noise-estimate and filter times. Banner code moved to the shared core
   (`vv/overlay.h`, used by the probes too). Speed on the owner's GPU not measured yet.
+
+## Noise estimate on the GPU (2026-11-14)
+
+- Owner's timing (Premiere 2027, Windows, GTX 1080, 4K 32f, CUDA path confirmed): Final
+  estimate 202 ms + filter 87 ms = 289 ms; Preview estimate 71 ms + filter 87 ms = 159 ms. The
+  CPU estimate was the bottleneck (slower than in our container, probably competing with 4K
+  decoding).
+- CPU estimator, identical output (hash over profiles of 4 frames x 3 domains unchanged): exact
+  quantiles with nth_element instead of full sorts, the 15 (band, channel) curves in parallel,
+  interpolation positions computed once per block. 1024x576 in the container: 180 -> 96 ms;
+  statistics alone 43 -> 16 ms.
+- GPU renderers: crop, starlet decomposition and 8x8 block statistics now run on the device; only
+  the block statistics (a few MB) come back for the statistical part (estimateFromBlocks).
+  Emulation vs CPU estimate: worst relative sigma/correlation difference 1.1e-6 (float block sums
+  instead of double), all three frame layouts. Metal test extended accordingly (CI). Speed in the
+  host not measured yet.
