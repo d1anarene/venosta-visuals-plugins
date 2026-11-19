@@ -66,9 +66,24 @@ Two modes per Conductor:
   bezier where the host supports it, hold keys for steps) to keep the timeline usable.
 - Range: whole clip, sequence in/out, or the selection.
 - **Speed (time remapping) output**, e.g. "500 % at every kick peak":
-  - speed integrates to source time, so a speed bump shifts everything after it; the panel must
-    offer **sync-preserving ramps** (each bump balanced, e.g. a slower section so source and
-    timeline time meet again at the next hit / beat) and show the drift otherwise;
+  - **time-dependent output (owner's requirement):** speed integrates to source time, so every
+    ramp moves everything after it. Keyframes of a time-dependent output must therefore be
+    computed **sequentially**: hits are detected in sequence (timeline) time on the music, which
+    the remap does not move; the speed curve is integrated from the clip start, and each
+    keyframe's position is derived from the mapping as it stands after all earlier ramps (time
+    remapping keyframes sit on source frames), so every ramp peaks exactly on its hit in the
+    timeline. Two policies, chosen per Conductor:
+    - **Sequential (drift allowed):** ramps as specified; the clip consumes more (or less) source
+      footage than without them. The panel shows the accumulated offset and warns when the clip
+      would run out of source media before its timeline end.
+    - **Compensated (sync-preserving):** each ramp is balanced by a slower section (shape and
+      placement selectable: just after the ramp, spread until the next hit, or on the off-beat)
+      so source and timeline time meet again at the next hit / beat / bar; zero net drift.
+    - The same sequential evaluation applies to any other output whose meaning depends on
+      earlier keyframes (none known among ordinary effect parameters; listed here so the core
+      keeps the "evaluate in order" step generic);
+  - linked audio of the remapped clip is not the analysis source (the music is assumed on its
+    own track); if the only audio is the clip's own, warn that remapping changes it;
   - frame duplicates/blending at extreme speeds are the host's (or later our Retime plugin's)
     business;
   - feasibility through the Premiere UXP API is **unverified** (see C0): the API reads speed
