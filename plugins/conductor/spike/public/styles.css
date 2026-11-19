@@ -1,0 +1,11 @@
+body { background: var(--uxp-host-background-color, #1e1e1e); color: var(--uxp-host-text-color, #ddd); font-size: 12px; margin: 0; }
+.panel { padding: 10px; display: flex; flex-direction: column; }
+.title { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
+.hint { opacity: 0.75; margin-bottom: 8px; }
+.section { margin-top: 12px; margin-bottom: 4px; font-weight: bold; }
+.row { display: flex; flex-direction: row; align-items: center; margin: 2px 0; }
+.row label { width: 90px; }
+.row button { margin-right: 6px; }
+select, input { margin: 2px 0; }
+button { margin: 2px 0; }
+textarea { height: 260px; width: 100%; font-family: monospace; font-size: 11px; margin-top: 4px; }

@@ -1,0 +1,24 @@
+{
+  "id": "com.venostavisuals.conductor.test",
+  "name": "Conductor Test (research)",
+  "version": "0.0.1",
+  "main": "index.html",
+  "manifestVersion": 5,
+  "host": { "app": "premierepro", "minVersion": "25.6.0" },
+  "requiredPermissions": { "localFileSystem": "fullAccess", "clipboard": "readAndWrite" },
+  "entrypoints": [
+    {
+      "id": "conductorTestPanel",
+      "type": "panel",
+      "label": { "default": "Conductor Test (research)" },
+      "minimumSize": { "width": 260, "height": 360 },
+      "maximumSize": { "width": 2000, "height": 3000 },
+      "preferredDockedSize": { "width": 360, "height": 640 },
+      "preferredFloatingSize": { "width": 420, "height": 720 },
+      "icons": [{ "width": 23, "height": 23, "path": "icons/panel.svg", "scale": [1, 2], "theme": ["all"] }]
+    }
+  ],
+  "icons": [
+    { "width": 48, "height": 48, "path": "icons/plugin.svg", "scale": [1, 2], "theme": ["all"], "species": ["pluginList"] }
+  ]
+}

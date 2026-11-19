@@ -1,0 +1,21 @@
+{
+  "name": "conductor-spike",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Conductor C0 feasibility spike: Premiere UXP test panel (keyframes, time remapping, audio access).",
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test && npm run build",
+    "package": "npm run build && ./scripts/package-ccx.sh"
+  },
+  "devDependencies": {
+    "@adobe/premierepro": "27.0.0",
+    "@types/node": "^22.20.5",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.0"
+  }
+}

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Conductor Test</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="index.js"></script>
+</head>
+<body>
+  <div class="panel">
+    <div class="title">Conductor Test (research)</div>
+    <div class="hint">Throwaway project only. Select clips in the timeline, then run the tests in order. Copy Log and send it.</div>
+
+    <div class="section">1. Inspect selection</div>
+    <button id="btn-inspect">Inspect selected clips</button>
+
+    <div class="section">2. Keyframes on one parameter</div>
+    <label>Parameter (from step 1)</label>
+    <select id="param-picker"><option value="">- run step 1 first -</option></select>
+    <div class="row">
+      <label>Time base</label>
+      <select id="timebase">
+        <option value="in">clip in point (source time)</option>
+        <option value="start">clip start (sequence time)</option>
+        <option value="zero">zero</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Keyframes</label>
+      <select id="count">
+        <option value="1">1 (at 1 s)</option>
+        <option value="25">25</option>
+        <option value="250">250</option>
+        <option value="2500">2500</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Interpolation</label>
+      <select id="interp">
+        <option value="linear">linear</option>
+        <option value="bezier">bezier</option>
+        <option value="hold">hold</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Amplitude (+)</label>
+      <input id="amp" type="number" value="20" />
+    </div>
+    <div class="row">
+      <button id="btn-write">Write keyframes</button>
+      <button id="btn-remove">Remove keyframes on clip</button>
+    </div>
+
+    <div class="section">3. Speed / time remapping</div>
+    <button id="btn-remap">Try time remapping (100 / 300 / 100 %)</button>
+
+    <div class="section">4. Audio access</div>
+    <button id="btn-audio">Read selected audio clip's file</button>
+
+    <div class="section">5. Storage</div>
+    <button id="btn-storage">Test plugin data folder</button>
+
+    <div class="section">Log</div>
+    <div class="row">
+      <button id="btn-copy">Copy Log</button>
+      <button id="btn-clear">Clear</button>
+    </div>
+    <textarea id="log" readonly></textarea>
+  </div>
+</body>
+</html>
