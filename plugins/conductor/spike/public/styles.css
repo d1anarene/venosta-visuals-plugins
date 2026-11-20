@@ -1,5 +1,6 @@
-body { background: var(--uxp-host-background-color, #1e1e1e); color: var(--uxp-host-text-color, #ddd); font-size: 12px; margin: 0; }
-.panel { padding: 10px; display: flex; flex-direction: column; }
+html, body { height: 100%; }
+body { overflow-y: scroll; background: var(--uxp-host-background-color, #1e1e1e); color: var(--uxp-host-text-color, #ddd); font-size: 12px; margin: 0; }
+.panel { padding: 10px; display: flex; flex-direction: column; height: 100%; overflow-y: scroll; box-sizing: border-box; }
 .title { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
 .hint { opacity: 0.75; margin-bottom: 8px; }
 .section { margin-top: 12px; margin-bottom: 4px; font-weight: bold; }

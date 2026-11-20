@@ -330,7 +330,7 @@ async function timeRemap() {
   log("=== 3. Time remapping ===");
   const { project, sequence } = await context();
   const items = (await selectedItems(sequence)).filter((x) => x.kind === "video");
-  if (!items.length) return log("select a video clip");
+  if (!items.length) return log("select the VIDEO clip in the timeline (alone or together with audio), then press again");
   const it = items[0];
   const i = it.item as VideoClipTrackItem;
   log("before", { speed: await i.getSpeed().catch((e) => `error ${e}`), duration: secs(await i.getDuration()) });
@@ -474,6 +474,28 @@ async function storageTest() {
   }
 }
 
+// ---------------------------------------------------------------- 6. WebAssembly
+// A 41-byte module exporting add(i32, i32) -> i32: can UXP run WebAssembly (e.g. an MP3 decoder)?
+const ADD_WASM = new Uint8Array([
+  0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x07, 0x01, 0x60, 0x02, 0x7f, 0x7f, 0x01, 0x7f, 0x03, 0x02, 0x01,
+  0x00, 0x07, 0x07, 0x01, 0x03, 0x61, 0x64, 0x64, 0x00, 0x00, 0x0a, 0x09, 0x01, 0x07, 0x00, 0x20, 0x00, 0x20, 0x01, 0x6a,
+  0x0b,
+]);
+
+async function wasmTest() {
+  log("=== 6. WebAssembly ===");
+  const W = (globalThis as any).WebAssembly;
+  log(`typeof WebAssembly: ${typeof W}`);
+  if (!W) return;
+  try {
+    const t = Date.now();
+    const { instance } = await W.instantiate(ADD_WASM);
+    log(`instantiate ok, add(2, 3) = ${instance.exports.add(2, 3)}, ${ms(t)}`);
+  } catch (e) {
+    log("WebAssembly.instantiate failed", e);
+  }
+}
+
 // ---------------------------------------------------------------- wiring
 function on(id: string, fn: () => Promise<void> | void) {
   document.getElementById(id)?.addEventListener("click", async () => {
@@ -492,6 +514,7 @@ document.addEventListener("DOMContentLoaded", () => {
   on("btn-remap", timeRemap);
   on("btn-audio", audioTest);
   on("btn-storage", storageTest);
+  on("btn-wasm", wasmTest);
   on("btn-clear", () => {
     lines.length = 0;
     log("log cleared");
