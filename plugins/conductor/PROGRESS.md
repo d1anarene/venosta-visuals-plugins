@@ -134,3 +134,12 @@ noise):
   ASCII-only string literals with the same value and refuses to finish if any non-ASCII byte
   remains; the decoder is a separate `mp3.js` so a failure there cannot stop the panel;
   `boot.js` shows any script error inside the panel. Browser end-to-end test passes again.
+
+## 2026-11-20 — 0.1.2
+
+- Host result 0.1.1: **the panel starts in Premiere** (texts, menus, EQ view), so the ASCII
+  rewrite / separate decoder bundle fixed the start-up; MP3 then failed with "TextDecoder is not
+  defined" (UXP has no TextDecoder). 0.1.2 installs a small UTF-8 TextDecoder (and
+  performance.now) only when missing, before the decoder loads (unit test against the real one;
+  browser end-to-end test with TextDecoder deleted passes). Invalid saved band values fall back
+  to the kick preset.

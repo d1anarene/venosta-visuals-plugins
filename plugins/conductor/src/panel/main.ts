@@ -92,6 +92,11 @@ function restore() {
     const o = JSON.parse(localStorage.getItem(STORE) ?? "{}");
     for (const f of FIELDS) if (typeof o[f] === "string") $(f).value = o[f];
     if (typeof o.invert === "boolean") $("invert").checked = o.invert;
+    for (const f of ["low", "high"]) if (!Number.isFinite(Number($(f).value))) {
+      $("low").value = "40";
+      $("high").value = "120";
+      $<HTMLSelectElement>("band").value = "kick";
+    }
   } catch {
     /* ignore */
   }
