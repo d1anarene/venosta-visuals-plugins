@@ -247,7 +247,11 @@ async function writeKeyframes() {
   if (count < want) log(`clip is ${maxFrames} frames long: writing ${count} keyframes instead of ${want}`);
   const values = want === 1 ? [baseValue + amp] : pulseValues(count, baseValue, amp);
   const times = want === 1 ? [t0 + TICKS_PER_SECOND] : values.map((_, k) => t0 + k * tpf);
-  log("plan", { param: ref.label, timeBase: base, originSeconds: t0 / TICKS_PER_SECOND, count, baseValue, amp });
+  const ci = ref.item.item as VideoClipTrackItem;
+  log("plan", {
+    param: ref.label, timeBase: base, originSeconds: t0 / TICKS_PER_SECOND, count, baseValue, amp,
+    clipStart: secs(await ci.getStartTime()), clipIn: secs(await ci.getInPoint()),
+  });
 
   const tA = Date.now();
   let ok = false;
@@ -491,6 +495,9 @@ async function wasmTest() {
     const t = Date.now();
     const { instance } = await W.instantiate(ADD_WASM);
     log(`instantiate ok, add(2, 3) = ${instance.exports.add(2, 3)}, ${ms(t)}`);
+    const t2 = Date.now();
+    await W.instantiate(ADD_WASM);
+    log(`second instantiate: ${ms(t2)} (first-use start-up cost vs per-module cost)`);
   } catch (e) {
     log("WebAssembly.instantiate failed", e);
   }

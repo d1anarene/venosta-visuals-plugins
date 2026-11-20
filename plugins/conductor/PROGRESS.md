@@ -40,3 +40,22 @@ Observed, needs follow-up:
   test added) or letting Premiere export the audio as WAV (`EncoderManager.exportSequence`,
   `ExportType.IMMEDIATELY`, with a WAV preset), which would also cover every format Premiere reads.
 - Panel was not scrollable: fixed in 0.0.2.
+
+## 2026-11-20 — C0 host test, round 2 (owner, Premiere Pro 27.0, macOS)
+
+Host-tested (owner: "all steps worked"):
+- **598 keyframes** (one per frame, whole clip) onto Motion › Scale in one transaction: 40 ms;
+  bezier interpolation on all: 19 ms; values read back exactly. Undo, smooth playback: reported
+  as working.
+- **Time remapping is not reachable from UXP**: no speed / time-remapping parameter appears in
+  the clip's component chain, so Conductor cannot write Premiere's own speed ramps. Speed output
+  needs another route (see AGENTS.md §4: a keyframable time parameter of our own Retime effect).
+- **WebAssembly runs in UXP** (`typeof WebAssembly` = object, instantiate works), but the first
+  instantiate took 5.2 s; 0.0.3 measures a second instantiate to tell start-up cost from
+  per-module cost.
+- Plugin data folder read/write works (per user and plugin, not per project; project-bound
+  storage still open).
+- Time base: with a trimmed clip (in point 1.92 s) a key written at in + 1 s read back at
+  2.92 s; which base matches "1 s after the clip start" in Effect Controls is still to be
+  confirmed by the owner (0.0.3 logs clip start / in with every write).
+- Panel layout overlapped on a small screen (flex column shrinking its children): fixed in 0.0.3.

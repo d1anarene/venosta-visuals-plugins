@@ -1,7 +1,7 @@
 {
   "id": "com.venostavisuals.conductor.test",
   "name": "Conductor Test (research)",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "main": "index.html",
   "manifestVersion": 5,
   "host": { "app": "premierepro", "minVersion": "25.6.0" },

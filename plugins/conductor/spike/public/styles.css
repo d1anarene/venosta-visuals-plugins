@@ -1,12 +1,17 @@
 html, body { height: 100%; }
-body { overflow-y: scroll; background: var(--uxp-host-background-color, #1e1e1e); color: var(--uxp-host-text-color, #ddd); font-size: 12px; margin: 0; }
-.panel { padding: 10px; display: flex; flex-direction: column; height: 100%; overflow-y: scroll; box-sizing: border-box; }
+body { overflow-y: auto; background: var(--uxp-host-background-color, #1e1e1e); color: var(--uxp-host-text-color, #ddd); font-size: 12px; margin: 0; }
+.panel { padding: 10px; display: block; }
+.panel > * { flex-shrink: 0; }
 .title { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
 .hint { opacity: 0.75; margin-bottom: 8px; }
 .section { margin-top: 12px; margin-bottom: 4px; font-weight: bold; }
-.row { display: flex; flex-direction: row; align-items: center; margin: 2px 0; }
-.row label { width: 90px; }
+.row { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; margin: 4px 0; min-height: 28px; }
+.title, .hint, .section, label, button, select, input, textarea { display: block; }
+.row > * { flex-shrink: 0; }
+.row label { width: 90px; display: inline-block; }
+.row select, .row input { flex: 1 1 120px; min-width: 120px; }
+.row button { display: inline-block; }
 .row button { margin-right: 6px; }
 select, input { margin: 2px 0; }
-button { margin: 2px 0; }
+button { margin: 4px 0; min-height: 26px; }
 textarea { height: 260px; width: 100%; font-family: monospace; font-size: 11px; margin-top: 4px; }

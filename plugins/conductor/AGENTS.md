@@ -86,9 +86,10 @@ Two modes per Conductor:
     own track); if the only audio is the clip's own, warn that remapping changes it;
   - frame duplicates/blending at extreme speeds are the host's (or later our Retime plugin's)
     business;
-  - feasibility through the Premiere UXP API is **unverified** (see C0): the API reads speed
-    (`getSpeed`) but has no documented setter; time remapping might be reachable as a component
-    parameter with keyframes, or not at all.
+  - **host result (C0, 2026-11-20): Premiere's own time remapping is not reachable from UXP**
+    (not in the component chain; speed is read-only). Planned route: our **Retime** effect
+    (plugin 6) exposes a keyframable speed / source-time parameter; Conductor writes that, with
+    the sequential evaluation above. Until then, speed output is not offered.
 
 ## 5. Research items (phase C0, before product code)
 
