@@ -12,16 +12,17 @@ export interface Envelope {
 export const SILENCE_DB = -120;
 
 export function rmsEnvelope(signal: Float32Array, sampleRate: number, windowSec = 0.01, rate = 1000): Envelope {
+  // Direct sum per step (no prefix array): memory stays at the size of the result, which matters
+  // for long songs inside Premiere's panel runtime.
   const steps = Math.max(1, Math.ceil((signal.length / sampleRate) * rate));
   const half = Math.max(1, Math.round((windowSec * sampleRate) / 2));
-  // prefix sums of squares (double precision) for O(1) windows
-  const pre = new Float64Array(signal.length + 1);
-  for (let i = 0; i < signal.length; ++i) pre[i + 1] = pre[i] + signal[i] * signal[i];
   const db = new Float32Array(steps);
   for (let k = 0; k < steps; ++k) {
     const c = Math.round((k / rate) * sampleRate);
     const a = Math.max(0, c - half), b = Math.min(signal.length, c + half);
-    const ms = b > a ? (pre[b] - pre[a]) / (b - a) : 0;
+    let sum = 0;
+    for (let i = a; i < b; ++i) sum += signal[i] * signal[i];
+    const ms = b > a ? sum / (b - a) : 0;
     db[k] = ms > 1e-12 ? 10 * Math.log10(ms) : SILENCE_DB;
   }
   return { rate, db };

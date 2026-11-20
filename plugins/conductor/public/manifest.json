@@ -1,7 +1,7 @@
 {
   "id": "com.venostavisuals.conductor",
   "name": "Conductor",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "main": "index.html",
   "manifestVersion": 5,
   "host": { "app": "premierepro", "minVersion": "25.6.0" },

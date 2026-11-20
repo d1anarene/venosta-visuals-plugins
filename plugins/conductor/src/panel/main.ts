@@ -150,7 +150,7 @@ function schedule() {
     } catch (e) {
       status(S.failed + String(e));
     }
-  }, 150);
+  }, 300);
 }
 
 // ---------------------------------------------------------------- actions
@@ -179,7 +179,7 @@ async function useAudio() {
     }
     audio = mp3 ? await mp3(data) : decodeAudio(data);
     {
-      const mix = selectChannel(audio, "mix");
+      const mix = audio.channels.length > 1 ? selectChannel(audio, "mix") : audio.channels[0];
       const a = Math.max(0, Math.floor((source.inPoint / TICKS_PER_SECOND) * audio.sampleRate));
       const b = Math.min(mix.length, Math.ceil((source.outPoint / TICKS_PER_SECOND) * audio.sampleRate));
       spectrum = averageSpectrum(mix.subarray(a, Math.max(a + 4096, b)), audio.sampleRate);

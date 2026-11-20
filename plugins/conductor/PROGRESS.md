@@ -143,3 +143,15 @@ noise):
   performance.now) only when missing, before the decoder loads (unit test against the real one;
   browser end-to-end test with TextDecoder deleted passes). Invalid saved band values fall back
   to the kick preset.
+
+## 2026-11-20 — Premiere crash report, 0.1.3
+
+- Owner sent a Premiere 27.0 crash report (Sentry envelope + minidump, macOS arm64, Metal):
+  fatal "Unhandled signal" after 9 minutes; the crashing thread's stack goes from the UXP
+  JavaScript runtime (`libdynamic-napi`) into `abort` in libsystem_c — the typical pattern of a
+  fatal error in the panel runtime, for example running out of memory. Two `uxp
+  uncaughtJSException` breadcrumbs at start-up. Not proven to be Conductor.
+- Conductor's memory per recompute on a 130 s song was high (several 23 MB copies and a 46 MB
+  prefix-sum array, recreated on every change). 0.1.3: the envelope sums each window directly
+  (no prefix array), the analysis channel is computed once per song, recompute debounce 300 ms.
+  Measured in Node: 130 s stereo 44.1 kHz analysed in 0.47 s, re-analysed in 0.25 s, ~49 MB.

@@ -74,8 +74,19 @@ export interface Analysis {
 }
 
 /** Band envelope + hits of the audio between `from` and `to` (source seconds, with margins). */
+const channelCache = new WeakMap<Audio, Map<ChannelMode, Float32Array>>();
+
+/** The analysis channel of `audio`, computed once per audio and mode (long songs: tens of MB). */
+function channelOf(audio: Audio, mode: ChannelMode): Float32Array {
+  let m = channelCache.get(audio);
+  if (!m) channelCache.set(audio, (m = new Map()));
+  let c = m.get(mode);
+  if (!c) m.set(mode, (c = selectChannel(audio, mode)));
+  return c;
+}
+
 export function analyse(audio: Audio, s: Pick<Settings, "band" | "channel" | "onsets">, from = 0, to = Infinity): Analysis {
-  const all = selectChannel(audio, s.channel);
+  const all = channelOf(audio, s.channel);
   const margin = 0.5;
   const a = Math.max(0, Math.floor((from - margin) * audio.sampleRate));
   const b = Math.min(all.length, Math.ceil((to + margin) * audio.sampleRate));
