@@ -124,3 +124,13 @@ noise):
 - Browser end-to-end test with a stubbed Premiere API (audio MP3 + video clip + Scale): decode,
   8 hits, EQ drag 120 → 245 Hz, 64 keys written in one transaction, peak keys at 2.25, 2.75, …
   media seconds (clip in point 2 s, start 1 s): exactly on the kicks. Still not run in Premiere.
+
+## 2026-11-20 — 0.1.1: panel did not start in Premiere
+
+- Owner: with the MP3 build the panel showed no texts, empty menus and "nan" fields — the script
+  had not run. The MP3 decoder embeds its WebAssembly as `String.raw` literals with ~28 000
+  control / non-ASCII characters (158 NUL bytes); Chromium accepts that, Premiere's UXP loader
+  apparently not (cause inferred, not proven). Fixes: the build turns those literals into
+  ASCII-only string literals with the same value and refuses to finish if any non-ASCII byte
+  remains; the decoder is a separate `mp3.js` so a failure there cannot stop the panel;
+  `boot.js` shows any script error inside the panel. Browser end-to-end test passes again.

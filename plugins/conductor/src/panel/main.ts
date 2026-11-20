@@ -3,7 +3,6 @@
  * selected video clip -> keyframes. Live preview; every write is one undo step.
  */
 import { Audio, ChannelMode, decodeAudio, looksLikeMp3, selectChannel } from "../core/audio";
-import { decodeMp3 } from "../core/mp3";
 import { averageSpectrum, Spectrum } from "../core/spectrum";
 import { attachEqDrag, drawEq } from "./eq";
 import { BAND_PRESETS } from "../core/filters";
@@ -168,7 +167,12 @@ async function useAudio() {
   $("audio-info").textContent = `${source.name} · ${secs.toFixed(1)} s`;
   try {
     const data = await readFile(source.path);
-    audio = looksLikeMp3(data) ? await decodeMp3(data) : decodeAudio(data);
+    let mp3: ((b: ArrayBuffer) => Promise<Audio>) | undefined;
+    if (looksLikeMp3(data)) {
+      mp3 = (globalThis as unknown as { ConductorMp3?: { decodeMp3: (b: ArrayBuffer) => Promise<Audio> } }).ConductorMp3?.decodeMp3;
+      if (!mp3) throw new Error("MP3 decoder not loaded");
+    }
+    audio = mp3 ? await mp3(data) : decodeAudio(data);
     {
       const mix = selectChannel(audio, "mix");
       const a = Math.max(0, Math.floor((source.inPoint / TICKS_PER_SECOND) * audio.sampleRate));
