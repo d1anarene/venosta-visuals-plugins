@@ -14,6 +14,8 @@ await build({
   platform: "neutral",
   target: "es2020",
   external: ["premierepro", "uxp"],
+  mainFields: ["module", "main"],
+  alias: { "@eshaz/web-worker": "./scripts/no-worker.js" },
   sourcemap: "inline",
   logLevel: "warning",
 });

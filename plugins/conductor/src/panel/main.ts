@@ -2,7 +2,10 @@
  * Conductor panel: music (selected audio clip) -> band -> reaction -> one parameter of the
  * selected video clip -> keyframes. Live preview; every write is one undo step.
  */
-import { Audio, ChannelMode, decodeAudio } from "../core/audio";
+import { Audio, ChannelMode, decodeAudio, looksLikeMp3, selectChannel } from "../core/audio";
+import { decodeMp3 } from "../core/mp3";
+import { averageSpectrum, Spectrum } from "../core/spectrum";
+import { attachEqDrag, drawEq } from "./eq";
 import { BAND_PRESETS } from "../core/filters";
 import { TICKS_PER_SECOND } from "../core/keyframes";
 import { AudioSource, context, readFile, removeKeys, selectedAudio, selectedTarget, Target, ticksPerFrame, uiLocale, writeKeys } from "./host";
@@ -19,6 +22,7 @@ const num = (id: string, fallback: number) => {
 
 let source: AudioSource | null = null;
 let audio: Audio | null = null;
+let spectrum: Spectrum | null = null;
 let target: Target | null = null;
 let tpf = TICKS_PER_SECOND / 25;
 let analysis: Analysis | null = null;
@@ -118,6 +122,11 @@ function recompute() {
   } else {
     $("summary").textContent = "";
   }
+  try {
+    drawEq($<HTMLCanvasElement>("eq"), spectrum, s.band);
+  } catch {
+    /* optional */
+  }
   const canvas = $<HTMLCanvasElement>("graph");
   try {
     drawPreview(canvas, analysis, current, timing, s.outMin, s.outMax);
@@ -145,6 +154,7 @@ async function useAudio() {
   status(S.working);
   source = await selectedAudio();
   audio = null;
+  spectrum = null;
   analysis = null;
   analysisKey = "";
   if (!source) {
@@ -157,11 +167,21 @@ async function useAudio() {
   const secs = (source.outPoint - source.inPoint) / TICKS_PER_SECOND;
   $("audio-info").textContent = `${source.name} · ${secs.toFixed(1)} s`;
   try {
-    audio = decodeAudio(await readFile(source.path));
+    const data = await readFile(source.path);
+    audio = looksLikeMp3(data) ? await decodeMp3(data) : decodeAudio(data);
+    {
+      const mix = selectChannel(audio, "mix");
+      const a = Math.max(0, Math.floor((source.inPoint / TICKS_PER_SECOND) * audio.sampleRate));
+      const b = Math.min(mix.length, Math.ceil((source.outPoint / TICKS_PER_SECOND) * audio.sampleRate));
+      spectrum = averageSpectrum(mix.subarray(a, Math.max(a + 4096, b)), audio.sampleRate);
+    }
+    $("audio-info").textContent = `${source.name} · ${secs.toFixed(1)} s · ${audio.sampleRate} Hz ✓`;
     status("");
   } catch (e) {
     const ext = source.path.split(".").pop()?.toLowerCase() ?? "";
-    status(ext === "wav" || ext === "aif" || ext === "aiff" ? S.decodeFailed + String(e) : S.onlyWav);
+    const msg = ["wav", "wave", "aif", "aiff", "mp3"].includes(ext) ? S.decodeFailed + String(e instanceof Error ? e.message : e) : S.unsupported(ext);
+    $("audio-info").textContent = `${source.name}: ${msg}`;
+    status(msg);
   }
   schedule();
 }
@@ -199,9 +219,12 @@ function keyRange(): [number, number] {
 
 async function write() {
   recompute();
-  if (!target || !current || !timing) return status(S.needBoth);
+  if (!source) return status(S.needAudio);
+  if (!audio) return status(S.audioNotReadable);
+  if (!target) return status(S.needTarget);
   const choice = target.params[Number($<HTMLSelectElement>("param").value)];
-  if (!choice) return status(S.needBoth);
+  if (!choice) return status(S.needParam);
+  if (!current || !timing) return status(S.failed + "no plan");
   status(S.working);
   const [from, to] = keyRange();
   const ok = await writeKeys(target, choice, current.keys, from, to, `Conductor: ${choice.label}`);
@@ -209,9 +232,9 @@ async function write() {
 }
 
 async function remove() {
-  if (!target) return status(S.needBoth);
+  if (!target) return status(S.needTarget);
   const choice = target.params[Number($<HTMLSelectElement>("param").value)];
-  if (!choice) return status(S.needBoth);
+  if (!choice) return status(S.needParam);
   const [from, to] = keyRange();
   const ok = await removeKeys(target, choice, from, to, `Conductor: ${choice.label}`);
   status(ok ? S.removed : S.failed + "transaction");
@@ -261,6 +284,21 @@ document.addEventListener("DOMContentLoaded", () => {
   for (const el of Array.from(document.querySelectorAll("input, select")))
     if (!["band", "low", "high", "param"].includes(el.id)) el.addEventListener(el.tagName === "SELECT" || (el as HTMLInputElement).type === "checkbox" ? "change" : "input", schedule);
   $("param").addEventListener("change", paramChanged);
+  attachEqDrag(
+    $<HTMLCanvasElement>("eq"),
+    () => ({ low: num("low", 0), high: num("high", 0) }),
+    (b) => {
+      $("low").value = String(b.low);
+      $("high").value = String(b.high);
+      $<HTMLSelectElement>("band").value = "custom";
+      try {
+        drawEq($<HTMLCanvasElement>("eq"), spectrum, b);
+      } catch {
+        /* optional */
+      }
+      schedule();
+    },
+  );
   $("btn-audio").addEventListener("click", guard(useAudio));
   $("btn-target").addEventListener("click", guard(useTarget));
   $("btn-write").addEventListener("click", guard(write));

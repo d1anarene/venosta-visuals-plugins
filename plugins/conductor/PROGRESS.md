@@ -107,3 +107,20 @@ noise):
   keys within tolerance.
 - Browser smoke test with stubbed UXP: renders, German strings, no script errors.
 - CI: `.ccx` as artifact `conductor-panel-test-build` (not released).
+
+## 2026-11-20 — owner's first panel test → MP3, EQ band picker, clearer messages
+
+- Owner (Premiere 27, macOS): "Write" answered "choose music and target first" although both
+  were chosen — the music was an MP3, which the panel could not decode yet; the message was
+  misleading. Now each missing piece has its own message, and decode problems show under step 1.
+- **MP3:** mpg123 (WebAssembly, `mpg123-decoder` 1.0.3; licences in THIRD_PARTY_NOTICES.md).
+  Measured: honours the encoder delay (first kick 0.2508 s in WAV and MP3; a pure-JS decoder,
+  js-mp3, was 47 ms late and took 28 s for 3 minutes, so it was rejected); 3 min in ~0.4 s in
+  Node; the bundled decoder runs in Chromium (64 ms for the 6 s fixture). Not yet run in UXP.
+  The web-worker part is replaced by a stub at bundle time. Audio inside video files (AAC): open.
+- **EQ-like band picker** (owner's request): average spectrum (Welch, 4096-point FFT, unit-tested)
+  of the used audio on a log 20 Hz–20 kHz axis; band shaded; drag the edges or drag inside the
+  band to move it.
+- Browser end-to-end test with a stubbed Premiere API (audio MP3 + video clip + Scale): decode,
+  8 hits, EQ drag 120 → 245 Hz, 64 keys written in one transaction, peak keys at 2.25, 2.75, …
+  media seconds (clip in point 2 s, start 1 s): exactly on the kicks. Still not run in Premiere.

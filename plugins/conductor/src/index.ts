@@ -7,3 +7,5 @@ export * from "./core/curves";
 export * from "./core/shape";
 export * from "./core/keyframes";
 export * from "./core/timemap";
+export * from "./core/mp3";
+export * from "./core/spectrum";

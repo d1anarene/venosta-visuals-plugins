@@ -1,7 +1,7 @@
 /**
  * Decoded audio and channel selection. Pure, deterministic.
- * Decoders for compressed formats (MP3/AAC) come later (WebAssembly or Premiere's own export);
- * this module reads RIFF/WAVE (PCM 16/24/32, float 32/64) and AIFF/AIFC ("NONE"/"sowt"/"fl32").
+ * This module reads RIFF/WAVE (PCM 16/24/32, float 32/64) and AIFF/AIFC ("NONE"/"sowt"/"fl32");
+ * MP3 is in mp3.ts (WebAssembly). AAC (audio of video files) is not supported yet.
  */
 export interface Audio {
   sampleRate: number;
@@ -130,4 +130,12 @@ export function decodeAudio(buf: ArrayBuffer): Audio {
   if (buf.byteLength >= 12 && tag(v, 0) === "RIFF") return decodeWav(buf);
   if (buf.byteLength >= 12 && tag(v, 0) === "FORM") return decodeAiff(buf);
   throw new Error("unsupported audio format (WAV and AIFF so far)");
+}
+
+/** True when the bytes look like an MP3 (ID3 tag or an MPEG audio frame sync). */
+export function looksLikeMp3(buf: ArrayBuffer): boolean {
+  const b = new Uint8Array(buf, 0, Math.min(4, buf.byteLength));
+  if (b.length < 3) return false;
+  if (b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33) return true;  // "ID3"
+  return b[0] === 0xff && (b[1] & 0xe0) === 0xe0;
 }
