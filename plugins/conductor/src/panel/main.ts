@@ -154,7 +154,15 @@ function schedule() {
 }
 
 // ---------------------------------------------------------------- actions
+let loadToken = 0;
+
+type Mp3Fn = (b: ArrayBuffer, o: {
+  onProgress?: (p: { fraction: number; readyMs: number }) => void;
+  isCancelled?: () => boolean;
+}) => Promise<Audio>;
+
 async function useAudio() {
+  const token = ++loadToken;  // a newer click cancels an unfinished load
   status(S.working);
   source = await selectedAudio();
   audio = null;
@@ -166,30 +174,41 @@ async function useAudio() {
     status("");
     return schedule();
   }
+  const src = source;
   const { sequence } = await context();
   tpf = await ticksPerFrame(sequence);
-  const secs = (source.outPoint - source.inPoint) / TICKS_PER_SECOND;
-  $("audio-info").textContent = `${source.name} · ${secs.toFixed(1)} s`;
+  const secs = (src.outPoint - src.inPoint) / TICKS_PER_SECOND;
+  const info = (extra: string) => {
+    if (token === loadToken) $("audio-info").textContent = `${src.name} · ${secs.toFixed(1)} s${extra}`;
+  };
+  info("");
+  const t0 = Date.now();
   try {
-    const data = await readFile(source.path);
-    let mp3: ((b: ArrayBuffer) => Promise<Audio>) | undefined;
+    const data = await readFile(src.path);
+    let decoded: Audio;
     if (looksLikeMp3(data)) {
-      mp3 = (globalThis as unknown as { ConductorMp3?: { decodeMp3: (b: ArrayBuffer) => Promise<Audio> } }).ConductorMp3?.decodeMp3;
+      const mp3 = (globalThis as unknown as { ConductorMp3?: { decodeMp3: Mp3Fn } }).ConductorMp3?.decodeMp3;
       if (!mp3) throw new Error("MP3 decoder not loaded");
+      decoded = await mp3(data, {
+        onProgress: (p) => info(` · ${S.decoding} ${Math.round(p.fraction * 100)} %`),
+        isCancelled: () => token !== loadToken,
+      });
+    } else {
+      decoded = decodeAudio(data);
     }
-    audio = mp3 ? await mp3(data) : decodeAudio(data);
-    {
-      const mix = audio.channels.length > 1 ? selectChannel(audio, "mix") : audio.channels[0];
-      const a = Math.max(0, Math.floor((source.inPoint / TICKS_PER_SECOND) * audio.sampleRate));
-      const b = Math.min(mix.length, Math.ceil((source.outPoint / TICKS_PER_SECOND) * audio.sampleRate));
-      spectrum = averageSpectrum(mix.subarray(a, Math.max(a + 4096, b)), audio.sampleRate);
-    }
-    $("audio-info").textContent = `${source.name} · ${secs.toFixed(1)} s · ${audio.sampleRate} Hz ✓`;
+    if (token !== loadToken) return;
+    const mix = decoded.channels.length > 1 ? selectChannel(decoded, "mix") : decoded.channels[0];
+    const a = Math.max(0, Math.floor((src.inPoint / TICKS_PER_SECOND) * decoded.sampleRate));
+    const b = Math.min(mix.length, Math.ceil((src.outPoint / TICKS_PER_SECOND) * decoded.sampleRate));
+    spectrum = averageSpectrum(mix.subarray(a, Math.max(a + 4096, b)), decoded.sampleRate);
+    audio = decoded;
+    info(` · ${decoded.sampleRate} Hz · ${((Date.now() - t0) / 1000).toFixed(1)} s ✓`);
     status("");
   } catch (e) {
-    const ext = source.path.split(".").pop()?.toLowerCase() ?? "";
+    if (token !== loadToken) return;
+    const ext = src.path.split(".").pop()?.toLowerCase() ?? "";
     const msg = ["wav", "wave", "aif", "aiff", "mp3"].includes(ext) ? S.decodeFailed + String(e instanceof Error ? e.message : e) : S.unsupported(ext);
-    $("audio-info").textContent = `${source.name}: ${msg}`;
+    $("audio-info").textContent = `${src.name}: ${msg}`;
     status(msg);
   }
   schedule();

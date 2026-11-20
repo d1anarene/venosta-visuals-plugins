@@ -155,3 +155,13 @@ noise):
   prefix-sum array, recreated on every change). 0.1.3: the envelope sums each window directly
   (no prefix array), the analysis channel is computed once per song, recompute debounce 300 ms.
   Measured in Node: 130 s stereo 44.1 kHz analysed in 0.47 s, re-analysed in 0.25 s, ~49 MB.
+
+## 2026-11-20 — 0.1.4: MP3 decoded in small steps
+
+- Owner's sequence before the crash: audio chosen (name shown, no ✓, no spectrum = MP3 still
+  decoding), then playback and a jump on the timeline → Premiere crashed. Likely: one long
+  synchronous WebAssembly decode blocked the panel runtime while Premiere needed it (WebAssembly
+  start-up in UXP was slow in C0: 5.2 s for a 41-byte module). Not proven.
+- 0.1.4 feeds the MP3 to mpg123 in 64 KB pieces and yields between them (tests: same samples as
+  one piece, many steps, cancellable), shows progress and the total read time under step 1, and
+  a new click cancels an unfinished load.
