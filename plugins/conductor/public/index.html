@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Conductor</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="index.js"></script>
+</head>
+<body>
+  <div class="panel">
+    <div class="title" data-t="title"></div>
+
+    <div class="section" data-t="sourceSection"></div>
+    <button id="btn-audio" data-t="useAudio"></button>
+    <div class="info" id="audio-info"></div>
+
+    <div class="section" data-t="bandSection"></div>
+    <div class="row"><label data-t="bandPreset"></label><select id="band"></select></div>
+    <div class="row"><label data-t="low"></label><input id="low" type="number" /></div>
+    <div class="row"><label data-t="high"></label><input id="high" type="number" /></div>
+    <div class="row"><label data-t="channel"></label><select id="channel"></select></div>
+
+    <div class="section" data-t="modeSection"></div>
+    <div class="row"><label data-t="mode"></label><select id="mode"></select></div>
+    <div id="trig">
+      <div class="row"><label data-t="sensitivity"></label><input id="sens" type="number" value="3" /></div>
+      <div class="row"><label data-t="minGap"></label><input id="gap" type="number" value="80" /></div>
+      <div class="row"><label data-t="rise"></label><input id="rise" type="number" value="40" /></div>
+      <div class="row"><label data-t="hold"></label><input id="hold" type="number" value="0" /></div>
+      <div class="row"><label data-t="release"></label><input id="rel" type="number" value="250" /></div>
+      <div class="row"><label data-t="peakOffset"></label><input id="offset" type="number" value="0" /></div>
+      <div class="row"><label data-t="riseCurve"></label><select id="riseCurve"></select></div>
+      <div class="row"><label data-t="fallCurve"></label><select id="fallCurve"></select></div>
+      <div class="row"><label data-t="amplitude"></label><select id="amp"></select></div>
+      <div class="row"><label data-t="overlap"></label><select id="overlap"></select></div>
+    </div>
+    <div id="cont" class="hidden">
+      <div class="row"><label data-t="inMin"></label><input id="inMin" type="number" value="-40" /></div>
+      <div class="row"><label data-t="inMax"></label><input id="inMax" type="number" value="-6" /></div>
+      <div class="row"><label data-t="curve"></label><select id="curve"></select></div>
+      <div class="row"><label data-t="attack"></label><input id="att" type="number" value="5" /></div>
+      <div class="row"><label data-t="smoothRelease"></label><input id="srel" type="number" value="120" /></div>
+      <div class="row"><label data-t="invert"></label><input id="invert" type="checkbox" /></div>
+    </div>
+
+    <div class="section" data-t="targetSection"></div>
+    <button id="btn-target" data-t="useTarget"></button>
+    <div class="info" id="target-info"></div>
+    <div class="row"><label data-t="param"></label><select id="param"></select></div>
+    <div class="row"><label data-t="outMin"></label><input id="outMin" type="number" value="100" /></div>
+    <div class="row"><label data-t="outMax"></label><input id="outMax" type="number" value="120" /></div>
+
+    <div class="section" data-t="keysSection"></div>
+    <div class="row"><label data-t="density"></label><select id="density"></select></div>
+    <div class="row"><label data-t="tolerance"></label><input id="tol" type="number" value="1" /></div>
+
+    <div class="section" data-t="preview"></div>
+    <canvas id="graph" width="360" height="120"></canvas>
+    <div class="info" id="summary"></div>
+    <div class="buttons">
+      <button id="btn-write" data-t="write"></button>
+      <button id="btn-remove" data-t="remove"></button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+</body>
+</html>

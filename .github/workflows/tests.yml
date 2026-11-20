@@ -33,7 +33,13 @@ jobs:
           node-version: 22
       - run: npm ci || npm install
       - run: npm run typecheck
-      - run: npx vitest run tests
+      - run: npm test
+      - run: npm run build && ./scripts/package-ccx.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: conductor-panel-test-build
+          path: plugins/conductor/dist/installers/Conductor-Premiere.ccx
+          if-no-files-found: error
   conductor-spike:
     # Research test panel (C0); the .ccx is a workflow artifact only, never released.
     runs-on: ubuntu-latest

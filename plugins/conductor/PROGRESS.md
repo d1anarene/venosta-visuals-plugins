@@ -88,3 +88,22 @@ noise):
 - **Speed (for Retime later):** sequential integration (drift reported, ramp peaks on the hits)
   and compensated mode (source and timeline meet at every hit, zero drift; reports a minimum
   speed ≤ 0 when a ramp cannot be balanced, e.g. 500 % on every beat, for a panel warning).
+
+## 2026-11-20 — C2 first panel (built; not yet run in Premiere)
+
+- UXP panel "Conductor" (`src/panel`, `public/`), German/English by Premiere's UI language:
+  1. music = selected audio clip (WAV/AIFF decoded; MP3/AAC message), mapped through its in/out
+     and timeline position; 2. band (presets or Hz) and channel; 3. reaction: per hit (build-up,
+     hold, release, peak offset, rise/fall curves, fixed or loudness strength, overlap) or
+     follow the level (dB window, curve, smoothing, invert); 4. target = numeric keyframable
+     parameter of the selected video clip, value at rest / at the peak; 5. one key per frame or
+     optimised (tolerance). Live preview graph (level, hits, curve, keys). "Write" replaces the
+     parameter's keyframes over the clip in one undo step; "Remove" clears them. Settings kept
+     per user (localStorage).
+- `plan.ts` (pure, 9 tests): hits only inside the audio clip's used range; keys on the sequence
+  frame grid, written in the target clip's media time (assumed from C0; to be confirmed in the
+  host — `keyTimeBase` switches to sequence time); **event peaks snap to the nearest frame**
+  (otherwise per-frame keys miss short kick peaks: 117 instead of 120 in the test); optimised
+  keys within tolerance.
+- Browser smoke test with stubbed UXP: renders, German strings, no script errors.
+- CI: `.ccx` as artifact `conductor-panel-test-build` (not released).

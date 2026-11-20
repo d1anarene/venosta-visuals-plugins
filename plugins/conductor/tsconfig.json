@@ -7,8 +7,17 @@
     "skipLibCheck": true,
     "noEmit": true,
     "isolatedModules": true,
-    "lib": ["ES2020"],
-    "types": ["node"]
+    "lib": [
+      "ES2020",
+      "DOM"
+    ],
+    "types": [
+      "@adobe/premierepro",
+      "node"
+    ]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts"
+  ]
 }
