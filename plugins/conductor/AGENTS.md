@@ -20,6 +20,10 @@
   project). "Update" rewrites exactly the keyframes this Conductor wrote, e.g. after the music
   edit changed. Every write is one undo step.
 - Deterministic: same audio + settings → same keyframes, always.
+- **Localised UI** (owner's request, 2026-11-20): all labels, buttons, messages and presets
+  follow Premiere's UI language (`require("uxp").host.uiLocale`, e.g. `de_DE`), German and
+  English first, English as fallback; strings live in one table per language. Parameter matching
+  uses match names / indices, never display names (those are localised by Premiere).
 
 ## 2. Inputs (signals)
 
