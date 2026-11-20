@@ -61,6 +61,7 @@ Run the tests for each plugin:
 
 ```bash
 cd plugins/track-range-exporter && npm install && npm test
+cd plugins/conductor && npm install && npm test
 ```
 
 ```bash

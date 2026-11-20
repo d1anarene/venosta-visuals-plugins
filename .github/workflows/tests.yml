@@ -21,6 +21,19 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+  conductor-core:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/conductor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci || npm install
+      - run: npm run typecheck
+      - run: npx vitest run tests
   conductor-spike:
     # Research test panel (C0); the .ccx is a workflow artifact only, never released.
     runs-on: ubuntu-latest

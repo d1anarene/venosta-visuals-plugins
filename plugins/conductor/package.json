@@ -1,0 +1,17 @@
+{
+  "name": "conductor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Conductor: turns audio into keyframes on any Premiere Pro effect parameter (analysis core; panel to follow).",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.0"
+  }
+}

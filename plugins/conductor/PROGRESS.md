@@ -59,3 +59,32 @@ Host-tested (owner: "all steps worked"):
   2.92 s; which base matches "1 s after the clip start" in Effect Controls is still to be
   confirmed by the owner (0.0.3 logs clip start / in with every write).
 - Panel layout overlapped on a small screen (flex column shrinking its children): fixed in 0.0.3.
+
+## 2026-11-20 — C1 analysis core (unit-tested, not in a panel yet)
+
+`src/core/` (TypeScript, pure and deterministic), 21 tests in `tests/core.test.ts` on synthetic
+music with known hit times (pitch-dropping kicks, hi-hats on the off-beats, a modulated bass,
+noise):
+- **Decoding:** WAV (PCM 8/16/24/32, float 32/64, extensible) and AIFF/AIFC; channel modes
+  mix / left / right / mid / side. MP3/AAC still open (WebAssembly decoder or Premiere export).
+- **Bands:** zero-phase band-pass (4th-order Butterworth edges, forwards and backwards) with
+  presets (sub, kick, bass, snare body/crack, vocals, hi-hats, air). Kick band passes 70 Hz,
+  rejects 1 kHz by > 60 dB; no systematic delay of hits (mean shift < 15 ms, a third of a frame).
+- **Envelope:** centred RMS at 1 ms steps (no lag), attack/release smoothing as a separate
+  artistic step.
+- **Hits:** rise above the loudest level of the preceding 60 ms (so kick-tail/bass beating does
+  not count), adaptive threshold, level gate, minimum gap, re-arm hysteresis; reports onset,
+  peak time and peak level. Tests: every kick found within 10 ms and nothing else in the kick
+  band (12 s, 124 BPM), every hat in the hi-hat band, a tempo drifting 3 ms per beat followed
+  exactly (no grid), loud vs soft kicks separated by > 6 dB.
+- **Tempo / beat grid:** autocorrelation with a prior around 120 BPM, then a fine tempo/phase
+  comb search: 96/120/128/140 BPM within 0.3 BPM, phase within 20 ms.
+- **Shaping:** curves (linear, ease in/out, power, exponential, cubic bezier; monotonic, fixed
+  ends); continuous mode (input dB window → output range, curve, invert, gate, smoothing);
+  triggered mode (rise, hold, release, peak offset, onset/peak alignment, rise/fall curves,
+  fixed or velocity amplitude, overlap max/add/restart) — event peak exactly on the hit peak.
+- **Keyframes:** one per frame at exact tick times (23.976 fps checked), simplification within a
+  value tolerance (fewer than half the keys for the test curve, error ≤ tolerance).
+- **Speed (for Retime later):** sequential integration (drift reported, ramp peaks on the hits)
+  and compensated mode (source and timeline meet at every hit, zero drift; reports a minimum
+  speed ≤ 0 when a ramp cannot be balanced, e.g. 500 % on every beat, for a panel warning).
